@@ -11,6 +11,8 @@ from peregrin.scripts import PlotParams
 import seaborn as sns
 from itertools import combinations
 import altair as alt
+import fitz
+import os
 
 
 
@@ -624,7 +626,141 @@ def swarm_plot(df, metric, Metric, show_violin=True, show_swarm=True, show_mean=
 
 
 
-def poly_fit_n_scatter(df, metric, Metric, condition='all', replicate='all', degree=[1], cmap='tab10'):
+def poly_fit_chart(df, metric, Metric, condition='all', replicate='all', degree=[1], cmap='tab10', fill=False, point_size=75, outline=False, outline_width=1, opacity=0.6, replicates_separately=False, dir=None):
+
+    if outline:
+        outline_color = 'black'
+    else:
+        outline_color = ''
+    
+    if condition == None or replicate == None:
+        pass
+    else:
+        try:
+            condition = int(condition)
+        except ValueError or TypeError:
+            pass
+        try:
+            replicate = int(replicate)
+        except ValueError or TypeError:
+            pass
+
+    df = df.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
+
+    if condition == 'all':
+        df = df.groupby(['CONDITION', 'POSITION_T']).agg({metric: 'mean'}).reset_index()
+        element = 'CONDITION'
+        shorthand = 'CONDITION:N'
+        what = ''
+    elif condition != 'all' and replicate == 'all':
+        if replicates_separately:
+            df = df[df['CONDITION'] == condition]
+            shorthand = 'REPLICATE:N'
+            element = 'REPLICATE'
+            what = f'for condition {condition}'
+        else:
+            df = df[df['CONDITION'] == condition].groupby(['CONDITION', 'POSITION_T']).agg({metric: 'mean'}).reset_index()
+            shorthand = 'CONDITION:N'
+            element = 'CONDITION'
+            what = f'for condition {condition}'
+    elif condition != 'all' and replicate != 'all':
+        df = df[(df['CONDITION'] == condition) & (df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
+        shorthand = 'REPLICATE:N'
+        element = 'REPLICATE'
+        what = f'for condition {condition} and replicate {replicate}'   
+    
+
+    # Retrieve unique conditions and assign colors from the selected qualitative colormap.
+    elements = df[element].unique().tolist()
+    colors = get_q_cmap_list(elements, cmap)
+
+    highlight = alt.selection_point(
+        on="pointerover", fields=[element], nearest=True
+        )
+    
+    # Create a base chart with the common encodings.
+    base = alt.Chart(df).encode(
+        x=alt.X('POSITION_T', title='Time position'),
+        y=alt.Y(metric, title=Metric),
+        color=alt.Color(shorthand, title='Condition', scale=alt.Scale(domain=elements, range=colors))
+        )
+    
+    ignore = 0.1 
+
+    if fill:
+        scatter = base.mark_circle(
+            size=point_size,
+            stroke=outline_color,
+            strokeWidth=outline_width,
+        ).encode(
+            opacity=alt.when(~highlight).then(alt.value(ignore)).otherwise(alt.value(opacity)),
+            tooltip=alt.value(None),
+        ).add_params(
+            highlight
+        )
+    else:
+        # Scatter layer: displays the actual data points.
+        scatter = base.mark_point(
+            size=point_size, 
+            filled=fill, 
+            strokeWidth=outline_width,
+        ).encode(
+            opacity=alt.when(~highlight).then(alt.value(ignore)).otherwise(alt.value(opacity)),
+            # tooltip=alt.Tooltip(metric, title=f'Cond: {condition}, Repl: {condition}'),
+            tooltip=['POSITION_T', metric, shorthand],
+        ).add_params(
+            highlight
+        )
+    
+    if degree[0] == 0:
+        chart = alt.layer(scatter).properties(
+            width=800,
+            height=400,
+            title=f'{Metric} with Polynomial Fits'
+        ).configure_view(
+            strokeWidth=1
+        )
+    else:
+        # Build a list of polynomial fit layers, one for each specified degree.
+        polynomial_fit = [
+            base.transform_regression(
+                "POSITION_T", metric,
+                method="poly",
+                order=order,
+                groupby=[element],
+                as_=["POSITION_T", str(order)]
+            ).mark_line(
+            ).transform_fold(
+                [str(order)], as_=["degree", metric]
+            ).encode(
+                x=alt.X('POSITION_T', title='Time position'),
+                y=alt.Y(metric, title=Metric),
+                color=alt.Color(shorthand, title='Condition', scale=alt.Scale(domain=elements, range=colors)),
+                size=alt.when(~highlight).then(alt.value(1.25)).otherwise(alt.value(3))
+            )
+            for order in degree
+            ]
+        
+        # Layer the scatter points with all polynomial fits.
+        chart = alt.layer(scatter, *polynomial_fit).properties(
+            width=700,
+            height=350,
+            title=f'{Metric} with Polynomial Fits for {what}'
+        ).configure_view(
+            strokeWidth=1
+        ).interactive()
+
+    chart.save(dir / 'cache/poly_fit_chart.svg')
+    chart.save(dir / 'cache/poly_fit_chart.html')
+
+    return chart
+        
+
+
+def line_chart(df, metric, Metric, condition='all', replicate='all', cmap='tab10', interpolation=None, show_median=True, replicates_separately=False, dir=None):
+
+    metric_mean = metric
+    metric_median = metric.replace('MEAN', 'MEDIAN')
 
     if condition == None or replicate == None:
         pass
@@ -638,60 +774,368 @@ def poly_fit_n_scatter(df, metric, Metric, condition='all', replicate='all', deg
         except ValueError or TypeError:
             pass
 
-    if condition == 'all':
-        df = df.sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
-    elif condition != 'all' and replicate == 'all':
-        df = df[df['CONDITION'] == condition].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
-    elif condition != 'all' and replicate != 'all':
-        df = df[(df['CONDITION'] == condition) & (df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
+    df.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
 
- 
+    if condition == 'all':
+        df = df.groupby(['CONDITION', 'POSITION_T']).agg({metric_mean: 'mean', metric_median: 'median'}).reset_index()
+        shorthand = 'CONDITION:N'
+        element = 'CONDITION'
+        what = ''
+    elif condition != 'all' and replicate == 'all':
+        if replicates_separately:
+            df = df[df['CONDITION'] == condition]
+            shorthand = 'REPLICATE:N'
+            element = 'REPLICATE'
+            what = f'for condition {condition}'
+        else:
+            df = df[df['CONDITION'] == condition].groupby(['CONDITION', 'POSITION_T']).agg({metric_mean: 'mean', metric_median: 'median'}).reset_index()
+            shorthand = 'CONDITION:N'
+            element = 'CONDITION'
+            what = f'for condition {condition}'
+    elif condition != 'all' and replicate != 'all':
+        df = df[(df['CONDITION'] == condition) & (df['REPLICATE'] == replicate)].sort_values(by=['POSITION_T'])
+        shorthand = 'REPLICATE:N'
+        element = 'REPLICATE'
+        what = f'for condition {condition} and replicate {replicate}'   
+
+    if show_median:
+        median_opacity = 0.85
+        Metric = Metric + ' and median'
+    else:
+        median_opacity = 0
+            
     # Retrieve unique conditions and assign colors from the selected qualitative colormap.
-    elements = df['CONDITION'].unique().tolist()
+    elements = df[element].unique().tolist()
     colors = get_q_cmap_list(elements, cmap)
     
-    # Create a base chart with the common encodings.
-    base = alt.Chart(df).encode(
+
+    nearest = alt.selection_point(nearest=True, on="pointerover",
+                              fields=['POSITION_T'], empty=False)    
+    
+    color_scale = alt.Scale(domain=elements, range=colors)
+
+    mean_base = alt.Chart(df).encode(
         x=alt.X('POSITION_T', title='Time position'),
-        y=alt.Y(metric, title=Metric),
-        color=alt.Color('CONDITION:N', title='Condition', scale=alt.Scale(domain=elements, range=colors))
-    )
-    
-    # Scatter layer: displays the actual data points.
-    scatter = base.mark_circle(opacity=1).encode(
-        tooltip=['CONDITION', 'REPLICATE', 'POSITION_T', metric]
-    )
-    
-    # Build a list of polynomial fit layers, one for each specified degree.
-    polynomial_fit = [
-        base.transform_regression(
-            "POSITION_T", metric,
-            method="poly",
-            order=order,
-            groupby=["CONDITION"],
-            as_=["POSITION_T", str(order)]
+        y=alt.Y(metric_mean, title=None),
+        color=alt.Color(shorthand, title='Condition', scale=color_scale),
         )
-        .mark_line(size=2)
-        .transform_fold(
-            [str(order)], as_=["degree", metric]
-        )
-        .encode(
-            x=alt.X('POSITION_T', title='Time position'),
-            y=alt.Y(metric, title=Metric),
-            # You can encode the polynomial degree if needed, e.g., via tooltip,
-            # but here we keep the color mapping based on CONDITION.
-            color=alt.Color('CONDITION:N', title='Condition', scale=alt.Scale(domain=elements, range=colors))
-        )
-        for order in degree
-    ]
     
-    # Layer the scatter points with all polynomial fits.
-    chart = alt.layer(scatter, *polynomial_fit).properties(
-        width=800,
-        height=400,
-        title=f'{Metric} with Polynomial Fits'
-    ).configure_view(
+    median_base = alt.Chart(df).encode(
+        x=alt.X('POSITION_T', title='Time position'),
+        y=alt.Y(metric_median, title='Median ' + Metric),
+        color=alt.Color(shorthand, title='Condition', scale=color_scale),
+        )
+
+    if interpolation is not None:
+        mean_line = mean_base.mark_line(interpolate=interpolation)
+        median_line = median_base.mark_line(interpolate=interpolation, strokeDash=[4, 3]).encode(
+            opacity=alt.value(median_opacity)
+            )
+        text_median = 0
+    else:
+        mean_line = mean_base.mark_line()
+        median_line = median_base.mark_line(strokeDash=[4, 3]).encode(
+            opacity=alt.value(median_opacity)
+            )
+
+
+    # Transparent selectors across the chart. This is what tells us
+    # the x-value of the cursor
+    mean_selectors = mean_base.mark_point().encode(
+        opacity=alt.value(0),
+        ).add_params(
+        nearest
+        )
+    median_selectors = median_base.mark_point().encode(
+        opacity=alt.value(0),
+        ).add_params(
+        nearest
+        )
+    
+    when_near = alt.when(nearest)
+
+    # Draw points on the line, and highlight based on selection
+    mean_points = mean_base.mark_point().encode(
+        opacity=when_near.then(alt.value(1)).otherwise(alt.value(0))
+        )
+    median_points = median_base.mark_point().encode(
+        opacity=when_near.then(alt.value(median_opacity)).otherwise(alt.value(0))
+        )
+
+    # Draw text labels near the points, and highlight based on selection
+    text_mean = mean_line.mark_text(align="left", dx=6, dy=-6).encode(
+        color=alt.value('black'),	
+        text=when_near.then(metric_mean).otherwise(alt.value(" "))
+        )
+    text_median = median_line.mark_text(align="left", dx=5, dy=-5).encode(
+        color=alt.value('grey'),
+        text=when_near.then(metric_median).otherwise(alt.value(" "))
+        )
+
+    # Draw a rule at the location of the selection
+    rules = alt.Chart(df).mark_rule(color="gray").encode(
+        x='POSITION_T',
+        ).transform_filter(
+        nearest
+        )
+
+    chart = alt.layer(
+        mean_line, mean_points, text_mean, mean_selectors, rules, median_line, median_points, text_median, median_selectors
+        ).properties(
+        width=700,
+        height=350,
+        title=f'{Metric} across time {what}'
+        ).configure_view(
         strokeWidth=1
-    )
+        ).interactive()
+
+    chart.save(dir / 'cache/line_chart.html')
+    chart.save(dir / 'cache/line_chart.svg')
+
+    return chart
+
+
+def errorband_chart(df, metric, Metric, condition=1, replicate='all', cmap='tab10', interpolation=None, show_mean=True, extent='orig_std', replicates_separately=False, dir=None):
+
+    metric_mean = metric
+    metric_std = metric.replace('MEAN', 'STD')
+    metric_min = metric.replace('MEAN', 'MIN')
+    metric_max = metric.replace('MEAN', 'MAX')
+
+    if condition == None or replicate == None:
+        pass
+    else:
+        try:
+            condition = int(condition)
+        except ValueError or TypeError:
+            pass
+        try:
+            replicate = int(replicate)
+        except ValueError or TypeError:
+            pass
+
+    df.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
+
+    if condition == 'all':
+        df = df.groupby(['CONDITION','POSITION_T']).agg({metric_mean: 'mean', metric_std: 'std', metric_min: 'min', metric_max: 'max'}).reset_index()
+        shorthand = 'CONDITION:N'
+        element = 'CONDITION'
+        element_ = 'Condition'
+        what = ''
+    elif condition != 'all' and replicate == 'all':
+        if replicates_separately:
+            df = df[df['CONDITION'] == condition]
+            shorthand = 'REPLICATE:N'
+            element = 'REPLICATE'
+            element_ = 'Replicate'
+            what = f'for condition {condition}'
+        else:
+            df = df[df['CONDITION'] == condition].groupby(['CONDITION', 'POSITION_T']).agg({metric_mean: 'mean', metric_std: 'std', metric_min: 'min', metric_max: 'max'}).reset_index()
+            shorthand = 'CONDITION:N'
+            element = 'CONDITION'
+            element_ = 'Condition'
+            what = f'for condition {condition}'
+    elif condition != 'all' and replicate != 'all':
+        df = df[(df['CONDITION'] == condition) & (df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
+        shorthand = 'REPLICATE:N'
+        element = 'REPLICATE'
+        element_ = 'Replicate'
+        what = f'for condition {condition} and replicate {replicate}'
+
+    if show_mean:
+        mean_opacity = 1
+    else:
+        mean_opacity = 0
+
+    df['lower'] = df[metric_mean] - df[metric_std]
+    df['upper'] = df[metric_mean] + df[metric_std]
+
+    # Retrieve unique conditions and assign colors from the selected qualitative colormap.
+    elements = df[element].unique().tolist()
+    colors = get_q_cmap_list(elements, cmap)
+    color_scale=alt.Scale(domain=elements, range=colors)
     
+    if extent == 'min-max':
+        band = alt.Chart(df).encode(
+            x=alt.X('POSITION_T', title='Time position'),
+            y=alt.Y(metric_min),
+            y2=alt.Y2(metric_max),
+            color=alt.Color(shorthand, title=element_, scale=color_scale),
+            tooltip=alt.value(None)
+            )
+        if interpolation is not None:
+            band = band.mark_errorband(interpolate=interpolation)
+        else:
+            band = band.mark_errorband()
+
+    elif extent == 'orig_std':
+        band = alt.Chart(df).encode(
+            x=alt.X('POSITION_T', title='Time position'),
+            y=alt.Y('upper'),
+            y2=alt.Y2('lower'),
+            color=alt.Color(shorthand, title=element_, scale=color_scale),   
+            opacity=alt.value(0.25),
+            tooltip=alt.value(None)
+        )
+        if interpolation is not None:
+            band = band.mark_errorband(interpolate=interpolation)
+        else:
+            band = band.mark_errorband()
+
+    else:
+        band = alt.Chart(df).mark_errorband(extent=extent).encode(
+            x=alt.X('POSITION_T', title='Time position'),
+            y=alt.Y('upper'),
+            y2=alt.Y2('lower'),
+            color=alt.Color(shorthand, title=element_, scale=color_scale),
+            opacity=alt.value(0.25),
+            tooltip=alt.value(None)
+        )
+        if interpolation is not None:
+            band = band.mark_errorband(interpolate=interpolation)  
+        else:
+            band = band.mark_errorband()
+
+    mean_base = alt.Chart(df).encode(
+        x=alt.X('POSITION_T', title='Time position'),
+        y=alt.Y(metric_mean, title=None),
+        color=alt.Color(shorthand, title=element_, scale=color_scale),
+        opacity=alt.value(mean_opacity),
+        strokeWidth=alt.value(3),
+        tooltip=alt.value(None)
+        )
+
+    if interpolation is not None:
+        mean_line = mean_base.mark_line(interpolate=interpolation)
+    else:
+        mean_line = mean_base.mark_line()
+
+    nearest = alt.selection_point(nearest=True, on="pointerover",
+                              fields=['POSITION_T'], empty=False)    
+    
+    color_scale = alt.Scale(domain=elements, range=colors)
+
+    # Transparent selectors across the chart. This is what tells us
+    mean_selectors = mean_base.mark_point().encode(
+        opacity=alt.value(0),
+        ).add_params(
+        nearest
+        )
+    
+    when_near = alt.when(nearest)
+
+    mean_points = mean_base.mark_point().encode(
+        opacity=when_near.then(alt.value(1)).otherwise(alt.value(0)),
+        )    
+
+    # Draw a rule at the location of the selection
+    rules = alt.Chart(df).mark_rule(color="gray").encode(
+        x='POSITION_T',
+        ).transform_filter(
+        nearest
+        )
+
+    # Calculate separate fields for each line of the tooltip.
+    tooltip_data = alt.Chart(df).transform_calculate(
+        tooltip_line1=f'"{element_}: " + datum.CONDITION',
+        tooltip_line2=f'"Time point: " + datum.POSITION_T',
+        tooltip_line3=f'"Mean: " + datum["{metric_mean}"]',
+        tooltip_line4=f'"Std: " + datum["{metric_std}"]',
+        tooltip_line5=f'"Min: " + datum["{metric_min}"]',
+        tooltip_line6=f'"Max: " + datum["{metric_max}"]',
+        )
+    
+    if condition == 'all':
+        text_opacity = 0
+    else:
+        text_opacity = 1
+
+    l = -75
+
+    # Create text marks for each line.
+    tooltip_line1_mark = tooltip_data.mark_text(
+        align='left',
+        dx=6,
+        dy=-30-l,  # adjust vertical offset as needed
+        fontSize=12,
+        fontWeight='bold'
+        ).encode(
+        x='POSITION_T',
+        text=alt.condition(nearest, 'tooltip_line1:N', alt.value('')),
+        opacity=alt.value(text_opacity)
+        ).transform_filter(nearest)
+
+    tooltip_line2_mark = tooltip_data.mark_text(
+        align='left',
+        dx=6,
+        dy=-15-l,  # adjust vertical offset for the second line
+        fontSize=12,
+        fontWeight='bold'
+        ).encode(
+        x='POSITION_T',
+        text=alt.condition(nearest, 'tooltip_line2:N', alt.value('')),
+        opacity=alt.value(text_opacity)
+        ).transform_filter(nearest)
+
+    tooltip_line3_mark = tooltip_data.mark_text(
+        align='left',
+        dx=6,
+        dy=0-l,  # adjust vertical offset for the third line
+        fontSize=12,
+        fontWeight='bold'
+        ).encode(
+        x='POSITION_T',
+        text=alt.condition(nearest, 'tooltip_line3:N', alt.value('')),
+        opacity=alt.value(text_opacity)
+        ).transform_filter(nearest)
+    
+    tooltip_line4_mark = tooltip_data.mark_text(
+        align='left',
+        dx=6,
+        dy=15-l,  # adjust vertical offset for the fourth line
+        fontSize=12,
+        fontWeight='bold'
+        ).encode(
+        x='POSITION_T',
+        text=alt.condition(nearest, 'tooltip_line4:N', alt.value('')),
+        opacity=alt.value(text_opacity)
+        ).transform_filter(nearest)
+    
+    tooltip_line5_mark = tooltip_data.mark_text(
+        align='left',
+        dx=6,
+        dy=30-l,  # adjust vertical offset for the fifth line
+        fontSize=12,
+        fontWeight='bold'
+        ).encode(
+        x='POSITION_T',
+        text=alt.condition(nearest, 'tooltip_line5:N', alt.value('')),
+        opacity=alt.value(text_opacity)
+        ).transform_filter(nearest)
+    
+    tooltip_line6_mark = tooltip_data.mark_text(
+        align='left',
+        dx=6,
+        dy=45-l,  # adjust vertical offset for the sixth line
+        fontSize=12,
+        fontWeight='bold'
+        ).encode(
+        x='POSITION_T',
+        text=alt.condition(nearest, 'tooltip_line6:N', alt.value('')),
+        opacity=alt.value(text_opacity)
+        ).transform_filter(nearest)
+
+    # Layer the tooltip text marks with your other layers.
+    chart = alt.layer(
+        band, mean_line, mean_points, mean_selectors, rules,
+        tooltip_line1_mark, tooltip_line2_mark, tooltip_line3_mark, tooltip_line4_mark, tooltip_line5_mark, tooltip_line6_mark
+        ).properties(
+        width=700,
+        height=350,
+        title=f'{Metric} with its standard deviation across time {what}'
+        ).interactive()
+
+    chart.save(dir / 'cache/errorband_chart.html')
+    chart.save(dir / 'cache/errorband_chart.svg')
+
     return chart

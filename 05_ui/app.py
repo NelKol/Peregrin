@@ -3,18 +3,21 @@ from shiny.express import input, render, ui
 from shiny.types import FileInfo
 
 import asyncio
-import time
+import io
+import os.path as op
+
+from pathlib import Path
 
 import pandas as pd
 import numpy as np
-import io
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
-from peregrin.scripts import PlotParams
 import utils.data_utils as du
 import utils.plot_utils as pu
+
+import webbrowser
 
 
 # ===========================================================================================================================================================================================================================================================================
@@ -935,6 +938,7 @@ smoothing_index = reactive.value(0)
 arrow_size = reactive.value(6)
 line_width = reactive.value(1)
 
+dir = Path(__file__).resolve().parent
 
 
 with ui.nav_panel("Visualisation"):
@@ -942,7 +946,7 @@ with ui.nav_panel("Visualisation"):
     # ===========================================================================================================================================================================================================================================================================
     # Tracks tab
 
-    with ui.navset_pill_list():
+    with ui.navset_pill_list(widths=(2,9), selected="Time series"):
         with ui.nav_panel("Tracks"):
             with ui.card():
                 ui.card_header("Tracks visualisation")
@@ -1100,7 +1104,9 @@ with ui.nav_panel("Visualisation"):
         with ui.nav_panel("Time series"):
             
             cmaps_ = ['Accent', 'Dark2', 'Set1', 'Set2', 'Set3', 'tab10']
+
             interpolations_ = [
+                None,
                 "basis",
                 "basis-open",
                 "basis-closed",
@@ -1118,23 +1124,181 @@ with ui.nav_panel("Visualisation"):
                 "step-after"
                 ]
 
+            extent_ = [
+                'orig_std',  # Original data
+                'ci',  # Confidence interval
+                'stdev',  # Standard deviation
+                'stderr',  # Standard error
+                'iqr',  # Interquartile range
+                'min-max'  # Min-Max range
+                ]
 
+            with ui.panel_well():
+                ui.input_numeric(
+                    "ts_degree",
+                    "Fitting degree:",
+                    1,
+                    min=0,
+                    max=15
+                    )
+                
+                ui.input_numeric(
+                    "ts_scatter_size",
+                    "Scatter size:",
+                    60,
+                    min=1,
+                    )
+                
+                ui.input_checkbox(
+                    "ts_fill",
+                    "fill scatter points",
+                    False
+                    )
+                
+                ui.input_numeric(
+                    "ts_outline_width",
+                    "Outline width:",
+                    2.5,
+                    min=1,
+                    step=0.25
+                    )
+                
+                ui.input_numeric(
+                    "ts_opacity",
+                    "Opacity:",
+                    0.6,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
+                
+                ui.input_checkbox(
+                    "ts_outline",
+                    "outline scatter points (when filled)",
+                    False
+                    )
+                
             with ui.card():
-                @render.plot
-                def time_series_plot():
-                    chart = pu.poly_fit_n_scatter(
-                        df=Time_stats_df.get(),
+                @render.image
+                def time_series_plot1():
+                    pu.poly_fit_chart(
+                        df=Time_stats_df.get(), 
                         metric=input.ts_metric(), 
-                        Metric=dict_Metrics[input.ts_metric()], 
+                        Metric=dict_Time_metrics[input.ts_metric()],
                         condition=input.ts_condition(), 
                         replicate=input.ts_replicate(), 
-                        degree=[1], 
-                        cmap=input.ts_cmap(),
+                        degree=[input.ts_degree()],
+                        cmap=input.ts_cmap(), 
+                        fill=input.ts_fill(), 
+                        point_size=input.ts_scatter_size(), 
+                        outline=input.ts_outline(), 
+                        outline_width=input.ts_outline_width(), 
+                        opacity=input.ts_opacity(),
+                        replicates_separately=input.ts_separate_replicates(),
+                        dir=dir
+                        )
+                    return {"src": str(dir / "cache/poly_fit_chart.svg")}
+                
+                ui.input_action_button(
+                    'open_poly_fit_chart',
+                    'Interactive poly fit chart'
+                )
+
+                @reactive.effect
+                @reactive.event(input.open_poly_fit_chart)
+                def poly_fit_chart_open():
+                    webbrowser.open_new_tab(op.join(dir, "cache/poly_fit_chart.html"))
+                    return None
+                
+                @render.download(label="Download figure", filename="Time series - scatter fit.svg")
+                def download_time_series_plot1():
+                    return op.join(dir, "cache/poly_fit_chart.svg")
+
+            with ui.panel_well():
+                ui.input_checkbox(
+                    "ts_show_median",
+                    "show median",
+                    False
+                    )
+                
+            with ui.card():
+                @render.image
+                def time_series_plot2():
+                    pu.line_chart(
+                        df=Time_stats_df.get(), 
+                        metric=input.ts_metric(), 
+                        Metric=dict_Time_metrics[input.ts_metric()], 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        show_median=input.ts_show_median(),
+                        replicates_separately=input.ts_separate_replicates(),
+                        dir=dir
+                        )
+                    return {"src": str(dir / "cache/line_chart.svg")}
+                
+                ui.input_action_button(
+                    'open_line_chart',
+                    'Interactive line chart'
+                )
+
+                @reactive.effect
+                @reactive.event(input.open_line_chart)
+                def line_chart_open():
+                    webbrowser.open_new_tab(op.join(dir, "cache/line_chart.html"))
+                    return None
+                
+                @render.download(label="Download figure", filename="Time series - line plot.svg")
+                def download_time_series_plot2():
+                    return op.join(dir, "cache/line_chart.svg")
+
+            with ui.panel_well():
+                ui.input_select(
+                    "ts_extent",
+                    "Extent:",
+                    extent_,
+                    selected='orig_std'
+                    )
+                
+                ui.input_checkbox(
+                    "ts_show_mean",
+                    "show mean",
+                    True
                     )
 
+            with ui.card():
+                @render.image
+                def time_series_plot3():
+                    pu.errorband_chart(
+                        df=Time_stats_df.get(), 
+                        metric=input.ts_metric(),
+                        Metric=dict_Time_metrics[input.ts_metric()], 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(),
+                        show_mean=input.ts_show_mean(), 
+                        extent=input.ts_extent(),
+                        replicates_separately=input.ts_separate_replicates(),
+                        dir=dir
+                        )
+                    return {"src": str(dir / "cache/errorband_chart.svg")}
+                
+                ui.input_action_button(
+                    'open_errorband_chart',
+                    'Interactive error band chart'
+                )
 
-
-
+                @reactive.effect
+                @reactive.event(input.open_errorband_chart)
+                def errorband_chart_open():
+                    webbrowser.open_new_tab(op.join(dir, "cache/errorband_chart.html"))
+                    return None
+                
+                @render.download(label="Download figure", filename="Time series - error band plot.svg")
+                def download_time_series_plot3():
+                    return op.join(dir, "cache/errorband_chart.svg")
 
             with ui.panel_well():
 
@@ -1150,10 +1314,16 @@ with ui.nav_panel("Visualisation"):
                     []
                     )
                 
+                ui.input_checkbox(
+                    "ts_separate_replicates",
+                    "show replicates separately (if a condition is selected)",
+                    False
+                    )
+                
                 ui.input_select(
                     "ts_metric",
                     "Metric:",
-                    dict_Metrics,
+                    dict_Time_metrics,
                     selected='MEAN_CONFINEMENT_RATIO'
                     )
 
@@ -1174,7 +1344,7 @@ with ui.nav_panel("Visualisation"):
 
                 @reactive.effect
                 def select_repl():
-                    condition = input.condition()
+                    condition = input.ts_condition()
                     dictionary = du.get_cond_repl(Time_stats_df.get())
 
                     if Time_stats_df.get().empty:
@@ -1184,6 +1354,8 @@ with ui.nav_panel("Visualisation"):
                         replicates = dictionary[condition]
                     else:
                         replicates = []
+                        for key in dictionary:
+                            replicates = []
 
                     ui.update_select(
                         id='ts_replicate',
@@ -1204,13 +1376,13 @@ with ui.nav_panel("Visualisation"):
                     selected='catmull-rom'
                     )
                 
-                ui.input_numeric(
-                    "ts_degree",
-                    "Fitting degree:",
-                    0,
-                    min=0,
-                    max=50
-                    )
+                
+                
+                
+                
+            
+                
+            
 
 
 
@@ -1224,15 +1396,17 @@ with ui.nav_panel("Visualisation"):
 
 
 
-
+        
 
         with ui.nav_panel("Corelation"):
             with ui.card():
 
+                'uhh'
 
-                'yeah'
 
-
+                
+                
+                
 
 
 

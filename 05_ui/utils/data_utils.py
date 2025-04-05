@@ -294,8 +294,28 @@ def calculate_mean_median_std_cr_nd_tl_per_frame(df):
         'CONFINEMENT_RATIO': 'STD_CONFINEMENT_RATIO'
     }).reset_index()
 
+    min_values = df.groupby(group_cols).agg({
+        'TRACK_LENGTH': 'min',
+        'NET_DISTANCE': 'min',
+        'CONFINEMENT_RATIO': 'min'
+    }).rename(columns={
+        'TRACK_LENGTH': 'MIN_TRACK_LENGTH',
+        'NET_DISTANCE': 'MIN_NET_DISTANCE',
+        'CONFINEMENT_RATIO': 'MIN_CONFINEMENT_RATIO'
+    }).reset_index()
+
+    max_values = df.groupby(group_cols).agg({
+        'TRACK_LENGTH': 'max',
+        'NET_DISTANCE': 'max',
+        'CONFINEMENT_RATIO': 'max'
+    }).rename(columns={
+        'TRACK_LENGTH': 'MAX_TRACK_LENGTH',
+        'NET_DISTANCE': 'MAX_NET_DISTANCE',
+        'CONFINEMENT_RATIO': 'MAX_CONFINEMENT_RATIO'
+    }).reset_index()
+
     # Merge the mean, median, and std DataFrames on the grouping columns
-    stats_df = merge_dfs([mean_values, median_values, std_values], on=group_cols)
+    stats_df = merge_dfs([mean_values, median_values, std_values, min_values, max_values], on=group_cols)
 
     return stats_df
 
@@ -377,4 +397,4 @@ def get_cond_repl(df):
             replicates_list.append(replicate)
             
         dictionary.update({str(condition): replicates_list})
-    return dictionary	
+    return dictionary

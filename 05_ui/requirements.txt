@@ -5,5 +5,5 @@ matplotlib
 scipy
 peregrin
 seaborn
-itertools
 altair
+pathlib
