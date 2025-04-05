@@ -32,7 +32,7 @@ ui.page_opts(
 raw_Buttered_df = reactive.value()
 raw_Spot_stats_df = reactive.value()
 raw_Track_stats_df = reactive.value()
-raw_Frame_stats_df = reactive.value()
+raw_Time_stats_df = reactive.value()
 
 
 # ===========================================================================================================================================================================================================================================================================
@@ -41,7 +41,7 @@ raw_Frame_stats_df = reactive.value()
 Buttered_df = reactive.value()
 Spot_stats_df = reactive.value()
 Track_stats_df = reactive.value()
-Frame_stats_df = reactive.value()
+Time_stats_df = reactive.value()
 
 # ===========================================================================================================================================================================================================================================================================
 # Creating reactive values for thresholding the data
@@ -70,7 +70,7 @@ dict_Track_metrics = {
     "TRACK_LENGTH": "Track length", 
     "NET_DISTANCE": "Net distance", 
     "CONFINEMENT_RATIO": "Confinement ratio",
-    "NUM_FRAMES": "Number of frames",
+    "TRACK_POINTS": "Number of points in track",
     "SPEED_MEAN": "Mean speed",
     "SPEED_MEDIAN": "Median speed",
     "SPEED_MAX": "Max speed",
@@ -82,15 +82,42 @@ dict_Track_metrics = {
     "STD_DEVIATION_RAD": "Standard deviation (radians)",
 }
 
-dict_Spot_metrics ={
-    "POSITION_T": "Position t",
-    "POSITION_X": "Position x",
-    "POSITION_Y": "Position y",
-    "QUALITY": "Quality",
-    "VISIBILITY": "Visibility"
+dict_Spot_metrics = {
+    "POSITION_T": "Position T",
+    "POSITION_X": "Position X",
+    "POSITION_Y": "Position Y",
+    "CONDITION": "Condition",
+    "REPLICATE": "Replicate",
+    "DISTANCE": "Distance",
+    "TRACK_LENGTH": "Track Length",
+    "NET_DISTANCE": "Net Distance",
+    "CONFINEMENT_RATIO": "Confinement Ratio",
 }
 
 dict_Metrics = dict_Track_metrics | dict_Spot_metrics
+
+dict_Time_metrics = {
+    "CONDITION": "Condition",
+    "REPLICATE": "Replicate",
+    "POSITION_T": "Position T",
+    "MEAN_TRACK_LENGTH": "Mean track length",
+    "MEAN_NET_DISTANCE": "Mean net distance",
+    "MEAN_CONFINEMENT_RATIO": "Mean confinement ratio",
+    "MEDIAN_TRACK_LENGTH": "Median track length",
+    "MEDIAN_NET_DISTANCE": "Median net distance",
+    "MEDIAN_CONFINEMENT_RATIO": "Median confinement ratio",
+    "min_DISTANCE": "Minimum distance",
+    "STD_DEVIATION_DEG": "Standard deviation (degrees)",
+    "MEDIAN_DIRECTION_DEG": "Median direction (degrees)",
+    "MEAN_DIRECTION_RAD": "Mean direction (radians)",
+    "STD_DEVIATION_RAD": "Standard deviation (radians)",
+    "MEDIAN_DIRECTION_RAD": "Median direction (radians)",
+    "SPEED_MIN": "Minimum speed",
+    "SPEED_MAX": "Maximum speed",
+    "SPEED_MEAN": "Mean speed",
+    "SPEED_STD_DEVIATION": "Speed standard deviation",
+    "SPEED_MEDIAN": "Median speed",
+}
 
 Thresholding_filters = {
     "literal": "Literal",
@@ -319,11 +346,11 @@ with ui.nav_panel("Data frames"):  # Data panel
         buttered = raw_Buttered_df.get()
 
         distances_for_each_cell_per_frame_df = du.calculate_traveled_distances_for_each_cell_per_frame(buttered)        # Call the function to calculate distances for each cell per frame and create the Spot_statistics .csv file
+        distances_for_each_cell_per_frame_df = du.calculate_track_length_net_distances_and_confinement_ratios_per_each_cell_per_frame(distances_for_each_cell_per_frame_df)
         direction_for_each_cell_per_frame_df = du.calculate_direction_of_travel_for_each_cell_per_frame(buttered)       # Call the function to calculate direction_for_each_cell_per_frame_df
 
         Spot_stats_dfs = [buttered, distances_for_each_cell_per_frame_df, direction_for_each_cell_per_frame_df]
         Spot_stats = du.merge_dfs(Spot_stats_dfs, on=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T']) # Merge the dataframes
-        Spot_stats = Spot_stats.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
 
         return Spot_stats
 
@@ -370,7 +397,7 @@ with ui.nav_panel("Data frames"):  # Data panel
 
     
     @reactive.calc
-    def process_frame_data():
+    def process_time_data():
         if file_detected.get() == False:
             return pd.DataFrame()
 
@@ -381,16 +408,17 @@ with ui.nav_panel("Data frames"):  # Data panel
         
         distances_per_frame_df = du.calculate_distances_per_frame(Spot_stats) # Call the function to calculate distances_per_frame_df
         absolute_directions_per_frame_df = du.calculate_absolute_directions_per_frame(Spot_stats) # Call the function to calculate directions_per_frame_df
-        speeds_per_frame = du.calculate_speed(Spot_stats, 'POSITION_T') # Call the function to calculate speeds_per_frame
+        speeds_per_frame = du.calculate_speed(Spot_stats, ['REPLICATE', 'POSITION_T']) # Call the function to calculate speeds_per_frame
+        mean_n_median_track_length_net_destance_confinement_ratios_per_frame = du.calculate_mean_median_std_cr_nd_tl_per_frame(Spot_stats)
 
-        Frame_stats_dfs = [distances_per_frame_df, absolute_directions_per_frame_df, speeds_per_frame]
+        Time_stats_dfs = [mean_n_median_track_length_net_destance_confinement_ratios_per_frame, distances_per_frame_df, absolute_directions_per_frame_df, speeds_per_frame]
 
-        Frame_stats = du.merge_dfs(Frame_stats_dfs, on='POSITION_T')
-        Frame_stats = Frame_stats.merge(Spot_stats['POSITION_T'].drop_duplicates(), on='POSITION_T')
+        Time_stats = du.merge_dfs(Time_stats_dfs, on=['CONDITION', 'REPLICATE', 'POSITION_T'])
+        # Frame_stats = Frame_stats.merge(Spot_stats['POSITION_T'].drop_duplicates(), on='POSITION_T')
 
-        Frame_stats = Frame_stats.sort_values(by=['CONDITION','POSITION_T'])
+        Time_stats = Time_stats.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
 
-        return Frame_stats
+        return Time_stats
     
 
     @reactive.effect
@@ -409,18 +437,18 @@ with ui.nav_panel("Data frames"):  # Data panel
 
 
     @reactive.effect
-    def update_Frame_stats_df():
+    def update_Time_stats_df():
         if file_detected.get() == False:
             return pd.DataFrame()
         
         else:
-            Frame_stats = process_frame_data()
-            raw_Frame_stats_df.set(Frame_stats)
-            Frame_stats_df.set(Frame_stats)
+            Time_stats = process_time_data()
+            raw_Time_stats_df.set(Time_stats)
+            Time_stats_df.set(Time_stats)
 
-        Frame_stats = process_frame_data()
-        raw_Frame_stats_df.set(Frame_stats)
-        Frame_stats_df.set(Frame_stats)
+        Time_stats = process_time_data()
+        raw_Time_stats_df.set(Time_stats)
+        Time_stats_df.set(Time_stats)
 
 
     # =============================================================================================================================================================================================================================================================================
@@ -470,17 +498,17 @@ with ui.nav_panel("Data frames"):  # Data panel
             ui.card_header("Frame stats")
 
             @render.data_frame
-            def render_frame_stats():
+            def render_time_stats():
                 if file_detected.get() == False:
                     return pd.DataFrame()
                 else:
-                    Frame_stats = Frame_stats_df.get()
-                    return render.DataGrid(Frame_stats)
+                    Time_stats = Time_stats_df.get()
+                    return render.DataGrid(Time_stats)
                 
-            @render.download(label="Download", filename="Frame_stats.csv")
-            def download_frame_stats():
+            @render.download(label="Download", filename="Time stats.csv")
+            def download_time_stats():
                 with io.BytesIO() as buf:
-                    Frame_stats_df.get().to_csv(buf, index=False)
+                    Time_stats_df.get().to_csv(buf, index=False)
                     yield buf.getvalue()
 
 
@@ -1066,15 +1094,143 @@ with ui.nav_panel("Visualisation"):
                     ) 
                 
                 
+        # ==========================================================================================================================================================================================================================================================================
+        # Time series panel
 
-                # ui.input_slider(
-                #     id="smoothing",
-                #     label="Smoothing index:",
-                #     min=0,
-                #     max=100,
-                #     value=50
-                # )
-                # ui.input_select(
+        with ui.nav_panel("Time series"):
+            
+            cmaps_ = ['Accent', 'Dark2', 'Set1', 'Set2', 'Set3', 'tab10']
+            interpolations_ = [
+                "basis",
+                "basis-open",
+                "basis-closed",
+                "bundle",
+                "cardinal",
+                "cardinal-open",
+                "cardinal-closed",
+                "catmull-rom",
+                "linear",
+                "linear-closed",
+                "monotone",
+                "natural",
+                "step",
+                "step-before",
+                "step-after"
+                ]
+
+
+            with ui.card():
+                @render.plot
+                def time_series_plot():
+                    chart = pu.poly_fit_n_scatter(
+                        df=Time_stats_df.get(),
+                        metric=input.ts_metric(), 
+                        Metric=dict_Metrics[input.ts_metric()], 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        degree=[1], 
+                        cmap=input.ts_cmap(),
+                    )
+
+
+
+
+
+            with ui.panel_well():
+
+                ui.input_select(
+                    "ts_condition",
+                    "Condition:",
+                    []
+                    )
+                
+                ui.input_select(
+                    "ts_replicate",
+                    "Replicate:",
+                    []
+                    )
+                
+                ui.input_select(
+                    "ts_metric",
+                    "Metric:",
+                    dict_Metrics,
+                    selected='MEAN_CONFINEMENT_RATIO'
+                    )
+
+                @reactive.effect
+                def select_cond():
+                    dictionary = du.get_cond_repl(Time_stats_df.get())	
+
+                    # Can use [] to remove all choices
+                    if Time_stats_df.get().empty:
+                        conditions = []
+
+                    conditions = list(dictionary.keys())
+
+                    ui.update_select(
+                        id='ts_condition',
+                        choices=conditions
+                    )
+
+                @reactive.effect
+                def select_repl():
+                    condition = input.condition()
+                    dictionary = du.get_cond_repl(Time_stats_df.get())
+
+                    if Time_stats_df.get().empty:
+                        replicates = []
+
+                    if condition in dictionary:
+                        replicates = dictionary[condition]
+                    else:
+                        replicates = []
+
+                    ui.update_select(
+                        id='ts_replicate',
+                        choices=replicates
+                        )
+
+                ui.input_select(
+                    "ts_cmap",
+                    "Color map:",
+                    cmaps_,
+                    selected='tab10'
+                    )
+                
+                ui.input_select(
+                    "ts_interpolation",
+                    "Interpolation type:",
+                    interpolations_,
+                    selected='catmull-rom'
+                    )
+                
+                ui.input_numeric(
+                    "ts_degree",
+                    "Fitting degree:",
+                    0,
+                    min=0,
+                    max=50
+                    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        with ui.nav_panel("Corelation"):
+            with ui.card():
+
+
+                'yeah'
 
 
 
