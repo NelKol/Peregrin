@@ -3,18 +3,21 @@ from shiny.express import input, render, ui
 from shiny.types import FileInfo
 
 import asyncio
-import time
+import io
+import os.path as op
+
+from pathlib import Path
 
 import pandas as pd
 import numpy as np
-import io
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
-from peregrin.scripts import PlotParams
 import utils.data_utils as du
 import utils.plot_utils as pu
+
+import webbrowser
 
 
 # ===========================================================================================================================================================================================================================================================================
@@ -32,7 +35,7 @@ ui.page_opts(
 raw_Buttered_df = reactive.value()
 raw_Spot_stats_df = reactive.value()
 raw_Track_stats_df = reactive.value()
-raw_Frame_stats_df = reactive.value()
+raw_Time_stats_df = reactive.value()
 
 
 # ===========================================================================================================================================================================================================================================================================
@@ -41,7 +44,7 @@ raw_Frame_stats_df = reactive.value()
 Buttered_df = reactive.value()
 Spot_stats_df = reactive.value()
 Track_stats_df = reactive.value()
-Frame_stats_df = reactive.value()
+Time_stats_df = reactive.value()
 
 # ===========================================================================================================================================================================================================================================================================
 # Creating reactive values for thresholding the data
@@ -70,7 +73,7 @@ dict_Track_metrics = {
     "TRACK_LENGTH": "Track length", 
     "NET_DISTANCE": "Net distance", 
     "CONFINEMENT_RATIO": "Confinement ratio",
-    "NUM_FRAMES": "Number of frames",
+    "TRACK_POINTS": "Number of points in track",
     "SPEED_MEAN": "Mean speed",
     "SPEED_MEDIAN": "Median speed",
     "SPEED_MAX": "Max speed",
@@ -82,15 +85,42 @@ dict_Track_metrics = {
     "STD_DEVIATION_RAD": "Standard deviation (radians)",
 }
 
-dict_Spot_metrics ={
-    "POSITION_T": "Position t",
-    "POSITION_X": "Position x",
-    "POSITION_Y": "Position y",
-    "QUALITY": "Quality",
-    "VISIBILITY": "Visibility"
+dict_Spot_metrics = {
+    "POSITION_T": "Position T",
+    "POSITION_X": "Position X",
+    "POSITION_Y": "Position Y",
+    "CONDITION": "Condition",
+    "REPLICATE": "Replicate",
+    "DISTANCE": "Distance",
+    "TRACK_LENGTH": "Track Length",
+    "NET_DISTANCE": "Net Distance",
+    "CONFINEMENT_RATIO": "Confinement Ratio",
 }
 
 dict_Metrics = dict_Track_metrics | dict_Spot_metrics
+
+dict_Time_metrics = {
+    "CONDITION": "Condition",
+    "REPLICATE": "Replicate",
+    "POSITION_T": "Position T",
+    "MEAN_TRACK_LENGTH": "Mean track length",
+    "MEAN_NET_DISTANCE": "Mean net distance",
+    "MEAN_CONFINEMENT_RATIO": "Mean confinement ratio",
+    "MEDIAN_TRACK_LENGTH": "Median track length",
+    "MEDIAN_NET_DISTANCE": "Median net distance",
+    "MEDIAN_CONFINEMENT_RATIO": "Median confinement ratio",
+    "min_DISTANCE": "Minimum distance",
+    "STD_DEVIATION_DEG": "Standard deviation (degrees)",
+    "MEDIAN_DIRECTION_DEG": "Median direction (degrees)",
+    "MEAN_DIRECTION_RAD": "Mean direction (radians)",
+    "STD_DEVIATION_RAD": "Standard deviation (radians)",
+    "MEDIAN_DIRECTION_RAD": "Median direction (radians)",
+    "SPEED_MIN": "Minimum speed",
+    "SPEED_MAX": "Maximum speed",
+    "SPEED_MEAN": "Mean speed",
+    "SPEED_STD_DEVIATION": "Speed standard deviation",
+    "SPEED_MEDIAN": "Median speed",
+}
 
 Thresholding_filters = {
     "literal": "Literal",
@@ -319,11 +349,11 @@ with ui.nav_panel("Data frames"):  # Data panel
         buttered = raw_Buttered_df.get()
 
         distances_for_each_cell_per_frame_df = du.calculate_traveled_distances_for_each_cell_per_frame(buttered)        # Call the function to calculate distances for each cell per frame and create the Spot_statistics .csv file
+        distances_for_each_cell_per_frame_df = du.calculate_track_length_net_distances_and_confinement_ratios_per_each_cell_per_frame(distances_for_each_cell_per_frame_df)
         direction_for_each_cell_per_frame_df = du.calculate_direction_of_travel_for_each_cell_per_frame(buttered)       # Call the function to calculate direction_for_each_cell_per_frame_df
 
         Spot_stats_dfs = [buttered, distances_for_each_cell_per_frame_df, direction_for_each_cell_per_frame_df]
         Spot_stats = du.merge_dfs(Spot_stats_dfs, on=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T']) # Merge the dataframes
-        Spot_stats = Spot_stats.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
 
         return Spot_stats
 
@@ -370,7 +400,7 @@ with ui.nav_panel("Data frames"):  # Data panel
 
     
     @reactive.calc
-    def process_frame_data():
+    def process_time_data():
         if file_detected.get() == False:
             return pd.DataFrame()
 
@@ -381,16 +411,17 @@ with ui.nav_panel("Data frames"):  # Data panel
         
         distances_per_frame_df = du.calculate_distances_per_frame(Spot_stats) # Call the function to calculate distances_per_frame_df
         absolute_directions_per_frame_df = du.calculate_absolute_directions_per_frame(Spot_stats) # Call the function to calculate directions_per_frame_df
-        speeds_per_frame = du.calculate_speed(Spot_stats, 'POSITION_T') # Call the function to calculate speeds_per_frame
+        speeds_per_frame = du.calculate_speed(Spot_stats, ['REPLICATE', 'POSITION_T']) # Call the function to calculate speeds_per_frame
+        mean_n_median_track_length_net_destance_confinement_ratios_per_frame = du.calculate_mean_median_std_cr_nd_tl_per_frame(Spot_stats)
 
-        Frame_stats_dfs = [distances_per_frame_df, absolute_directions_per_frame_df, speeds_per_frame]
+        Time_stats_dfs = [mean_n_median_track_length_net_destance_confinement_ratios_per_frame, distances_per_frame_df, absolute_directions_per_frame_df, speeds_per_frame]
 
-        Frame_stats = du.merge_dfs(Frame_stats_dfs, on='POSITION_T')
-        Frame_stats = Frame_stats.merge(Spot_stats['POSITION_T'].drop_duplicates(), on='POSITION_T')
+        Time_stats = du.merge_dfs(Time_stats_dfs, on=['CONDITION', 'REPLICATE', 'POSITION_T'])
+        # Frame_stats = Frame_stats.merge(Spot_stats['POSITION_T'].drop_duplicates(), on='POSITION_T')
 
-        Frame_stats = Frame_stats.sort_values(by=['CONDITION','POSITION_T'])
+        Time_stats = Time_stats.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
 
-        return Frame_stats
+        return Time_stats
     
 
     @reactive.effect
@@ -409,18 +440,18 @@ with ui.nav_panel("Data frames"):  # Data panel
 
 
     @reactive.effect
-    def update_Frame_stats_df():
+    def update_Time_stats_df():
         if file_detected.get() == False:
             return pd.DataFrame()
         
         else:
-            Frame_stats = process_frame_data()
-            raw_Frame_stats_df.set(Frame_stats)
-            Frame_stats_df.set(Frame_stats)
+            Time_stats = process_time_data()
+            raw_Time_stats_df.set(Time_stats)
+            Time_stats_df.set(Time_stats)
 
-        Frame_stats = process_frame_data()
-        raw_Frame_stats_df.set(Frame_stats)
-        Frame_stats_df.set(Frame_stats)
+        Time_stats = process_time_data()
+        raw_Time_stats_df.set(Time_stats)
+        Time_stats_df.set(Time_stats)
 
 
     # =============================================================================================================================================================================================================================================================================
@@ -470,17 +501,17 @@ with ui.nav_panel("Data frames"):  # Data panel
             ui.card_header("Frame stats")
 
             @render.data_frame
-            def render_frame_stats():
+            def render_time_stats():
                 if file_detected.get() == False:
                     return pd.DataFrame()
                 else:
-                    Frame_stats = Frame_stats_df.get()
-                    return render.DataGrid(Frame_stats)
+                    Time_stats = Time_stats_df.get()
+                    return render.DataGrid(Time_stats)
                 
-            @render.download(label="Download", filename="Frame_stats.csv")
-            def download_frame_stats():
+            @render.download(label="Download", filename="Time stats.csv")
+            def download_time_stats():
                 with io.BytesIO() as buf:
-                    Frame_stats_df.get().to_csv(buf, index=False)
+                    Time_stats_df.get().to_csv(buf, index=False)
                     yield buf.getvalue()
 
 
@@ -907,6 +938,7 @@ smoothing_index = reactive.value(0)
 arrow_size = reactive.value(6)
 line_width = reactive.value(1)
 
+dir = Path(__file__).resolve().parent
 
 
 with ui.nav_panel("Visualisation"):
@@ -914,7 +946,7 @@ with ui.nav_panel("Visualisation"):
     # ===========================================================================================================================================================================================================================================================================
     # Tracks tab
 
-    with ui.navset_pill_list():
+    with ui.navset_pill_list(widths=(2,9), selected="Time series"):
         with ui.nav_panel("Tracks"):
             with ui.card():
                 ui.card_header("Tracks visualisation")
@@ -1066,17 +1098,315 @@ with ui.nav_panel("Visualisation"):
                     ) 
                 
                 
+        # ==========================================================================================================================================================================================================================================================================
+        # Time series panel
 
-                # ui.input_slider(
-                #     id="smoothing",
-                #     label="Smoothing index:",
-                #     min=0,
-                #     max=100,
-                #     value=50
-                # )
-                # ui.input_select(
+        with ui.nav_panel("Time series"):
+            
+            cmaps_ = ['Accent', 'Dark2', 'Set1', 'Set2', 'Set3', 'tab10']
+
+            interpolations_ = [
+                None,
+                "basis",
+                "basis-open",
+                "basis-closed",
+                "bundle",
+                "cardinal",
+                "cardinal-open",
+                "cardinal-closed",
+                "catmull-rom",
+                "linear",
+                "linear-closed",
+                "monotone",
+                "natural",
+                "step",
+                "step-before",
+                "step-after"
+                ]
+
+            extent_ = [
+                'orig_std',  # Original data
+                'ci',  # Confidence interval
+                'stdev',  # Standard deviation
+                'stderr',  # Standard error
+                'iqr',  # Interquartile range
+                'min-max'  # Min-Max range
+                ]
+
+            with ui.panel_well():
+                ui.input_numeric(
+                    "ts_degree",
+                    "Fitting degree:",
+                    1,
+                    min=0,
+                    max=15
+                    )
+                
+                ui.input_numeric(
+                    "ts_scatter_size",
+                    "Scatter size:",
+                    60,
+                    min=1,
+                    )
+                
+                ui.input_checkbox(
+                    "ts_fill",
+                    "fill scatter points",
+                    False
+                    )
+                
+                ui.input_numeric(
+                    "ts_outline_width",
+                    "Outline width:",
+                    2.5,
+                    min=1,
+                    step=0.25
+                    )
+                
+                ui.input_numeric(
+                    "ts_opacity",
+                    "Opacity:",
+                    0.6,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
+                
+                ui.input_checkbox(
+                    "ts_outline",
+                    "outline scatter points (when filled)",
+                    False
+                    )
+                
+            with ui.card():
+                @render.image
+                def time_series_plot1():
+                    pu.poly_fit_chart(
+                        df=Time_stats_df.get(), 
+                        metric=input.ts_metric(), 
+                        Metric=dict_Time_metrics[input.ts_metric()],
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        degree=[input.ts_degree()],
+                        cmap=input.ts_cmap(), 
+                        fill=input.ts_fill(), 
+                        point_size=input.ts_scatter_size(), 
+                        outline=input.ts_outline(), 
+                        outline_width=input.ts_outline_width(), 
+                        opacity=input.ts_opacity(),
+                        replicates_separately=input.ts_separate_replicates(),
+                        dir=dir
+                        )
+                    return {"src": str(dir / "cache/poly_fit_chart.svg")}
+                
+                ui.input_action_button(
+                    'open_poly_fit_chart',
+                    'Interactive poly fit chart'
+                )
+
+                @reactive.effect
+                @reactive.event(input.open_poly_fit_chart)
+                def poly_fit_chart_open():
+                    webbrowser.open_new_tab(op.join(dir, "cache/poly_fit_chart.html"))
+                    return None
+                
+                @render.download(label="Download figure", filename="Time series - scatter fit.svg")
+                def download_time_series_plot1():
+                    return op.join(dir, "cache/poly_fit_chart.svg")
+
+            with ui.panel_well():
+                ui.input_checkbox(
+                    "ts_show_median",
+                    "show median",
+                    False
+                    )
+                
+            with ui.card():
+                @render.image
+                def time_series_plot2():
+                    pu.line_chart(
+                        df=Time_stats_df.get(), 
+                        metric=input.ts_metric(), 
+                        Metric=dict_Time_metrics[input.ts_metric()], 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        show_median=input.ts_show_median(),
+                        replicates_separately=input.ts_separate_replicates(),
+                        dir=dir
+                        )
+                    return {"src": str(dir / "cache/line_chart.svg")}
+                
+                ui.input_action_button(
+                    'open_line_chart',
+                    'Interactive line chart'
+                )
+
+                @reactive.effect
+                @reactive.event(input.open_line_chart)
+                def line_chart_open():
+                    webbrowser.open_new_tab(op.join(dir, "cache/line_chart.html"))
+                    return None
+                
+                @render.download(label="Download figure", filename="Time series - line plot.svg")
+                def download_time_series_plot2():
+                    return op.join(dir, "cache/line_chart.svg")
+
+            with ui.panel_well():
+                ui.input_select(
+                    "ts_extent",
+                    "Extent:",
+                    extent_,
+                    selected='orig_std'
+                    )
+                
+                ui.input_checkbox(
+                    "ts_show_mean",
+                    "show mean",
+                    True
+                    )
+
+            with ui.card():
+                @render.image
+                def time_series_plot3():
+                    pu.errorband_chart(
+                        df=Time_stats_df.get(), 
+                        metric=input.ts_metric(),
+                        Metric=dict_Time_metrics[input.ts_metric()], 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(),
+                        show_mean=input.ts_show_mean(), 
+                        extent=input.ts_extent(),
+                        replicates_separately=input.ts_separate_replicates(),
+                        dir=dir
+                        )
+                    return {"src": str(dir / "cache/errorband_chart.svg")}
+                
+                ui.input_action_button(
+                    'open_errorband_chart',
+                    'Interactive error band chart'
+                )
+
+                @reactive.effect
+                @reactive.event(input.open_errorband_chart)
+                def errorband_chart_open():
+                    webbrowser.open_new_tab(op.join(dir, "cache/errorband_chart.html"))
+                    return None
+                
+                @render.download(label="Download figure", filename="Time series - error band plot.svg")
+                def download_time_series_plot3():
+                    return op.join(dir, "cache/errorband_chart.svg")
+
+            with ui.panel_well():
+
+                ui.input_select(
+                    "ts_condition",
+                    "Condition:",
+                    []
+                    )
+                
+                ui.input_select(
+                    "ts_replicate",
+                    "Replicate:",
+                    []
+                    )
+                
+                ui.input_checkbox(
+                    "ts_separate_replicates",
+                    "show replicates separately (if a condition is selected)",
+                    False
+                    )
+                
+                ui.input_select(
+                    "ts_metric",
+                    "Metric:",
+                    dict_Time_metrics,
+                    selected='MEAN_CONFINEMENT_RATIO'
+                    )
+
+                @reactive.effect
+                def select_cond():
+                    dictionary = du.get_cond_repl(Time_stats_df.get())	
+
+                    # Can use [] to remove all choices
+                    if Time_stats_df.get().empty:
+                        conditions = []
+
+                    conditions = list(dictionary.keys())
+
+                    ui.update_select(
+                        id='ts_condition',
+                        choices=conditions
+                    )
+
+                @reactive.effect
+                def select_repl():
+                    condition = input.ts_condition()
+                    dictionary = du.get_cond_repl(Time_stats_df.get())
+
+                    if Time_stats_df.get().empty:
+                        replicates = []
+
+                    if condition in dictionary:
+                        replicates = dictionary[condition]
+                    else:
+                        replicates = []
+                        for key in dictionary:
+                            replicates = []
+
+                    ui.update_select(
+                        id='ts_replicate',
+                        choices=replicates
+                        )
+
+                ui.input_select(
+                    "ts_cmap",
+                    "Color map:",
+                    cmaps_,
+                    selected='tab10'
+                    )
+                
+                ui.input_select(
+                    "ts_interpolation",
+                    "Interpolation type:",
+                    interpolations_,
+                    selected='catmull-rom'
+                    )
+                
+                
+                
+                
+                
+            
+                
+            
 
 
+
+
+
+
+
+
+
+
+
+
+
+        
+
+        with ui.nav_panel("Corelation"):
+            with ui.card():
+
+                'uhh'
+
+
+                
+                
+                
 
 
 
