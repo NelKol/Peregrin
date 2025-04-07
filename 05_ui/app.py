@@ -1213,6 +1213,10 @@ with ui.nav_panel("Visualisation"):
                 @render.download(label="Download figure", filename="Time series - scatter fit.svg")
                 def download_time_series_plot1():
                     return op.join(dir, "cache/poly_fit_chart.svg")
+                
+                @render.download(label="Download interactive plot as html", filename="Time series - scatter fit.html")
+                def download_time_series_plot1_html():
+                    return op.join(dir, "cache/poly_fit_chart.html")
 
             with ui.panel_well():
                 ui.input_checkbox(
@@ -1250,8 +1254,12 @@ with ui.nav_panel("Visualisation"):
                     return None
                 
                 @render.download(label="Download figure", filename="Time series - line plot.svg")
-                def download_time_series_plot2():
+                def download_time_series_plot2_svg():
                     return op.join(dir, "cache/line_chart.svg")
+                
+                @render.download(label="Download interactive plot as html", filename="Time series - line plot.html")
+                def download_time_series_plot2_html():
+                    return op.join(dir, "cache/line_chart.html")
 
             with ui.panel_well():
                 ui.input_select(
@@ -1297,8 +1305,12 @@ with ui.nav_panel("Visualisation"):
                     return None
                 
                 @render.download(label="Download figure", filename="Time series - error band plot.svg")
-                def download_time_series_plot3():
+                def download_time_series_plot3_svg():
                     return op.join(dir, "cache/errorband_chart.svg")
+                
+                @render.download(label="Download interactive plot as html", filename="Time series - error band plot.html")
+                def download_time_series_plot3_html():
+                    return op.join(dir, "cache/errorband_chart.html")
 
             with ui.panel_well():
 
