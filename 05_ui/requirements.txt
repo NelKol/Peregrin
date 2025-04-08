@@ -6,4 +6,4 @@ scipy
 peregrin
 seaborn
 altair
-pathlib
+plotly

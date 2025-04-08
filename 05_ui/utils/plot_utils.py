@@ -26,6 +26,42 @@ def get_q_cmap_list(elements, cmap):
     colors = [mcolors.to_hex(cmap(i / n)) for i in range(n)]
     return colors
 
+def generate_random_color():
+    r = np.random.randint(0, 255)  # Random value for Red
+    g = np.random.randint(0, 255)  # Random value for Green
+    b = np.random.randint(0, 255)  # Random value for Blue
+    return '#{:02x}{:02x}{:02x}'.format(r, g, b)
+
+def generate_random_grey():
+    n = np.random.randint(0, 240)  # Random value for Grey
+    return '#{:02x}{:02x}{:02x}'.format(n, n, n)
+
+def get_colormap(c_mode):
+    if c_mode == 'greyscale':
+        return plt.cm.gist_yarg
+    elif c_mode == 'color1':
+        return plt.cm.jet
+    elif c_mode == 'color2':
+        return plt.cm.brg
+    elif c_mode == 'color3':
+        return plt.cm.hot
+    elif c_mode == 'color4':
+        return plt.cm.gnuplot
+    elif c_mode == 'color5':
+        return plt.cm.viridis
+    elif c_mode == 'color6':
+        return plt.cm.rainbow
+    elif c_mode == 'color7':
+        return plt.cm.turbo
+    elif c_mode == 'color8':
+        return plt.cm.nipy_spectral
+    elif c_mode == 'color9':
+        return plt.cm.gist_ncar
+    else:
+        return None
+
+
+
 
 def migration_directions_with_kde_plus_mean(df, metric, subject, scaling_metric, cmap_normalization_metric, cmap, threshold, title_size2):	
 
@@ -206,6 +242,10 @@ def df_gaussian_donut(df, metric, subject, heatmap, weight, threshold, title_siz
     # try to normalize the heatmap colors to the absolute 0 (not min of the kde values) and to the max of the kde values
 
 
+
+
+
+
 def track_visuals(df2, c_mode, grid, lut_metric, title_size=12):
     
     fig, ax = plt.subplots(figsize=(13, 10))
@@ -228,24 +268,8 @@ def track_visuals(df2, c_mode, grid, lut_metric, title_size=12):
         else:
             grid_lines = 'None'
     else:
-        if c_mode == 'color1':
-            colormap = plt.cm.jet
-        elif c_mode == 'color2':
-            colormap = plt.cm.brg
-        elif c_mode == 'color3':
-            colormap = plt.cm.hot
-        elif c_mode == 'color4':
-            colormap = plt.cm.gnuplot
-        elif c_mode == 'color5':
-            colormap = plt.cm.viridis
-        elif c_mode == 'color6':
-            colormap = plt.cm.rainbow
-        elif c_mode == 'color7':
-            colormap = plt.cm.turbo
-        elif c_mode == 'color8':
-            colormap = plt.cm.nipy_spectral
-        elif c_mode == 'color9':
-            colormap = plt.cm.gist_ncar
+        colormap = get_colormap(c_mode)
+            
         grid_color = 'silver'
         face_color = 'darkgrey'
         grid_alpha = 0.75
@@ -381,7 +405,134 @@ def visualize_tracks(df, df2, condition='all', replicate='all', c_mode='color1',
 
     return plt.gcf()
 
-def tracks_lut_map(df2, c_mode='color1', lut_metric='NET_DISTANCE', metrics_dict=None):
+
+# ===========================================================================================================================================================================================================================================================================================================
+
+def visualize_normalized_tracks(df, condition='all', replicate='all', c_mode='random colors', only_one_color='black', lw=0.5, grid=True, backround='light', lut_metric='NET_DISTANCE'):
+
+    if condition == None or replicate == None:
+        pass
+    else:
+        try:
+            condition = int(condition)
+        except ValueError or TypeError:
+            pass
+        try:
+            replicate = int(replicate)
+        except ValueError or TypeError:
+            pass
+
+    if condition == 'all':
+        df = df.sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
+    elif condition != 'all' and replicate == 'all':
+        df = df[df['CONDITION'] == condition].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
+    elif condition != 'all' and replicate != 'all':
+        df = df[(df['CONDITION'] == condition) & (df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
+
+
+    # First sort the data and get groups of tracks.
+    # df.sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'], inplace=True)
+    grouped = df.groupby(['CONDITION', 'REPLICATE', 'TRACK_ID'])
+    
+    unique_tracks = df[['CONDITION', 'REPLICATE', 'TRACK_ID']].drop_duplicates().reset_index(drop=True)
+    # For the random modes, pre-assign a color per track.
+    if c_mode in ['random colors']:
+        track_colors = [generate_random_color() for _ in range(len(unique_tracks))]
+    elif c_mode in ['random greys']:
+        track_colors = [generate_random_grey() for _ in range(len(unique_tracks))]
+    else:
+        track_colors = [None] * len(unique_tracks)  # Colors will be assigned via the LUT
+    
+    color_map_direct = dict(zip(unique_tracks['TRACK_ID'], track_colors))
+    df['COLOR'] = df['TRACK_ID'].map(color_map_direct)
+    
+    # Normalize the positions for each track (shift tracks to start at 0,0)
+    for (cond, repl, track_id), group in grouped:
+        start_x = group['POSITION_X'].iloc[0]
+        start_y = group['POSITION_Y'].iloc[0]
+        df.loc[group.index, 'POSITION_X'] -= start_x
+        df.loc[group.index, 'POSITION_Y'] -= start_y
+
+    # Convert to polar coordinates.
+    df['r'] = np.sqrt(df['POSITION_X']**2 + df['POSITION_Y']**2)
+    df['theta'] = np.arctan2(df['POSITION_Y'], df['POSITION_X'])
+    
+    fig, ax = plt.subplots(figsize=(12.5, 9.5), subplot_kw={'projection': 'polar'})
+    y_max = df['r'].max() * 1.1
+
+    ax.set_title('Normalized Tracks')
+    ax.set_ylim(0, y_max)
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.spines['polar'].set_visible(False)
+    ax.grid(grid)
+    
+    # If using a colormap based on a LUT metric, pre-compute aggregated values
+    # Here we use the mean of the lut_metric per track. You can adjust the aggregation as needed.
+    if c_mode not in ['random colors', 'random greys', 'only-one'] and lut_metric is not None:
+        track_metric = df.groupby('TRACK_ID')[lut_metric].mean()
+        metric_min = track_metric.min()
+        metric_max = track_metric.max()
+    else:
+        track_metric = None
+
+    # Plot all tracks
+    for (cond, repl, track_id), group in grouped:
+        # First, handle the modes that specify a direct color.
+        if c_mode == 'random colors':
+            color = group['COLOR'].iloc[0]
+        elif c_mode == 'random greys':
+            color = group['COLOR'].iloc[0]
+        elif c_mode == 'only-one':
+            color = only_one_color
+        else:
+            colormap = get_colormap(c_mode)
+
+            # If no explicit color was assigned and we have a colormap, then use LUT mapping.
+            if colormap is not None and track_metric is not None:
+                # Get the aggregated metric value for the track.
+                val = track_metric.get(track_id, 0)
+                # Normalize to [0, 1] (protect against division by zero)
+                if metric_max > metric_min:
+                    norm_val = (val - metric_min) / (metric_max - metric_min)
+                else:
+                    norm_val = 0.5
+                color = colormap(norm_val)
+            else:
+                # Fallback if something goes wrong
+                color = 'black'
+
+        # Plot the track using computed color.
+        ax.plot(group['theta'], group['r'], lw=lw, color=color)
+    
+    if backround == 'light':
+        x_grid_color = 'grey'
+        y_grid_color = 'lightgrey'
+        ax.set_facecolor('white')
+    elif backround == 'dark':
+        x_grid_color = 'lightgrey'
+        y_grid_color = 'grey'
+        ax.set_facecolor('darkgrey')
+
+    # Style the polar grid.
+    for i, line in enumerate(ax.get_xgridlines()):
+        if i % 2 == 0:
+            line.set_linestyle('--')
+            line.set_color(x_grid_color)
+            line.set_linewidth(0.5)
+
+    for line in ax.get_ygridlines():
+        line.set_linestyle('-.')
+        line.set_color(y_grid_color)
+        line.set_linewidth(0.5)
+
+    ax.text(0, df['r'].max() * 1.2, f'{int(round(y_max, -1))} µm',
+            ha='center', va='center', fontsize=9, color='black')
+
+    return plt.gcf()
+
+
+"""def tracks_lut_map(df2, c_mode='color1', lut_metric='NET_DISTANCE', metrics_dict=None):
 
     lut_norm_df = df2[['TRACK_ID', lut_metric]].drop_duplicates()
 
@@ -391,27 +542,7 @@ def tracks_lut_map(df2, c_mode='color1', lut_metric='NET_DISTANCE', metrics_dict
     norm = plt.Normalize(vmin=lut_min, vmax=lut_max)
 
 
-    if c_mode == 'greyscale':
-        colormap = plt.cm.gist_yarg
-    else:
-        if c_mode == 'color1':
-            colormap = plt.cm.jet
-        elif c_mode == 'color2':
-            colormap = plt.cm.brg
-        elif c_mode == 'color3':
-            colormap = plt.cm.hot
-        elif c_mode == 'color4':
-            colormap = plt.cm.gnuplot
-        elif c_mode == 'color5':
-            colormap = plt.cm.viridis
-        elif c_mode == 'color6':
-            colormap = plt.cm.rainbow
-        elif c_mode == 'color7':
-            colormap = plt.cm.turbo
-        elif c_mode == 'color8':
-            colormap = plt.cm.nipy_spectral
-        elif c_mode == 'color9':
-            colormap = plt.cm.gist_ncar
+    colormap = get_colormap(c_mode)
     
     # Add a colorbar to show the LUT map
     sm = plt.cm.ScalarMappable(norm=norm, cmap=colormap)
@@ -422,94 +553,12 @@ def tracks_lut_map(df2, c_mode='color1', lut_metric='NET_DISTANCE', metrics_dict
     cbar = fig_lut.colorbar(sm, ax=ax_lut, orientation='vertical', extend='both')
     cbar.set_label(metrics_dict[lut_metric], fontsize=10)
 
-    return plt.gcf()
+    return plt.gcf()"""
 
 
 
-def histogram_cells_distance(df, metric, str):
-    # Sort the DataFrame by 'TRACK_LENGTH' in ascending order
-    df_sorted = df.sort_values(by=metric)
-
-    norm = mcolors.Normalize(vmin=df_sorted["NUM_FRAMES"].min(), vmax=df_sorted["NUM_FRAMES"].max())
-    cmap = plt.colormaps["ocean_r"]
-
-    # Create new artificial IDs for sorting purposes (1 for lowest distance, N for highest)
-    df_sorted["Artificial_ID"] = range(1, len(df_sorted) + 1)
-
-    x_span = PlotParams.x_span(df_sorted)
-
-    # Create the figure and axis for the plot
-    fig, ax = plt.subplots(figsize=(x_span, 8))
-    fig.set_tight_layout(True)
-    width = 6
-
-    # Loop through each row to plot each cell's data
-    for idx, row in df_sorted.iterrows():
-        artificial_id = row["Artificial_ID"]
-        track_length = row[metric]
-        num_frames = row["NUM_FRAMES"]
-
-        # Get the color based on the number of frames using the viridis colormap
-        line_color = cmap(norm(num_frames))
-
-        # Plot the "chimney" or vertical line
-        ax.vlines(
-            x=artificial_id,  # X position for the cell
-            ymin=track_length,  # Starting point of the line (y position)
-            ymax=track_length + num_frames,  # End point based on number of frames (height)
-            color=line_color,
-            linewidth=width,
-            )
-
-        plt.plot(artificial_id, track_length, '_', zorder=5, color="lavender")
-
-        # Add the mean number of frames as text above each chimney
-        ax.text(
-        artificial_id,  # X position (same as the chimney)
-        track_length + num_frames + 1,  # Y position (slightly above the chimney)
-        f"{round(num_frames)}",  # The text to display (formatted mean)
-        ha='center',  # Horizontal alignment center
-        va='bottom',  # Vertical alignment bottom
-        fontsize=6,  # Adjust font size if necessary
-        color='black',  # Color of the text
-        style='italic'  # Italicize the text
-        )
-
-        x = int(row['Artificial_ID'])
-
-        plt.xticks(range(x), rotation=90) # add loads of ticks
-        plt.grid(which='major', color='#DDDDDD', linewidth=0.8)
-        plt.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-
-
-    max_y = df_sorted[metric].max()
-    num_x_values = df_sorted[metric].count()
-
-    # Adjust the plot aesthetics
-    plt.tick_params(axis='x', rotation=60)
-    plt.tick_params(axis='y', labelsize=8)
-    plt.xticks(range(num_x_values)) # add loads of ticks
-    plt.grid(which='major', color='#DDDDDD', linewidth=0.8)
-    plt.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-
-    # Set ticks, labels and title
-    ax.set_xticks(range(1, num_x_values + 1))
-    ax.set_yticks(np.arange(0, max_y + 1, 10))
-    ax.set_xlabel(f"Cells (sorted by {str} distance)")
-    ax.set_ylabel(f"{str} distance traveled [μm]")
-    ax.set_title(f"{str} Distance Traveled by Cells\nWith Length Representing Number of Frames")
-
-    # Invert x-axis so the highest distance is on the left
-    plt.gca().invert_xaxis()
-
-    ax.set_xlim(right=0, left=num_x_values+1)  # Adjust the left limit as needed
-
-    # Show the plot
-    # plt.savefig(op.join(save_path, f"02f_Histogram_{str}_distance_traveled_per_cell.png"))
-    # plt.show()
-
-    return plt.gcf()
-
+# ==========================================================================================================================================================================================================================================================================================================
+# -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 def swarm_plot(df, metric, Metric, show_violin=True, show_swarm=True, show_mean=True, show_median=True, show_error_bars=True, show_legend=True, p_testing=False):
     # fig, ax = plt.subplots(figsize=(12.5, 9.5))
@@ -597,11 +646,8 @@ def swarm_plot(df, metric, Metric, show_violin=True, show_swarm=True, show_mean=
     plt.title(f"Swarm Plot with Mean and Median Lines for {Metric}")
     plt.xlabel("Condition")
     plt.ylabel(Metric)
-    # plt.legend(title='Legend', title_fontsize='12', fontsize='10', loc='upper right', bbox_to_anchor=(1.15, 1), frameon=True)
-    # sns.replot
 
     # Create a custom legend entry for the replicates marker.
-    # Here, we choose the first color of the palette ('tab10') as representative.
     replicate_handle = mlines.Line2D([], [], marker='o', color='w',
                                      markerfacecolor=sns.color_palette('tab10')[0],
                                      markeredgecolor='black', markersize=10,
@@ -625,6 +671,10 @@ def swarm_plot(df, metric, Metric, show_violin=True, show_swarm=True, show_mean=
     return plt.gcf()
 
 
+
+
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# ==============================================================================================================================================================================================================================================================================================
 
 def poly_fit_chart(df, metric, Metric, condition='all', replicate='all', degree=[1], cmap='tab10', fill=False, point_size=75, outline=False, outline_width=1, opacity=0.6, replicates_separately=False, dir=None):
 
@@ -756,6 +806,7 @@ def poly_fit_chart(df, metric, Metric, condition='all', replicate='all', degree=
     return chart
         
 
+# ==============================================================================================================================================================================================================================================================================================
 
 def line_chart(df, metric, Metric, condition='all', replicate='all', cmap='tab10', interpolation=None, show_median=True, replicates_separately=False, dir=None):
 
@@ -894,6 +945,8 @@ def line_chart(df, metric, Metric, condition='all', replicate='all', cmap='tab10
 
     return chart
 
+
+# ===============================================================================================================================================================================================================================================================================================
 
 def errorband_chart(df, metric, Metric, condition=1, replicate='all', cmap='tab10', interpolation=None, show_mean=True, extent='orig_std', replicates_separately=False, dir=None):
 
@@ -1139,3 +1192,4 @@ def errorband_chart(df, metric, Metric, condition=1, replicate='all', cmap='tab1
     chart.save(dir / 'cache/errorband_chart.svg')
 
     return chart
+

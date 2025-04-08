@@ -947,9 +947,11 @@ with ui.nav_panel("Visualisation"):
     # Tracks tab
 
     with ui.navset_pill_list(widths=(2,9), selected="Time series"):
+
         with ui.nav_panel("Tracks"):
             with ui.card():
-                ui.card_header("Tracks visualisation")
+                ui.card_header("True tracks visualisation")
+
                 @render.plot
                 def tracks_plot():
                     return pu.visualize_tracks(
@@ -992,6 +994,24 @@ with ui.nav_panel("Visualisation"):
                     with io.BytesIO() as buf:
                         figure.savefig(buf, format="svg", bbox_inches='tight')
                         yield buf.getvalue()
+
+            with ui.card():
+                ui.card_header("Normalized tracks")
+
+                @render.plot
+                def normalized_tracks():
+                    figure = pu.visualize_normalized_tracks(
+                        df=Spot_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        c_mode=, 
+                        only_one_color='black', 
+                        lw=0.5, 
+                        grid=True, 
+                        backround='light', 
+                        lut_metric='NET_DISTANCE'
+                        )
+
                 
             
             with ui.panel_well():
