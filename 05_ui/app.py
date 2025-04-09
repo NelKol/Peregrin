@@ -1004,7 +1004,7 @@ with ui.nav_panel("Visualisation"):
                         df=Spot_stats_df.get(), 
                         condition=input.condition(), 
                         replicate=input.replicate(), 
-                        c_mode=, 
+                        c_mode=input.color_mode(), 
                         only_one_color='black', 
                         lw=0.5, 
                         grid=True, 

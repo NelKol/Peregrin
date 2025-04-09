@@ -3,9 +3,10 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import pandas as pd
 import plotly.graph_objects as go
+import mpld3
 
 Track_stats = pd.read_csv(r'C:\Users\modri\Desktop\python\Peregrin\Peregrin\test data\Track_stats.csv')
-Spot_stats = pd.read_csv(r'C:\Users\modri\Desktop\python\Peregrin\Peregrin\test data\Spot_stats.csv')
+Spot_stats = pd.read_csv(r'C:\Users\modri\Desktop\python\Peregrin\Peregrin\test data\Spot stats.csv')
 
 color_modes = {
     'greyscale': 'B&W',
@@ -316,6 +317,8 @@ def visualize_normalized_tracksl(df, df2, c_mode='', only_one_color='black', lw=
 
     ax.text(0, df['r'].max() * 1.2, f'{int(round(y_max, -1))} µm',
             ha='center', va='center', fontsize=9, color='black')
+    
+    mpld3.save_html(fig, 'interactive_fig.html') #save to html here
 
     plt.show()
 
@@ -454,7 +457,7 @@ def visualize_normalized_tracks_interactive(df, c_mode='random colors', only_one
     )
 
     # Write the figure to an HTML file (adjust the path as needed)
-    fig.write_html(r'C:\Users\modri\Desktop\python\Peregrin\Peregrin\code files\cache_\normalized_tracks_radial.html', auto_open=False)
+    fig.write_html(r'C:\Users\modri\Desktop\python\Peregrin\Peregrin\code files\cache_\normalized_tracks_radial.html', auto_open=True)
 
 # Example usage:
 visualize_normalized_tracks_interactive(
