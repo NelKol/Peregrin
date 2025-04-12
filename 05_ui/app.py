@@ -758,7 +758,6 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
                 pass
 
         @reactive.effect
-        # @reactive.event(input.threshold1, input.)
         def update_thresholded_dataA():
             return _update_thresholded_data(input.metricA(), Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df, thresholded_dataA())
 
@@ -795,19 +794,6 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
             a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
             return c
         
-
-
-
-# Task button for applying the thresholding
-
-    # @ui.bind_task_button(button_id="threshold1")
-    # @reactive.extended_task
-    # async def thresholding1():
-    #     await asyncio.sleep(4.5)
-        
-    # ui.input_task_button("threshold1", "Apply")
-    
-
             
         
 
@@ -884,7 +870,6 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
                 pass
             
         @reactive.effect
-        # @reactive.event(input.threshold1, input.threshold2)
         def update_thresholded_dataB():
             return _update_thresholded_data(input.metricB(), Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T, thresholded_dataB())
 
@@ -922,20 +907,6 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
             return c
         
 
-# Task button for applying the thresholding
-
-    # @ui.bind_task_button(button_id="threshold2")
-    # @reactive.extended_task
-    # async def thresholding2():
-    #     await asyncio.sleep(4.5)
-        
-    # ui.input_task_button("threshold2", "Apply")
-
-
-            
-
-
-
 
 
 
@@ -951,7 +922,7 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
 with ui.nav_panel("Visualisation"):
 
-    with ui.navset_pill_list(widths=(2, 9)):
+    with ui.navset_pill_list(widths=(2, 9), selected="Time series"):
 
         # ==========================================================================================================================================================================================================================================================================
         # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1304,6 +1275,24 @@ with ui.nav_panel("Visualisation"):
                         plot.savefig(buf, format="svg")
                         yield buf.getvalue()
 
+                ui.markdown(
+                    """
+                    ___
+                    """
+                    )
+
+                @render.download(label="Download LUT map as SVG", filename="LUT map.svg")
+                def download_lut_map_svg():
+                    lut_map = pu.Lut_map(
+                        Tracks_df=Track_stats_df.get(),
+                        c_mode=input.color_mode(), 
+                        lut_scaling_metric=input.lut_scaling(), 
+                        metrics_dict=select_metrics.tracks,
+                        )
+                    with io.BytesIO() as buf:
+                        lut_map.savefig(buf, format="svg")
+                        yield buf.getvalue()
+
 
             # ==================================================================================================================================================================================================================================================================================
             # Common track visualization settings
@@ -1312,7 +1301,8 @@ with ui.nav_panel("Visualisation"):
 
                 ui.markdown(
                     """
-                    **Common track visualization settings**
+                    ##### **Common track visualization settings**
+                    ___
                     """
                     )
 
@@ -1450,21 +1440,23 @@ with ui.nav_panel("Visualisation"):
 
 
 
-
-
-
-
-
-                
-                
                 
         # ==========================================================================================================================================================================================================================================================================
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         # Time series panel
 
         with ui.nav_panel("Time series"):
             
-
             with ui.panel_well():
+                
+                ui.markdown(
+                    """
+                    #### **Time series with a polynomial fit**
+                    *made with*  `altair`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+
                 ui.input_numeric(
                     "ts_degree",
                     "Fitting degree:",
@@ -1473,17 +1465,17 @@ with ui.nav_panel("Visualisation"):
                     max=15
                     )
                 
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
                 ui.input_numeric(
                     "ts_scatter_size",
                     "Scatter size:",
                     60,
                     min=1,
-                    )
-                
-                ui.input_checkbox(
-                    "ts_fill",
-                    "fill scatter points",
-                    False
                     )
                 
                 ui.input_numeric(
@@ -1502,6 +1494,12 @@ with ui.nav_panel("Visualisation"):
                     max=1,
                     step=0.05
                     )
+
+                ui.input_checkbox(
+                    "ts_fill",
+                    "fill scatter points",
+                    False
+                    )
                 
                 ui.input_checkbox(
                     "ts_outline",
@@ -1510,70 +1508,84 @@ with ui.nav_panel("Visualisation"):
                     )
                 
             with ui.card():
-                @render.image
-                def time_series_plot1():
-                    pu.poly_fit_chart(
-                        df=Time_stats_df.get(), 
-                        metric=input.ts_metric(), 
-                        Metric=select_metrics.time[input.ts_metric()],
-                        condition=input.ts_condition(), 
-                        replicate=input.ts_replicate(), 
-                        degree=[input.ts_degree()],
-                        cmap=input.ts_cmap(), 
-                        fill=input.ts_fill(), 
-                        point_size=input.ts_scatter_size(), 
-                        outline=input.ts_outline(), 
-                        outline_width=input.ts_outline_width(), 
-                        opacity=input.ts_opacity(),
-                        replicates_separately=input.ts_separate_replicates(),
-                        dir=dir
-                        )
-                    return {"src": str(dir / "cache/poly_fit_chart.svg")}
-                
-                ui.input_action_button(
-                    'open_poly_fit_chart',
-                    'Interactive poly fit chart'
-                )
 
-                @reactive.effect
-                @reactive.event(input.open_poly_fit_chart)
-                def poly_fit_chart_open():
-                    webbrowser.open_new_tab(op.join(dir, "cache/poly_fit_chart.html"))
-                    return None
-                
-                @render.download(label="Download figure", filename="Time series - scatter fit.svg")
-                def download_time_series_plot1():
-                    return op.join(dir, "cache/poly_fit_chart.svg")
-                
-                @render.download(label="Download interactive plot as html", filename="Time series - scatter fit.html")
-                def download_time_series_plot1_html():
-                    return op.join(dir, "cache/poly_fit_chart.html")
-                
                 @render_altair
-                def altair_polz_fitt():
-                    chart = pu.poly_fit_chart(
-                        df=Time_stats_df.get(), 
-                        metric=input.ts_metric(), 
-                        Metric=select_metrics.time[input.ts_metric()],
+                def time_series_poly_fit_chart():
+                    chart = pu.Scatter_poly_fit_chart_altair(
+                        Time_df=Time_stats_df.get(), 
                         condition=input.ts_condition(), 
                         replicate=input.ts_replicate(), 
-                        degree=[input.ts_degree()],
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()], 
+                        degree=[input.ts_degree()], 
                         cmap=input.ts_cmap(), 
-                        fill=input.ts_fill(), 
+                        point_fill=input.ts_fill(), 
                         point_size=input.ts_scatter_size(), 
-                        outline=input.ts_outline(), 
-                        outline_width=input.ts_outline_width(), 
+                        point_outline=input.ts_outline(), 
+                        point_outline_width=input.ts_outline_width(), 
                         opacity=input.ts_opacity(),
-                        replicates_separately=input.ts_separate_replicates(),
-                        dir=dir
                         )
-                
                     return chart
                 
-
+                @render.download(label="Download interactive HTML chart", filename="Time series interactive - polynomial fit chart.html")
+                def download_time_series_poly_fit_chart__html():
+                    chart = pu.Scatter_poly_fit_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()], 
+                        degree=[input.ts_degree()], 
+                        cmap=input.ts_cmap(), 
+                        point_fill=input.ts_fill(), 
+                        point_size=input.ts_scatter_size(), 
+                        point_outline=input.ts_outline(), 
+                        point_outline_width=input.ts_outline_width(), 
+                        opacity=input.ts_opacity(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
+                
+                @render.download(label="Download SVG figure", filename="Time series - polynomial fit figure.svg")
+                def download_time_series_poly_fit_chart_svg():
+                    chart = pu.Scatter_poly_fit_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()], 
+                        degree=[input.ts_degree()], 
+                        cmap=input.ts_cmap(), 
+                        point_fill=input.ts_fill(), 
+                        point_size=input.ts_scatter_size(), 
+                        point_outline=input.ts_outline(), 
+                        point_outline_width=input.ts_outline_width(), 
+                        opacity=input.ts_opacity(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
+                
                 
 
             with ui.panel_well():
+
+                ui.markdown(
+                    """
+                    #### **Time series line chart**
+                    *made with*  `altair`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+
                 ui.input_checkbox(
                     "ts_show_median",
                     "show median",
@@ -1581,42 +1593,71 @@ with ui.nav_panel("Visualisation"):
                     )
                 
             with ui.card():
-                @render.image
-                def time_series_plot2():
-                    pu.line_chart(
-                        df=Time_stats_df.get(), 
-                        metric=input.ts_metric(), 
-                        Metric=select_metrics.time[input.ts_metric()], 
+                
+                @render_altair
+                def time_series_line_chart_altair():
+                    chart = pu.Line_chart_altair(
+                        Time_df=Time_stats_df.get(), 
                         condition=input.ts_condition(), 
                         replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
                         cmap=input.ts_cmap(), 
                         interpolation=input.ts_interpolation(), 
                         show_median=input.ts_show_median(),
-                        replicates_separately=input.ts_separate_replicates(),
-                        dir=dir
                         )
-                    return {"src": str(dir / "cache/line_chart.svg")}
+                    return chart
                 
-                ui.input_action_button(
-                    'open_line_chart',
-                    'Interactive line chart'
-                )
+                @render.download(label="Download interactive HTML chart", filename="Time series interactive - line chart.html")
+                def download_time_series_line_chart_html():
+                    chart = pu.Line_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        show_median=input.ts_show_median(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
 
-                @reactive.effect
-                @reactive.event(input.open_line_chart)
-                def line_chart_open():
-                    webbrowser.open_new_tab(op.join(dir, "cache/line_chart.html"))
-                    return None
-                
-                @render.download(label="Download figure", filename="Time series - line plot.svg")
-                def download_time_series_plot2_svg():
-                    return op.join(dir, "cache/line_chart.svg")
-                
-                @render.download(label="Download interactive plot as html", filename="Time series - line plot.html")
-                def download_time_series_plot2_html():
-                    return op.join(dir, "cache/line_chart.html")
+                @render.download(label="Download SVG figure", filename="Time series - line chart.svg")
+                def download_time_series_line_chart_svg():
+                    chart = pu.Line_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        show_median=input.ts_show_median(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
+
 
             with ui.panel_well():
+
+                ui.markdown(
+                    """
+                    #### **Errorband chart**
+                    *made with*  `altair`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+
                 ui.input_select(
                     "ts_extent",
                     "Extent:",
@@ -1629,46 +1670,76 @@ with ui.nav_panel("Visualisation"):
                     "show mean",
                     True
                     )
-
+                
             with ui.card():
-                @render.image
-                def time_series_plot3():
-                    pu.errorband_chart(
-                        df=Time_stats_df.get(), 
-                        metric=input.ts_metric(),
-                        Metric=select_metrics.time[input.ts_metric()], 
+                
+                @render_altair
+                def errorband_chart_altair():
+                    chart = pu.Errorband_chart_altair(
+                        Time_df=Time_stats_df.get(), 
                         condition=input.ts_condition(), 
                         replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
                         cmap=input.ts_cmap(), 
-                        interpolation=input.ts_interpolation(),
-                        show_mean=input.ts_show_mean(), 
-                        extent=input.ts_extent(),
-                        replicates_separately=input.ts_separate_replicates(),
-                        dir=dir
+                        interpolation=input.ts_interpolation(), 
+                        extent=input.ts_extent(), 
+                        show_mean=input.ts_show_mean(),
                         )
-                    return {"src": str(dir / "cache/errorband_chart.svg")}
+                    return chart
                 
-                ui.input_action_button(
-                    'open_errorband_chart',
-                    'Interactive error band chart'
-                )
+                @render.download(label="Download interactive HTML chart", filename="Time series interactive - error band chart.html")
+                def download_errorband_chart_html():
+                    chart = pu.Errorband_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        extent=input.ts_extent(), 
+                        show_mean=input.ts_show_mean(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
 
-                @reactive.effect
-                @reactive.event(input.open_errorband_chart)
-                def errorband_chart_open():
-                    webbrowser.open_new_tab(op.join(dir, "cache/errorband_chart.html"))
-                    return None
-                
-                @render.download(label="Download figure", filename="Time series - error band plot.svg")
-                def download_time_series_plot3_svg():
-                    return op.join(dir, "cache/errorband_chart.svg")
-                
-                @render.download(label="Download interactive plot as html", filename="Time series - error band plot.html")
-                def download_time_series_plot3_html():
-                    return op.join(dir, "cache/errorband_chart.html")
+                @render.download(label="Download SVG figure", filename="Time series - error band chart.svg")
+                def download_errorband_chart_svg():
+                    chart = pu.Errorband_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        extent=input.ts_extent(), 
+                        show_mean=input.ts_show_mean(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
+
 
             with ui.panel_well():
 
+                ui.markdown(
+                    """
+                    ##### **Common settings**
+                    *made with*  `altair`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+                
                 ui.input_select(
                     "ts_condition",
                     "Condition:",
@@ -1728,6 +1799,14 @@ with ui.nav_panel("Visualisation"):
                         id='ts_replicate',
                         choices=replicates
                         )
+                    
+                ui.markdown(
+                    """
+                    ___
+                    ###### ***Common settings for the line and errorband charts***
+
+                    """
+                    )
 
                 ui.input_select(
                     "ts_cmap",

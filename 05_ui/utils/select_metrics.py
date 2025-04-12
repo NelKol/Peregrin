@@ -45,9 +45,6 @@ spots = {
 spots_n_tracks = tracks | spots
 
 time = {
-    "CONDITION": "Condition",
-    "REPLICATE": "Replicate",
-    "POSITION_T": "Position T",
     "MEAN_TRACK_LENGTH": "Mean track length",
     "MEAN_NET_DISTANCE": "Mean net distance",
     "MEAN_CONFINEMENT_RATIO": "Mean confinement ratio",

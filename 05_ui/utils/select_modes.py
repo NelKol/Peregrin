@@ -124,16 +124,19 @@ cmaps_quantitative = [
     ]
 
 cmaps_qualitative = [
-    'Accent', 
-    'Dark2', 
-    'Set1', 
-    'Set2', 
-    'Set3', 
-    'tab10'
+    'Set1',
+    'Set2',
+    'Set3',
+    'tab10',
+    'Accent',
+    'Dark2',
+    'Paired',
+    'Pastel1',
+    'Pastel2',
     ]
 
 interpolation = [
-    None,
+    'None',
     "basis",
     "basis-open",
     "basis-closed",
