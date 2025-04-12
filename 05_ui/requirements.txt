@@ -7,3 +7,6 @@ peregrin
 seaborn
 altair
 plotly
+# fitz
+shinywidgets
+ratelimit

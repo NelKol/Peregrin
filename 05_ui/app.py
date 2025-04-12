@@ -1,6 +1,7 @@
 from shiny import reactive
 from shiny.express import input, render, ui
 from shiny.types import FileInfo
+from shinywidgets import render_plotly, render_altair
 
 import asyncio
 import io
@@ -14,210 +15,215 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
-import utils.data_utils as du
-import utils.plot_utils as pu
+import utils.funcs_data as du
+import utils.funcs_plot as pu
+import utils.select_markers as select_markers
+import utils.select_modes as select_mode
+import utils.select_metrics as select_metrics
+from utils.ratelimit import debounce, throttle
 
 import webbrowser
+import tempfile
+
+
+pd.options.mode.chained_assignment = None
+
 
 
 # ===========================================================================================================================================================================================================================================================================
-# Page specs and layout
+# ===========================================================================================================================================================================================================================================================================
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Reactive and global variables
+
+
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Creating reactive values for the data input
+
+raw_Buttered_df = reactive.value()      # Creating a reactive value for the stem/pre-processed base dataframe
+raw_Spot_stats_df = reactive.value()    # Creating a reactive value for the stem/pre-processed spot stats dataframe
+raw_Track_stats_df = reactive.value()   # Creating a reactive value for the stem/pre-processed track stats file dataframe
+raw_Time_stats_df = reactive.value()    # Creating a reactive value for the stem/pre-processed time stats file dataframe
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Creating reactive values for thresholding the data
+
+Spot_stats_df_T = reactive.value()      # Creating a reactive value for the mediating spot stats file used in thresholding
+Track_stats_df_T = reactive.value()     # Creating a reactive value for the mediating track stats file used in thresholding
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Creating reactive variables for processed dataframe storage
+
+Buttered_df = reactive.value()          # Creating a reactive value for the processed base dataframe
+Spot_stats_df = reactive.value()        # Creating a reactive value for the processed spot stats file
+Track_stats_df = reactive.value()       # Creating a reactive value for the processed track stats file
+Time_stats_df = reactive.value()        # Creating a reactive value for the processed time stats file
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Creating other reactive variables 
+
+Track_metrics = reactive.value()        # Creating a reactive value for the track metrics
+Spot_metrics = reactive.value()         # Creating a reactive value for the spot metrics
+
+slider_valuesT1 = reactive.value()      # Creating a reactive value for the slider values for thresholding 1
+slider_valuesT2 = reactive.value()      # Creating a reactive value for the slider values for thresholding 2
+slider_values = reactive.value()        # Creating a reactive value for the slider values
+
+count = reactive.value(1)               # Data input counter
+conditions = reactive.value()           # Creating a reactive value for the conditions
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Creating reactive values for the data input status
+
+file_detected = reactive.value(False)
+delayed_detection = reactive.value(False)
+cells_in_possesion = reactive.value(False)
+
+
+# -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Optics parameters
+
+# Definition of micron length per pixel
+microns_per_pixel = 0.7381885238402274 # for 10x lens
+
+# Define the desired dimensions in microns
+x_min, x_max = 0, (1600 * microns_per_pixel)
+y_min, y_max = 0, (1200 * microns_per_pixel)
+x_axe_remainder = x_max-1150
+x_add = 50 - x_axe_remainder
+y_ax_remainder = y_max-850
+x_substract = (x_max - y_max) + (y_ax_remainder - 50)
+
+# Calculate the aspect ratio
+aspect_ratio = x_max / y_max
+
+
+
+# plot specs
+title_size = 16
+title_size2 = 12
+label_size = 11
+figtext_size = 9
+compass_annotations_size = 15
+figtext_color = 'grey'
+
+# Color maps
+cmap_cells = mcolors.LinearSegmentedColormap.from_list("", ["#9b598910", "#9b181eff"])
+cmap_frames = plt.get_cmap('viridis')
+
+
+
+smoothing_index = reactive.value(0)
+arrow_size = reactive.value(6)
+line_width = reactive.value(1)
+marker_size = reactive.value(5)
+
+dir = Path(__file__).resolve().parent
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Creating a reactive value for visualized tracks hover info
+see_hover = reactive.value(['CONDITION', 'REPLICATE', 'TRACK_ID'])        # Creating a reactive value for the visualized tracks hover info
+
+
+
+
+
+# ===========================================================================================================================================================================================================================================================================
+# ===========================================================================================================================================================================================================================================================================
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Creating the app layout
 
 ui.page_opts(
     title="Peregrin", 
-    fillable=False
+    fillable=True
     )
 
 
-# ===========================================================================================================================================================================================================================================================================
-# Creating reactive variables for raw dataframe storage
-
-raw_Buttered_df = reactive.value()
-raw_Spot_stats_df = reactive.value()
-raw_Track_stats_df = reactive.value()
-raw_Time_stats_df = reactive.value()
 
 
 # ===========================================================================================================================================================================================================================================================================
-# Creating reactive variables for processed dataframe storage
-
-Buttered_df = reactive.value()
-Spot_stats_df = reactive.value()
-Track_stats_df = reactive.value()
-Time_stats_df = reactive.value()
-
-# ===========================================================================================================================================================================================================================================================================
-# Creating reactive values for thresholding the data
-
-Spot_stats_df_T = reactive.value()
-Track_stats_df_T = reactive.value()
-
-
-# ===========================================================================================================================================================================================================================================================================
-# Creating other reactive variables 
-
-Track_metrics = reactive.value()     # Creating a reactive value for the track metrics
-Spot_metrics = reactive.value()      # Creating a reactive value for the spot metrics
-
-slider_valuesT1 = reactive.value()   # Creating a reactive value for the slider values for thresholding 1
-slider_valuesT2 = reactive.value()   # Creating a reactive value for the slider values for thresholding 2
-slider_valuesT3 = reactive.value()   # Creating a reactive value for the slider values for thresholding 3
-count = reactive.value(1)            # Data input counter
-
-
-slider_values = reactive.value()     # Creating a reactive value for the slider values
-conditions = reactive.value()        # Creating a reactive value for the conditions
-
-
-dict_Track_metrics = {
-    "TRACK_LENGTH": "Track length", 
-    "NET_DISTANCE": "Net distance", 
-    "CONFINEMENT_RATIO": "Confinement ratio",
-    "TRACK_POINTS": "Number of points in track",
-    "SPEED_MEAN": "Mean speed",
-    "SPEED_MEDIAN": "Median speed",
-    "SPEED_MAX": "Max speed",
-    "SPEED_MIN": "Min speed",
-    "SPEED_STD_DEVIATION": "Speed standard deviation",
-    "MEAN_DIRECTION_DEG": "Mean direction (degrees)",
-    "MEAN_DIRECTION_RAD": "Mean direction (radians)",
-    "STD_DEVIATION_DEG": "Standard deviation (degrees)",
-    "STD_DEVIATION_RAD": "Standard deviation (radians)",
-}
-
-dict_Spot_metrics = {
-    "POSITION_T": "Position T",
-    "POSITION_X": "Position X",
-    "POSITION_Y": "Position Y",
-    "CONDITION": "Condition",
-    "REPLICATE": "Replicate",
-    "DISTANCE": "Distance",
-    "TRACK_LENGTH": "Track Length",
-    "NET_DISTANCE": "Net Distance",
-    "CONFINEMENT_RATIO": "Confinement Ratio",
-}
-
-dict_Metrics = dict_Track_metrics | dict_Spot_metrics
-
-dict_Time_metrics = {
-    "CONDITION": "Condition",
-    "REPLICATE": "Replicate",
-    "POSITION_T": "Position T",
-    "MEAN_TRACK_LENGTH": "Mean track length",
-    "MEAN_NET_DISTANCE": "Mean net distance",
-    "MEAN_CONFINEMENT_RATIO": "Mean confinement ratio",
-    "MEDIAN_TRACK_LENGTH": "Median track length",
-    "MEDIAN_NET_DISTANCE": "Median net distance",
-    "MEDIAN_CONFINEMENT_RATIO": "Median confinement ratio",
-    "min_DISTANCE": "Minimum distance",
-    "STD_DEVIATION_DEG": "Standard deviation (degrees)",
-    "MEDIAN_DIRECTION_DEG": "Median direction (degrees)",
-    "MEAN_DIRECTION_RAD": "Mean direction (radians)",
-    "STD_DEVIATION_RAD": "Standard deviation (radians)",
-    "MEDIAN_DIRECTION_RAD": "Median direction (radians)",
-    "SPEED_MIN": "Minimum speed",
-    "SPEED_MAX": "Maximum speed",
-    "SPEED_MEAN": "Mean speed",
-    "SPEED_STD_DEVIATION": "Speed standard deviation",
-    "SPEED_MEDIAN": "Median speed",
-}
-
-Thresholding_filters = {
-    "literal": "Literal",
-    "percentile": "Percentile",
-}
-
-# ===========================================================================================================================================================================================================================================================================
-# Data panel
-# ===========================================================================================================================================================================================================================================================================
-# Reading a selected CSV file and cleaning it
-# Extracting separate dataframes
-
-
-
-
-
-
-
-
-
-
-
-# Directionality metric 
-# When downloading, I could make it possible to download the merged df and the separate datasets as well, in which case I would exclude the CONDITION column but rather include it in the name of the file
-# I may include some metadata as well for download such as the data of the analysis and what not idk
-# # I could also make it possible to download the data as a .txt file or .xlsx file
-# # # 2D visualization - gating
-# # # remove the percentile thresholding opptions
-# # # make the thresholding the way that inputs are, so that you can add and remove them
-# # # maybe an option in 1D/2D thresholding
-
-
-
-
-
-
-
-
-
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Data input panel
+# 
+# 1. Rendering a default data input slot (CSV file browser and condition labeling text window)
+# 2. Adding and removing additional data input slots (CSV file browser and condition labeling text window)
 
 
 with ui.nav_panel("Input"):
     
-    with ui.div(id="data-inputs"): # div container for flow content
+    with ui.div(id="data-inputs"):      # div container for flow content
 
-        # =============================================================================================================================================================================================================================================================================
-        # Buttons for adding and removing additional data input
+        # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Buttons for adding and removing additional data inputs
 
-        ui.input_action_button("add_input", "Add data input")
-        ui.input_action_button("remove_input", "Remove data input")
+        ui.input_action_button("add_input", "Add data input", class_="btn btn-primary")
+        ui.input_action_button("remove_input", "Remove data input", class_="btn btn-primary")
 
+        ui.markdown(
+            """
+            ___
+            """
+        )
 
-        # =============================================================================================================================================================================================================================================================================
+        # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         # Default data input slot
 
         @render.ui
         def default_input():
             default_browser = ui.input_file("file1", "Input CSV", accept=[".csv"], multiple=True, placeholder="No files selected")
-            default_label = ui.input_text("label1", "Condition", placeholder="write something")
+            default_label = ui.input_text("label1", "Condition", placeholder="label me :D")
             return default_label, default_browser
 
 
-        # =============================================================================================================================================================================================================================================================================
-        # Additional data input slots - reacting on the buttons
+        # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Reactive event for adding and removing additional data input slots
 
-        @reactive.effect
-        @reactive.event(input.add_input)                             # "Add data input" button sensor
+        @reactive.effect                                        # Reactive effect on "Add data input"
+        @reactive.event(input.add_input)                        # "Add data input" button sensor
         def add_rowser():
-            if input.add_input():                                    # REACTION:
+            if input.add_input():                               # REACTION:
                 count.set(count.get() + 1)                      # Increasing the input count
                 adding = count.get()                            # Getting the current input count
 
-                browser = ui.input_file(                        # CSV file browser
+                segmentator = ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+
+                # CSV file browser
+                browser = ui.input_file(                        
                     id=f"file{adding}", 
                     label=f"Input CSV {adding}", 
                     accept=[".csv"], 
                     multiple=True, 
                     placeholder="No files selected"
                     )
-                label = ui.input_text(                          # Data labeling text window
+                
+                # Data labeling text window (condition labeling)
+                label = ui.input_text(                          
                     id=f"label{adding}", 
                     label=f"Condition", 
-                    placeholder="write something"
+                    placeholder="label me :D"
                     )
 
-                ui.insert_ui(                                   # Rendering the additional input slot container
-                    ui.div(                                     # container consisting of the label, browser and use button
+                # Container rendering the additional input slot container
+                ui.insert_ui(                                   
+                    ui.div(                                     
                         {"id": f"additional-input-{adding}"}, 
-                        label, browser),
+                        segmentator, label, browser),
                         selector="#data-inputs",
                         where="beforeEnd",
                 )
 
-        @reactive.effect
-        @reactive.event(input.remove_input)                             # "Remove data input" button sensor
+        @reactive.effect                                        # Reactive effect on "Remove data input"
+        @reactive.event(input.remove_input)                     # "Remove data input" button sensor
         def remove_browser():
-            if input.remove_input():                                    # REACTION:
+            if input.remove_input():                            # REACTION:
                 removing = count.get()                          # Getting the current input count
                 ui.remove_ui(f"#additional-input-{removing}")   # Removing the last input slot (one with the current input count)
                 if count.get() > 1:                             # Decreasing the input count
@@ -226,78 +232,86 @@ with ui.nav_panel("Input"):
                     pass
 
 
-    @reactive.calc 
-    def parsed_file():                                                          # File-reading 
-        
-        # =============================================================================================================================================================================================================================================================================
-        # Processing the default input files
 
-        default = pd.DataFrame()
+
+
+    # =======================================================================================================================================================================================================================================================================
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    # Data input parsing and processing function
+    # 
+    # 1. Loading the data from the CSV files
+    # 2. Buttering the data (smoothing)
+    # 3. Assigning the condition and replicate labels to the data
+    # 4. Merging the data into a single DataFrame
+
+
+    @reactive.calc 
+    def parsed_file():                                                           
+        
+        default = pd.DataFrame()                                                        
         additional = pd.DataFrame()
                     
-        inpt_file_list_dflt: list[FileInfo] | None = input.file1()                      # Getting the list of default input files
+        inpt_file_list_dflt: list[FileInfo] | None = input.file1()                      # Getting the list of default input data files
 
         if inpt_file_list_dflt is None:
             default = pd.DataFrame()
         
         else:
             all_data_dflt = []
-            for dflt_file_count, file_dflt in enumerate(inpt_file_list_dflt, start=1):       # Enumerate and cycle through default input files
-                df_dflt = pd.read_csv(file_dflt['datapath'])                     
-                buttered_dflt = du.butter(df_dflt)                                      # Process the DataFrame
+            for dflt_file_count, file_dflt in enumerate(inpt_file_list_dflt, start=1):  # Enumerate and cycle through the files
+                df_dflt = pd.read_csv(file_dflt['datapath'])                            # Load each CSV file into a DataFrame
+                buttered_dflt = du.butter(df_dflt)                                      # Butter the DataFrame
                                                   
-                label_dflt = input.label1()                                             # Getting the label to assign the 'CONDITION' column parameter
-                if not label_dflt or label_dflt is None:                                # If no label is provided, assign a default one
+                label_dflt = input.label1()                                             # Assigning the condition label to a 'CONDITION' column
+                if not label_dflt or label_dflt is None:                                # If no label is provided, assign a default - numeric - one
                     buttered_dflt['CONDITION'] = 1
-                else:                                                                   # Else, assign the given lable
+                else:                                                                   # Else, assign the lable
                     buttered_dflt['CONDITION'] = f'{label_dflt}'
-                buttered_dflt['REPLICATE'] = dflt_file_count
+                buttered_dflt['REPLICATE'] = dflt_file_count                            # Assigning the replicate number
 
-                all_data_dflt.append(buttered_dflt)                                       # Store processed DataFrame
+                all_data_dflt.append(buttered_dflt)                                     # Stack the buttered and labeled DataFrames into a list
 
-                default = pd.concat(all_data_dflt, axis=0)                              # Join the DataFrames
+                default = pd.concat(all_data_dflt, axis=0)                              # Merge the DataFrames
                 
-        # =============================================================================================================================================================================================================================================================================
+
+        # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         # Processing the additional input files
 
         browse_count = count.get()                                                      # Getting the current additional input slot count
-        all_data_addtnl = []                                                            # List storing processed DataFrames                            
-        for i in range(2, browse_count + 1, 1):                                         # Cycle trough the additional input slots 
+        all_data_addtnl = []                         
+        for i in range(2, browse_count + 1, 1):                                         # Cycle trough the additional input slots
 
-            inpt_file_list_addtnl: list[FileInfo] | None = input[f"file{i}"]()         # Getting the list of files
+            inpt_file_list_addtnl: list[FileInfo] | None = input[f"file{i}"]()          # Getting the list of additional input data files
 
             if inpt_file_list_addtnl is None:
                 additional = pd.DataFrame()
             
             else:
-                for additnl_file_count, file_addtnl in enumerate(inpt_file_list_addtnl, start=1):                             # Enumerate and cycle through additional input files
+                for additnl_file_count, file_addtnl in enumerate(inpt_file_list_addtnl, start=1):   # Enumerate and cycle through additional input files
                     df_addtnl = pd.read_csv(file_addtnl["datapath"])                  
                     buttered_addtnl = du.butter(df_addtnl)
 
-                    label_addtnl = input[f"label{i}"]()                                # Getting the label to assign the 'CONDITION' column parameter
-                    if not label_addtnl or label_addtnl is None:                                        # If no label is provided, assign a default one
+                    label_addtnl = input[f"label{i}"]()                                 # Assigning the condition label to a 'CONDITION' column
+                    if not label_addtnl or label_addtnl is None:                        # If no label is provided, assign a default - numeric - one
                         buttered_addtnl['CONDITION'] = i
-                    else:                                                                               # Else, assign the given lable
+                    else:                                                               # Else, assign the given lable
                         buttered_addtnl['CONDITION'] = f'{label_addtnl}'
-                    buttered_addtnl['REPLICATE'] = additnl_file_count
+                    buttered_addtnl['REPLICATE'] = additnl_file_count                   # Assigning the replicate number
 
-                    all_data_addtnl.append(buttered_addtnl)                                           # Store processed DataFrame
+                    all_data_addtnl.append(buttered_addtnl)                             # Stack the buttered and labeled DataFrames into a list
                     
 
-                    additional = pd.concat(all_data_addtnl, axis=0)                     # Join the DataFrames
+                    additional = pd.concat(all_data_addtnl, axis=0)                     # Merge the DataFrames
 
-        # =============================================================================================================================================================================================================================================================================
+
+        # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         # Merging the default and additional input files
 
         return pd.DataFrame(pd.concat([default, additional], axis=0))
 
 
-
-
-
-file_detected = reactive.value(False)
-delayed_detection = reactive.value(False)
-cells_in_possesion = reactive.value(False)
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Creating a reactive effect detecting any files is selected
 
 @reactive.effect
 def file_detection():
@@ -307,39 +321,36 @@ def file_detection():
             file_detected.set(True)
         else:
             pass
-
-
-@reactive.calc
-async def file_detection_delay():
-    if file_detected.get():
-        await asyncio.sleep(2.5)
-        return True
-    else:
-        return False
         
             
 
             
  
 
+# ===========================================================================================================================================================================================================================================================================
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Data processing and showcasing panel
+# 
+# 1. Processing and calculating the data (spot stats, track stats, time stats)
+# 2. Displaying the dataframes
+# 3. Enabling the user to download the dataframes as .csv files
 
 
-with ui.nav_panel("Data frames"):  # Data panel
+with ui.nav_panel("Data frames"):  
 
-    # =============================================================================================================================================================================================================================================================================
-    # Executing the functions 
-    # Creating separate dataframes
-    # Itermidiate caching of the dataframes
 
-    
+    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
     @reactive.effect
     def update_buttered_df():
         if file_detected.get() == False:
             return pd.DataFrame()
         
-        df = parsed_file()  # Call the expensive function.
+        df = parsed_file()
         raw_Buttered_df.set(df)
 
+
+    # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     @reactive.calc
     def process_spot_data():
@@ -367,13 +378,13 @@ with ui.nav_panel("Data frames"):  # Data panel
             Spot_stats = process_spot_data()
             raw_Spot_stats_df.set(Spot_stats)
             Spot_metrics.set(Spot_stats.columns)
-
         
         Spot_stats = process_spot_data()
         raw_Spot_stats_df.set(Spot_stats)
         Spot_metrics.set(Spot_stats.columns)
 
 
+    # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     @reactive.calc
     def process_track_data():
@@ -397,8 +408,25 @@ with ui.nav_panel("Data frames"):  # Data panel
         Track_stats = Track_stats.sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID'])
 
         return Track_stats
-
     
+
+    @reactive.effect
+    def update_Track_stats_df():
+        if file_detected.get() == False:
+            return pd.DataFrame()
+        
+        else:
+            Track_stats = process_track_data()
+            raw_Track_stats_df.set(Track_stats)
+            Track_metrics.set(Track_stats.columns)
+
+        Track_stats = process_track_data()
+        raw_Track_stats_df.set(Track_stats)
+        Track_metrics.set(Track_stats.columns)
+
+
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
     @reactive.calc
     def process_time_data():
         if file_detected.get() == False:
@@ -425,21 +453,6 @@ with ui.nav_panel("Data frames"):  # Data panel
     
 
     @reactive.effect
-    def update_Track_stats_df():
-        if file_detected.get() == False:
-            return pd.DataFrame()
-        
-        else:
-            Track_stats = process_track_data()
-            raw_Track_stats_df.set(Track_stats)
-            Track_metrics.set(Track_stats.columns)
-
-        Track_stats = process_track_data()
-        raw_Track_stats_df.set(Track_stats)
-        Track_metrics.set(Track_stats.columns)
-
-
-    @reactive.effect
     def update_Time_stats_df():
         if file_detected.get() == False:
             return pd.DataFrame()
@@ -454,10 +467,12 @@ with ui.nav_panel("Data frames"):  # Data panel
         Time_stats_df.set(Time_stats)
 
 
+
+
+
     # =============================================================================================================================================================================================================================================================================
-    # Separately displaying the dataframes
-    # Enabling the user to download the dataframes as .csv files
-    # Enabling data filtering?
+    # Separately displaying Spot, Track and Time dataframes with possibility for CSV download
+
 
     with ui.layout_columns():  
         with ui.card():  
@@ -529,11 +544,11 @@ with ui.nav_panel("Data frames"):  # Data panel
 
 
 # ===========================================================================================================================================================================================================================================================================
-# Sidebar
-# ===========================================================================================================================================================================================================================================================================
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Thresholding utilities - functions
 
 
-def update_slider(filter_type, slider, slider_values):
+def _update_slider(filter_type, slider, slider_values):
     if filter_type == "percentile":
         ui.update_slider(id=slider, min=0, max=100, value=(0, 100), step=1)
     elif filter_type == "literal":
@@ -550,7 +565,8 @@ def update_slider(filter_type, slider, slider_values):
         if values:
             ui.update_slider(id=slider, min=values[0], max=values[1], value=values, step=steps)
 
-def update_slider_values(metric, filter, dfA, dfB, slider_values):
+
+def _update_slider_values(metric, filter, dfA, dfB, slider_values):
     if metric in Track_metrics.get():
         try:
             if filter == "literal":
@@ -576,7 +592,8 @@ def update_slider_values(metric, filter, dfA, dfB, slider_values):
         except Exception as e:
             slider_values.set([0, 100])
     
-def thresholded_histogram(metric, filter_type, slider_range, dfA, dfB):
+
+def _thresholded_histogram(metric, filter_type, slider_range, dfA, dfB):
     if file_detected.get() == False:
         return None
     elif dfA == None:
@@ -619,7 +636,8 @@ def thresholded_histogram(metric, filter_type, slider_range, dfA, dfB):
 
         return fig
 
-def data_thresholding_numbers(df):
+
+def _data_thresholding_numbers(df):
     raw = raw_Track_stats_df.get().shape[0]
     filtered = df.shape[0]
     filtered_out = raw - filtered
@@ -630,7 +648,8 @@ def data_thresholding_numbers(df):
 
     return f"Cells in total: {raw}", f"In focus: {round(filtered_prcbt)} % ({filtered})", f"Filtered out: {round(filtered_out_prcbt)} % ({filtered_out})"
 
-def thresholded_data(filter_type, metric, slider_range, dfA, dfB):
+
+def _thresholded_data(filter_type, metric, slider_range, dfA, dfB):
     if filter_type == "percentile":
         if metric in Track_metrics.get():
             return du.percentile_thresholding(dfA, metric, slider_range)
@@ -642,11 +661,13 @@ def thresholded_data(filter_type, metric, slider_range, dfA, dfB):
         elif metric in Spot_metrics.get():
             return du.literal_thresholding(dfB, metric, slider_range)
         
-def set_thresholded_data(dfA, dfB, df0A, df0B):
+
+def _set_thresholded_data(dfA, dfB, df0A, df0B):
     dfA.set(df0A.get())
     dfB.set(df0B.get())
 
-def update_thresholded_data(metric, dfA, dfB, df0A, df0B, thresholded_df):
+
+def _update_thresholded_data(metric, dfA, dfB, df0A, df0B, thresholded_df):
     if metric in Track_metrics.get():
         dfA.set(thresholded_df)
         dfB.set(du.dataframe_filter(df0B.get(), dfA.get()))
@@ -656,36 +677,50 @@ def update_thresholded_data(metric, dfA, dfB, df0A, df0B, thresholded_df):
 
 
 
-# ===========================================================================================================================================================================================================================================================================
+# ============================================================================================================================================================================================================================================================================
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Sidebar
 
-pass_check = reactive.value(True)
+# pass_check = reactive.value(True)
 
 with ui.sidebar(open="open", position="right", bg="f8f8f8"): 
 
 
-    @render.text
-    def first_thresholding():
-        return "Filter no. 1"
+    # ================================================================================================================================================================================================================================================================================
+    # Thresholding window no. 1
+    # 
+    # 1. Thresholding metric selection
+    # 2. Thresholding filter selection
+    # 3. Thresholding slider
+    # 4. Thresholding histogram
+    # 5. Thresholding output - numbers (cells in total, filtered in focus, filtered out)
+
+
+    ui.markdown(
+        """
+        ###### **Thresholding no. 1**
+
+        """
+        )
 
     with ui.panel_well():
 
-    # ===========================================================================================================================================================================================================================================================================
-    # Creating a possibility for thresholding metric selection
-    # Creating a possibility for thresholding filter selection
-    # Creating a slider for thresholding
+
+        # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Metirc and filter selection selection
+        # Slider rendering
 
         ui.input_select(  
             "metricA",  
             "Thresholding metric:",  
-            dict_Metrics 
-        )  
+            select_metrics.tracks 
+            )  
 
         ui.input_select(
             "filterA",
             "Thresholding filter:",
-            Thresholding_filters
-        )
+            select_mode.thresholding
+            )
 
         ui.input_slider(
             "sliderA",
@@ -693,65 +728,78 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
             min=0,
             max=100,
             value=(0, 100)
-        )
+            )
 
 
-        # ===========================================================================================================================================================================================================================================================================
-        # Reactive functions updating the slider values
+        # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Updating the slider range
         
         @reactive.effect
         def update_sliderA():
-            return update_slider(input.filterA(), "sliderA", slider_valuesT1)
+            return _update_slider(input.filterA(), "sliderA", slider_valuesT1)
 
         @reactive.effect
         def update_slider_valuesA():
-            return update_slider_values(input.metricA(), input.filterA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get(), slider_valuesT1)
+            return _update_slider_values(input.metricA(), input.filterA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get(), slider_valuesT1)
 
 
-        # ===========================================================================================================================================================================================================================================================================
-        # Thresholding the data based on percentiles
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Data filtering itself
         
         @reactive.calc
         def thresholded_dataA():
-            return thresholded_data(input.filterA(), input.metricA(), input.sliderA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get())
+            return _thresholded_data(input.filterA(), input.metricA(), input.sliderA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get())
 
         @reactive.effect
         def set_thresholded_dataA():
             if delayed_detection.get() == False:
-                set_thresholded_data(Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df)
+                _set_thresholded_data(Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df)
             else:
                 pass
 
         @reactive.effect
         # @reactive.event(input.threshold1, input.)
         def update_thresholded_dataA():
-            return update_thresholded_data(input.metricA(), Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df, thresholded_dataA())
+            return _update_thresholded_data(input.metricA(), Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df, thresholded_dataA())
+
+
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Thresholding histogram
 
         @render.plot
         def threshold_histogramA():
-            return thresholded_histogram(input.metricA(), input.filterA(), input.sliderA(), raw_Track_stats_df, raw_Spot_stats_df)
+            return _thresholded_histogram(input.metricA(), input.filterA(), input.sliderA(), raw_Track_stats_df, raw_Spot_stats_df)
+
+
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Output - numbers
 
         @render.text
         def data_thresholding_numbersA1():
             if cells_in_possesion.get() == False:
                 return None
-            a, b, c = data_thresholding_numbers(raw_Track_stats_df.get())
+            a, b, c = _data_thresholding_numbers(raw_Track_stats_df.get())
             return a
 
         @render.text
         def data_thresholding_numbersA2():
             if cells_in_possesion.get() == False:
                 return None
-            a, b, c = data_thresholding_numbers(Track_stats_df_T.get())
+            a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
             return b
             
         @render.text
         def data_thresholding_numbersA3():
             if cells_in_possesion.get() == False:
                 return None
-            a, b, c = data_thresholding_numbers(Track_stats_df_T.get())
+            a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
             return c
-    
+        
+
+
+
+# Task button for applying the thresholding
+
     # @ui.bind_task_button(button_id="threshold1")
     # @reactive.extended_task
     # async def thresholding1():
@@ -763,34 +811,42 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
             
         
 
-# ===========================================================================================================================================================================================================================================================================
-# Thresholding 2 panel
+    # ================================================================================================================================================================================================================================================================================
+    # Thresholding well no. 2
+    # 
+    # 1. Thresholding metric selection
+    # 2. Thresholding filter selection
+    # 3. Thresholding slider
+    # 4. Thresholding histogram
+    # 5. Thresholding output - numbers (cells in total, filtered in focus, filtered out)
 
-# with ui.accordion_panel(title="Tresholding 2"):
 
-    @render.text
-    def second_thresholding():
-        return "Filter no. 2"
+    ui.markdown(
+        """
+        ###### **Thresholding no. 1**
+
+        """
+        )
 
     with ui.panel_well():
 
-        # ===========================================================================================================================================================================================================================================================================
-        # Creating a possibility for thresholding metric selection
-        # Creating a possibility for thresholding filter selection
-        # Creating a slider for thresholding
+        
+        # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Metirc and filter selection selection
+        # Slider rendering
 
         ui.input_select(  
             id="metricB",  
             label="Thresholding metric:",  
-            choices=dict_Metrics ,
+            choices=select_metrics.spots_n_tracks ,
             selected="NUM_FRAMES"
-        )  
+            )   
 
         ui.input_select(
             "filterB",
             "Thresholding filter:",
-            Thresholding_filters
-        )
+            select_mode.thresholding
+            )
 
         ui.input_slider(
             "sliderB",
@@ -798,65 +854,75 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
             min=0,
             max=100,
             value=(0, 100)
-        )
+            )
 
 
-        # ===========================================================================================================================================================================================================================================================================
-        # Reactive functions updating the slider values
+        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Updating the slider range
         
         @reactive.effect
         def update_sliderB():
-            return update_slider(input.filterB(), "sliderB", slider_valuesT2)
+            return _update_slider(input.filterB(), "sliderB", slider_valuesT2)
 
         @reactive.effect
         def update_slider_valuesB():
-            return update_slider_values(input.metricB(), input.filterB(), Track_stats_df_T.get(), Spot_stats_df_T.get(), slider_valuesT2)
+            return _update_slider_values(input.metricB(), input.filterB(), Track_stats_df_T.get(), Spot_stats_df_T.get(), slider_valuesT2)
 
 
-        # ===========================================================================================================================================================================================================================================================================
-        # Thresholding the data based on percentiles
+        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Data filtering itself
         
         @reactive.calc
         def thresholded_dataB():
-            return thresholded_data(input.filterB(), input.metricB(), input.sliderB(), Track_stats_df_T.get(), Spot_stats_df_T.get())
+            return _thresholded_data(input.filterB(), input.metricB(), input.sliderB(), Track_stats_df_T.get(), Spot_stats_df_T.get())
 
         @reactive.effect
         def set_thresholded_dataB():
             if delayed_detection.get() == False:
-                set_thresholded_data(Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T)
+                _set_thresholded_data(Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T)
             else:
                 pass
             
         @reactive.effect
         # @reactive.event(input.threshold1, input.threshold2)
         def update_thresholded_dataB():
-            return update_thresholded_data(input.metricB(), Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T, thresholded_dataB())
+            return _update_thresholded_data(input.metricB(), Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T, thresholded_dataB())
+
+
+        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Thresholding histogram
 
         @render.plot
         def threshold_histogramB():
-            return thresholded_histogram(input.metricB(), input.filterB(), input.sliderB(), Track_stats_df_T, Spot_stats_df_T)
+            return _thresholded_histogram(input.metricB(), input.filterB(), input.sliderB(), Track_stats_df_T, Spot_stats_df_T)
+
+
+        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Output - numbers
 
         @render.text
         def data_thresholding_numbersB1():
             if cells_in_possesion.get() == False:
                 return None
-            a, b, c = data_thresholding_numbers(Track_stats_df.get())
+            a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return a
 
         @render.text
         def data_thresholding_numbersB2():
             if cells_in_possesion.get() == False:
                 return None
-            a, b, c = data_thresholding_numbers(Track_stats_df.get())
+            a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return b
 
         @render.text
         def data_thresholding_numbersB3():
             if cells_in_possesion.get() == False:
                 return None
-            a, b, c = data_thresholding_numbers(Track_stats_df.get())
+            a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return c
         
+
+# Task button for applying the thresholding
 
     # @ui.bind_task_button(button_id="threshold2")
     # @reactive.extended_task
@@ -877,144 +943,381 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
 
 
-
-# ===========================================================================================================================================================================================================================================================================	
-# Optics parameters
-
-# Definition of micron length per pixel
-microns_per_pixel = 0.7381885238402274 # for 10x lens
-
-# Define the desired dimensions in microns
-x_min, x_max = 0, (1600 * microns_per_pixel)
-y_min, y_max = 0, (1200 * microns_per_pixel)
-x_axe_remainder = x_max-1150
-x_add = 50 - x_axe_remainder
-y_ax_remainder = y_max-850
-x_substract = (x_max - y_max) + (y_ax_remainder - 50)
-
-# Calculate the aspect ratio
-aspect_ratio = x_max / y_max
-
-
-
-# ===========================================================================================================================================================================================================================================================================
-# Globally used callables
-
-# plot specs
-title_size = 16
-title_size2 = 12
-label_size = 11
-figtext_size = 9
-compass_annotations_size = 15
-figtext_color = 'grey'
-
-# Color maps
-cmap_cells = mcolors.LinearSegmentedColormap.from_list("", ["#9b598910", "#9b181eff"])
-cmap_frames = plt.get_cmap('viridis')
-
-
-
-
-# ===========================================================================================================================================================================================================================================================================
+# ================================================================================================================================================================================================================================================================================
+# ================================================================================================================================================================================================================================================================================
+# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Visualisation panel
-# ===========================================================================================================================================================================================================================================================================
-# Data visualisation
-# Plots
-# Statistical testing?
-
-color_modes = {
-    'greyscale': 'B&W',
-    'color1': 'jet',
-    'color3': 'brg',
-    'color4': 'hot',
-    'color5': 'viridis',
-    'color6': 'rainbow',
-    'color7': 'turbo',
-    'color8': 'nipy-spectral',
-    'color9': 'gist-ncar'
-    }
-
-smoothing_index = reactive.value(0)
-arrow_size = reactive.value(6)
-line_width = reactive.value(1)
-
-dir = Path(__file__).resolve().parent
 
 
 with ui.nav_panel("Visualisation"):
 
-    # ===========================================================================================================================================================================================================================================================================
-    # Tracks tab
+    with ui.navset_pill_list(widths=(2, 9)):
 
-    with ui.navset_pill_list(widths=(2,9), selected="Time series"):
+        # ==========================================================================================================================================================================================================================================================================
+        # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Track visualization pill
 
         with ui.nav_panel("Tracks"):
-            with ui.card():
-                ui.card_header("True tracks visualisation")
 
-                @render.plot
-                def tracks_plot():
-                    return pu.visualize_tracks(
-                        df=Spot_stats_df.get(),
-                        df2=Track_stats_df.get(),
-                        condition=input.condition(), 
-                        replicate=input.replicate(), 
-                        c_mode=input.color_mode(), 
-                        grid=input.grid(),
-                        smoothing_index=smoothing_index.get(),
-                        lut_metric=input.lut_scaling(),
-                        lw=line_width.get(),
-                        arrowsize=arrow_size.get()
-                        )
-                @render.download(label="Download figure", filename="Track visualization.svg")
-                def download_tracks_plot():
-                    figure = pu.visualize_tracks(
-                        df=Spot_stats_df.get(),
-                        df2=Track_stats_df.get(),
-                        condition=input.condition(), 
-                        replicate=input.replicate(), 
-                        c_mode=input.color_mode(), 
-                        grid=input.grid(),
-                        smoothing_index=smoothing_index.get(), 
-                        lut_metric=input.lut_scaling(),
-                        lw=line_width.get(),
-                        arrowsize=arrow_size.get()
-                        )
-                    with io.BytesIO() as buf:
-                        figure.savefig(buf, format="svg")
-                        yield buf.getvalue()
-                @render.download(label="Download LUT map", filename="Track visualization LUT map.svg")
-                def download_tracks_lut_map():
-                    figure = pu.tracks_lut_map(
-                        df2=Track_stats_df.get(), 
-                        c_mode=input.color_mode(), 
-                        lut_metric=input.lut_scaling(), 
-                        metrics_dict=dict_Track_metrics
-                        )
-                    with io.BytesIO() as buf:
-                        figure.savefig(buf, format="svg", bbox_inches='tight')
-                        yield buf.getvalue()
 
-            with ui.card():
-                ui.card_header("Normalized tracks")
+            # ==================================================================================================================================================================================================================================================================================
+            # Plotly - interactive visualization settings'
 
-                @render.plot
-                def normalized_tracks():
-                    figure = pu.visualize_normalized_tracks(
-                        df=Spot_stats_df.get(), 
-                        condition=input.condition(), 
-                        replicate=input.replicate(), 
-                        c_mode=input.color_mode(), 
-                        only_one_color='black', 
-                        lw=0.5, 
-                        grid=True, 
-                        backround='light', 
-                        lut_metric='NET_DISTANCE'
-                        )
-
-                
-            
             with ui.panel_well():
+
+                ui.markdown(
+                    """
+                    #### **Interactive track visualization**
+                    *made with*  `plotly`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+
+                # 1. Hover info selection (metrics)
+
+                ui.input_selectize(
+                    'let_me_look_at_these',
+                    'Let me look at these:',
+                    select_metrics.tracks,
+                    multiple=True,
+                    selected=['CONDITION', 'REPLICATE', 'TRACK_ID'],
+                    )
+                
+                ui.input_action_button(
+                    'hover_info',
+                    'see info',
+                    class_="btn btn-primary",
+                    style="padding: 4px 50px"
+                    )
+                
+                @reactive.effect
+                @reactive.event(input.hover_info)
+                def update_hover_info():
+                    see_hover.set(input.let_me_look_at_these())
+
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+
+
+                # 2. Marker size setting
+                # 3. Markers displayed at the end of the tracks
+                # 4. Markers selection (for the end of the tracks)
+
+                ui.input_numeric(
+                    'marker_size',
+                    'Marker size:',
+                    5
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_marker_size():
+                    return input.marker_size()
+                
+                
+                ui.input_checkbox(
+                    'end_track_markers',
+                    'markers at the end of the tracks',
+                    True
+                    )
+                
+                ui.input_select(
+                    'markers',
+                    'Markers:',
+                    select_markers.classic,
+                    selected='circle',
+                    )
+
+                ui.input_checkbox(
+                    'I_just_wanna_be_normal',
+                    'just be normal',
+                    True
+                    )
+
+                @reactive.effect
+                @reactive.event(input.I_just_wanna_be_normal)
+                def update_markers():
+                    if input.I_just_wanna_be_normal():
+                        ui.update_select(
+                            id='markers',
+                            choices=select_markers.classic,
+                            selected='circle-open',
+                            )
+                        ui.update_numeric(
+                            id='marker_size',
+                            value=5,
+                            )
+                        marker_size.set(5)
+
+                    else:
+                        ui.update_select(
+                            id='markers',
+                            choices=select_markers.not_normal,
+                            selected='scaled',
+                            )
+                        ui.update_numeric(
+                            id='marker_size',
+                            value=14,
+                            )
+                        marker_size.set(14)
+                        
+            # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+            # Plotly - interactive visualization
+            # 
+            # 1. Plotly figure rendering
+            # 2. Plotly figure download button (HTML)
+
+            with ui.card():
+
+                @render_plotly
+                def interactive_true_track_visualization():
+                    fig = pu.Visualize_tracks_plotly(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        lut_scaling_metric=input.lut_scaling(), 
+                        let_me_look_at_these=see_hover.get(), 
+                        background=input.background(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_line_width(),
+                        marker_size=update_marker_size(),
+                        end_track_markers=input.end_track_markers(),
+                        markers=input.markers(),
+                        I_just_wanna_be_normal=input.I_just_wanna_be_normal(), 
+                        metric_dictionary=select_metrics.tracks,
+                        show_tracks=input.show_tracks(),
+                        )
+                    return fig
+                
+
+                @render.download(label="Download interactive HTML figure", filename="Track visualization.html")
+                def download_true_interactive_visualization_html():
+                    fig = pu.Visualize_tracks_plotly(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        lut_scaling_metric=input.lut_scaling(), 
+                        let_me_look_at_these=see_hover.get(), 
+                        background=input.background(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_line_width(),
+                        marker_size=update_marker_size(),
+                        end_track_markers=input.end_track_markers(),
+                        markers=input.markers(),
+                        I_just_wanna_be_normal=input.I_just_wanna_be_normal(), 
+                        metric_dictionary=select_metrics.tracks,
+                        show_tracks=input.show_tracks(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+                        fig.write_html(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
+            
+
+                @render_plotly
+                def interactive_normalized_track_visualization():
+                    fig = pu.Visualize_normalized_tracks_plotly(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(),
+                        condition=input.condition(),
+                        replicate=input.replicate(),
+                        c_mode=input.color_mode(),
+                        only_one_color=input.only_one_color(),
+                        lut_scaling_metric=input.lut_scaling(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_line_width(),
+                        marker_size=update_marker_size(),
+                        end_track_markers=input.end_track_markers(),
+                        markers=input.markers(),
+                        I_just_wanna_be_normal=input.I_just_wanna_be_normal(),
+                        metric_dictionary=select_metrics.tracks,
+                        let_me_look_at_these=see_hover.get(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    return fig
+                
+                @render.download(label="Download interactive HTML figure", filename="Normalized track visualization.html")
+                def download_normalized_interactive_visualization_html():
+                    fig = pu.Visualize_normalized_tracks_plotly(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(),
+                        condition=input.condition(),
+                        replicate=input.replicate(),
+                        c_mode=input.color_mode(),
+                        only_one_color=input.only_one_color(),
+                        lut_scaling_metric=input.lut_scaling(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_line_width(),
+                        marker_size=update_marker_size(),
+                        end_track_markers=input.end_track_markers(),
+                        markers=input.markers(),
+                        I_just_wanna_be_normal=input.I_just_wanna_be_normal(),
+                        metric_dictionary=select_metrics.tracks,
+                        let_me_look_at_these=see_hover.get(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+                        fig.write_html(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
+                        
+
+            # ==================================================================================================================================================================================================================================================================================
+            # Matplotlib - static visualization settings
+
+            with ui.panel_well():
+
+                ui.markdown(
+                    """
+                    #### **Static track visualization**
+                    *made with*  `matplotlib`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+
+                # 1. Arrow size setting
+                # 2. Arrows displayed at the end of the tracks
+                # 3. Grid displayment
+
+                ui.input_numeric(
+                    'arrow_size',
+                    'Arrow size:',
+                    6
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_arrow_size():
+                    return input.arrow_size()
+                
+                ui.input_checkbox(
+                    'arrows',
+                    'arrows at the end of tracks',
+                    True
+                    )
+                
+                ui.input_checkbox(
+                    "grid", 
+                    "grid", 
+                    True
+                    ) 
+
+            # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+            # Matplotlib - static visualization
+            #
+            # 1. Matplotlib figure rendering
+            # 2. Matplotlib figure download button (SVG)
+
+            with ui.card():
+
+                @render.plot
+                def true_track_visualization():
+                    plot = pu.Visualize_tracks_matplotlib(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        lut_scaling_metric=input.lut_scaling(), 
+                        background=input.background(),
+                        grid=input.grid(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_line_width(),
+                        arrows=input.arrows(),
+                        arrowsize=update_arrow_size(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    return plot
+                
+                @render.download(label="Download SVG figure", filename="Track visualization.svg")
+                def download_true_visualization_svg():
+                    plot = pu.Visualize_tracks_matplotlib(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        lut_scaling_metric=input.lut_scaling(), 
+                        background=input.background(),
+                        grid=input.grid(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_line_width(),
+                        arrows=input.arrows(),
+                        arrowsize=update_arrow_size(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    with io.BytesIO() as buf:
+                        plot.savefig(buf, format="svg")
+                        yield buf.getvalue()
+
+
+                @render.plot
+                def normalized_track_visualization():
+                    plot = pu.Visualize_normalized_tracks_matplotlib(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        lut_scaling_metric=input.lut_scaling(),
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        smoothing_index=update_smoothing(),
+                        lw=update_line_width(),
+                        grid=input.grid(),
+                        arrows=input.arrows(),
+                        arrowsize=update_arrow_size(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    return plot
+                
+                @render.download(label="Download SVG figure", filename="Normalized track visualization.svg")
+                def download_normalized_visualization_svg():
+                    plot = pu.Visualize_normalized_tracks_matplotlib(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        lut_scaling_metric=input.lut_scaling(),
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        smoothing_index=update_smoothing(),
+                        lw=update_line_width(),
+                        grid=input.grid(),
+                        arrows=input.arrows(),
+                        arrowsize=update_arrow_size(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    with io.BytesIO() as buf:
+                        plot.savefig(buf, format="svg")
+                        yield buf.getvalue()
+
+
+            # ==================================================================================================================================================================================================================================================================================
+            # Common track visualization settings
+
+            with ui.panel_well():
+
+                ui.markdown(
+                    """
+                    **Common track visualization settings**
+                    """
+                    )
+
+                # 1. Condition selections
+                # 2. Replicate selections
 
                 ui.input_select(
                     "condition",
@@ -1061,18 +1364,55 @@ with ui.nav_panel("Visualisation"):
                         choices=replicates
                         )
                     
-                ui.input_select(
-                    'lut_scaling',
-                    'LUT scaling metric:',
-                    dict_Track_metrics
-                )
+
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+
+                # 3. Color mode selection ()
+                # 4. LUT scaling metric selection (utiised in color scaling
+                # 5. Color selection (for single color mode)
+                # 6. Background selection (dark/light)
 
                 ui.input_select(
                     "color_mode",
                     "Color mode:",
-                    color_modes,
-                    selected='color1'
+                    select_mode.color_modes,
+                    selected='random colors',
                     )
+                
+                ui.input_select(
+                    'lut_scaling',
+                    'LUT scaling metric:',
+                    select_metrics.lut,
+                    selected='NET_DISTANCE',
+                    )
+
+                ui.input_select(
+                    'only_one_color',
+                    'Color:',
+                    select_mode.colors,
+                    )
+                
+                ui.input_select(
+                    'background',
+                    'Background:',
+                    select_mode.background,
+                    selected='dark',
+                    )
+                
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+
+                # 7. Smoothing index selection (for smoothing the tracks)
+                # 8. Line (track) width setting
                 
                 ui.input_numeric(
                     "smoothing", 
@@ -1081,41 +1421,41 @@ with ui.nav_panel("Visualisation"):
                     min=1, 
                     max=100)
                 
-                @reactive.effect
-                async def update_smoothing():
-                    value = input.smoothing()
-                    await asyncio.sleep(2.5)
-                    return smoothing_index.set(value)
+                @debounce(1)
+                @reactive.calc
+                def update_smoothing():
+                    return input.smoothing()
                 
                 ui.input_numeric(
                     'line_width',
                     'Line width:',
-                    1
+                    0.85,
+                    min=0,
+                    step=0.05
                     )
                 
-                @reactive.effect
-                async def update_line_width():
-                    value = input.line_width()
-                    await asyncio.sleep(2.5)
-                    return line_width.set(value)
-
-                ui.input_numeric(
-                    'arrow_size',
-                    'Arrow size:',
-                    6
-                    )
+                @debounce(1)
+                @reactive.calc
+                def update_line_width():
+                    return input.line_width()
                 
-                @reactive.effect
-                async def update_arrow_size():
-                    value = input.arrow_size()
-                    await asyncio.sleep(2.5)
-                    return arrow_size.set(value)
-
                 ui.input_checkbox(
-                    "grid", 
-                    "grid", 
+                    'show_tracks',
+                    'show tracks',
                     True
-                    ) 
+                    )
+
+
+
+
+
+
+
+
+
+
+
+                
                 
                 
         # ==========================================================================================================================================================================================================================================================================
@@ -1123,35 +1463,6 @@ with ui.nav_panel("Visualisation"):
 
         with ui.nav_panel("Time series"):
             
-            cmaps_ = ['Accent', 'Dark2', 'Set1', 'Set2', 'Set3', 'tab10']
-
-            interpolations_ = [
-                None,
-                "basis",
-                "basis-open",
-                "basis-closed",
-                "bundle",
-                "cardinal",
-                "cardinal-open",
-                "cardinal-closed",
-                "catmull-rom",
-                "linear",
-                "linear-closed",
-                "monotone",
-                "natural",
-                "step",
-                "step-before",
-                "step-after"
-                ]
-
-            extent_ = [
-                'orig_std',  # Original data
-                'ci',  # Confidence interval
-                'stdev',  # Standard deviation
-                'stderr',  # Standard error
-                'iqr',  # Interquartile range
-                'min-max'  # Min-Max range
-                ]
 
             with ui.panel_well():
                 ui.input_numeric(
@@ -1204,7 +1515,7 @@ with ui.nav_panel("Visualisation"):
                     pu.poly_fit_chart(
                         df=Time_stats_df.get(), 
                         metric=input.ts_metric(), 
-                        Metric=dict_Time_metrics[input.ts_metric()],
+                        Metric=select_metrics.time[input.ts_metric()],
                         condition=input.ts_condition(), 
                         replicate=input.ts_replicate(), 
                         degree=[input.ts_degree()],
@@ -1237,6 +1548,30 @@ with ui.nav_panel("Visualisation"):
                 @render.download(label="Download interactive plot as html", filename="Time series - scatter fit.html")
                 def download_time_series_plot1_html():
                     return op.join(dir, "cache/poly_fit_chart.html")
+                
+                @render_altair
+                def altair_polz_fitt():
+                    chart = pu.poly_fit_chart(
+                        df=Time_stats_df.get(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        degree=[input.ts_degree()],
+                        cmap=input.ts_cmap(), 
+                        fill=input.ts_fill(), 
+                        point_size=input.ts_scatter_size(), 
+                        outline=input.ts_outline(), 
+                        outline_width=input.ts_outline_width(), 
+                        opacity=input.ts_opacity(),
+                        replicates_separately=input.ts_separate_replicates(),
+                        dir=dir
+                        )
+                
+                    return chart
+                
+
+                
 
             with ui.panel_well():
                 ui.input_checkbox(
@@ -1251,7 +1586,7 @@ with ui.nav_panel("Visualisation"):
                     pu.line_chart(
                         df=Time_stats_df.get(), 
                         metric=input.ts_metric(), 
-                        Metric=dict_Time_metrics[input.ts_metric()], 
+                        Metric=select_metrics.time[input.ts_metric()], 
                         condition=input.ts_condition(), 
                         replicate=input.ts_replicate(), 
                         cmap=input.ts_cmap(), 
@@ -1285,7 +1620,7 @@ with ui.nav_panel("Visualisation"):
                 ui.input_select(
                     "ts_extent",
                     "Extent:",
-                    extent_,
+                    select_mode.extent,
                     selected='orig_std'
                     )
                 
@@ -1301,7 +1636,7 @@ with ui.nav_panel("Visualisation"):
                     pu.errorband_chart(
                         df=Time_stats_df.get(), 
                         metric=input.ts_metric(),
-                        Metric=dict_Time_metrics[input.ts_metric()], 
+                        Metric=select_metrics.time[input.ts_metric()], 
                         condition=input.ts_condition(), 
                         replicate=input.ts_replicate(), 
                         cmap=input.ts_cmap(), 
@@ -1355,7 +1690,7 @@ with ui.nav_panel("Visualisation"):
                 ui.input_select(
                     "ts_metric",
                     "Metric:",
-                    dict_Time_metrics,
+                    select_metrics.time,
                     selected='MEAN_CONFINEMENT_RATIO'
                     )
 
@@ -1397,14 +1732,14 @@ with ui.nav_panel("Visualisation"):
                 ui.input_select(
                     "ts_cmap",
                     "Color map:",
-                    cmaps_,
+                    select_mode.cmaps_qualitative,
                     selected='tab10'
                     )
                 
                 ui.input_select(
                     "ts_interpolation",
                     "Interpolation type:",
-                    interpolations_,
+                    select_mode.interpolation,
                     selected='catmull-rom'
                     )
                 
@@ -1434,6 +1769,24 @@ with ui.nav_panel("Visualisation"):
             with ui.card():
 
                 'uhh'
+
+
+
+
+        with ui.nav_panel("Testing"):
+            with ui.card():
+
+                @render_plotly   
+                def plotlyplot_normalized_tracks():  
+                    normalized_tracks = pu.visualize_normalized_tracks_interactive(
+                        df= Spot_stats_df.get(), 
+                        c_mode='random colors', 
+                        lut_metric='NET_DISTANCE'
+                    )
+
+                    return normalized_tracks  
+                
+                
 
 
                 
@@ -1903,7 +2256,7 @@ with ui.nav_panel("Statistics"):
                     return plt.figure()
                 # else:
                 #     return plt.figure()
-                return pu.swarm_plot(df, metric, dict_Metrics[metric], show_violin=input.violins(), show_swarm=input.swarm(), show_mean=input.mean(), show_median=input.median(), show_error_bars=input.errorbars(), show_legend=input.legend(), p_testing=input.p_test())
+                return pu.swarm_plot(df, metric, select_metrics.spots_n_tracks[metric], show_violin=input.violins(), show_swarm=input.swarm(), show_mean=input.mean(), show_median=input.median(), show_error_bars=input.errorbars(), show_legend=input.legend(), p_testing=input.p_test())
             
             @render.download(label="Download figure", filename="Swarmplot.svg")
             def download_swarmplot():
@@ -1916,7 +2269,7 @@ with ui.nav_panel("Statistics"):
                 # else:
                 #     return plt.figure()
             
-                figure = pu.swarm_plot(df, metric, dict_Metrics[metric], show_violin=input.violins(), show_swarm=input.swarm(), show_mean=input.mean(), show_median=input.median(), show_error_bars=input.errorbars(), show_legend=input.legend(), p_testing=input.p_test())
+                figure = pu.swarm_plot(df, metric, select_metrics.spots_n_tracks[metric], show_violin=input.violins(), show_swarm=input.swarm(), show_mean=input.mean(), show_median=input.median(), show_error_bars=input.errorbars(), show_legend=input.legend(), p_testing=input.p_test())
                 with io.BytesIO() as buf:
                     figure.savefig(buf, format="svg")
                     yield buf.getvalue()
@@ -1928,7 +2281,7 @@ with ui.nav_panel("Statistics"):
         ui.input_select(  
                 "testing_metric",  
                 "Test for metric:",  
-                dict_Track_metrics 
+                select_metrics.tracks 
             )  
         
         ui.input_checkbox(

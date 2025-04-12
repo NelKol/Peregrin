@@ -1,0 +1,163 @@
+thresholding = {
+    "literal": "Literal",
+    "percentile": "Percentile",
+}
+
+colors = [
+    'red',
+    'green',
+    'blue',
+    'yellow',
+    'cyan',
+    'magenta',
+    'black',
+    'gray',
+    'grey',
+    'maroon',
+    'olive',
+    'navy',
+    'teal',
+    'purple',
+    'orange',
+    'brown',
+    'pink',
+    'gold',
+    'silver',
+    'violet',
+    'indigo',
+    'turquoise',
+    'coral',
+    'chocolate',
+    'tan',
+    'orchid',
+    'salmon',
+    'plum',
+    'crimson',
+    'peru',
+    'tomato',
+    'seagreen',
+    'darkgreen',
+    'darkblue',
+    'darkred',
+    'darkorange',
+    'darkviolet',
+    'darkcyan',
+    'darkmagenta',
+    'deepskyblue',
+    'lightblue',
+    'lightgreen',
+    'lightgray',
+    'lightgrey',
+    'lightsalmon',
+    'lightcoral',
+    'mediumblue',
+    'mediumorchid',
+    'mediumpurple',
+    'mediumseagreen',
+    'mediumslateblue',
+    'mediumspringgreen',
+    'mediumturquoise',
+    'royalblue',
+    'skyblue',
+    'slateblue',
+    'slategray',
+    'springgreen',
+    'steelblue',
+    'forestgreen',
+    'firebrick',
+    'dodgerblue',
+    'indianred',
+    'khaki',
+    'lavender',
+    'lawngreen',
+    'lemonchiffon',
+    'linen',
+    'mediumvioletred',
+    'mistyrose',
+    'orange',
+    'orchid',
+    'palegreen',
+    'paleturquoise',
+    'palevioletred',
+    'peachpuff',
+    'powderblue',
+    'rosybrown',
+    'sandybrown',
+    'sienna',
+    'skyblue',
+    'slateblue',
+    'slategrey',
+    'snow',
+    'turquoise',
+    'wheat',
+    'yellowgreen'
+]
+
+color_modes = [
+    'random colors',
+    'random greys',
+    'only-one-color',
+    'greyscale LUT', 
+    'jet LUT', 
+    'brg LUT', 
+    'hot LUT', 
+    'gnuplot LUT', 
+    'viridis LUT', 
+    'rainbow LUT', 
+    'turbo LUT', 
+    'nipy-spectral LUT', 
+    'gist-ncar LUT'
+    ]
+
+
+cmaps_quantitative = [
+    'greyscale', 
+    'jet', 
+    'brg', 
+    'hot', 
+    'gnuplot', 
+    'viridis', 
+    'rainbow', 
+    'turbo', 
+    'nipy-spectral', 
+    'gist-ncar'
+    ]
+
+cmaps_qualitative = [
+    'Accent', 
+    'Dark2', 
+    'Set1', 
+    'Set2', 
+    'Set3', 
+    'tab10'
+    ]
+
+interpolation = [
+    None,
+    "basis",
+    "basis-open",
+    "basis-closed",
+    "bundle",
+    "cardinal",
+    "cardinal-open",
+    "cardinal-closed",
+    "catmull-rom",
+    "linear",
+    "linear-closed",
+    "monotone",
+    "natural",
+    "step",
+    "step-before",
+    "step-after"
+    ]
+
+extent = [
+    'std', 
+    'min-max' 
+    ]
+
+background = [
+    'light', 
+    'dark'
+    ]
+
