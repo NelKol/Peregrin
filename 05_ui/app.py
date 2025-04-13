@@ -137,10 +137,13 @@ see_hover = reactive.value(['CONDITION', 'REPLICATE', 'TRACK_ID'])        # Crea
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Creating the app layout
 
+
 ui.page_opts(
     title="Peregrin", 
     fillable=True
     )
+
+
 
 
 
@@ -309,7 +312,6 @@ with ui.nav_panel("Input"):
 
         return pd.DataFrame(pd.concat([default, additional], axis=0))
 
-
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Creating a reactive effect detecting any files is selected
 
@@ -322,10 +324,10 @@ def file_detection():
         else:
             pass
         
-            
 
-            
- 
+
+
+
 
 # ===========================================================================================================================================================================================================================================================================
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -533,16 +535,6 @@ with ui.nav_panel("Data frames"):
 
 
 
-
-
-
-
-
-
-
-
-
-
 # ===========================================================================================================================================================================================================================================================================
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Thresholding utilities - functions
@@ -677,11 +669,13 @@ def _update_thresholded_data(metric, dfA, dfB, df0A, df0B, thresholded_df):
 
 
 
+
+
+
 # ============================================================================================================================================================================================================================================================================
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Sidebar
 
-# pass_check = reactive.value(True)
 
 with ui.sidebar(open="open", position="right", bg="f8f8f8"): 
 
@@ -911,9 +905,6 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
 
 
-
-
-
 # ================================================================================================================================================================================================================================================================================
 # ================================================================================================================================================================================================================================================================================
 # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -923,6 +914,8 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 with ui.nav_panel("Visualisation"):
 
     with ui.navset_pill_list(widths=(2, 9), selected="Time series"):
+
+
 
         # ==========================================================================================================================================================================================================================================================================
         # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1417,7 +1410,7 @@ with ui.nav_panel("Visualisation"):
                     return input.smoothing()
                 
                 ui.input_numeric(
-                    'line_width',
+                    'track_line_width',
                     'Line width:',
                     0.85,
                     min=0,
@@ -1427,17 +1420,13 @@ with ui.nav_panel("Visualisation"):
                 @debounce(1)
                 @reactive.calc
                 def update_line_width():
-                    return input.line_width()
+                    return input.track_line_width()
                 
                 ui.input_checkbox(
                     'show_tracks',
                     'show tracks',
                     True
                     )
-
-
-
-
 
 
                 
@@ -1822,487 +1811,584 @@ with ui.nav_panel("Visualisation"):
                     selected='catmull-rom'
                     )
                 
+
+                
+
+        with ui.nav_panel("Superplots"):
+                    
+                        
+                        
+            # ==================================================================================================================================================================================================================================================================================
+            # Seaborn superplot settings
+
+            with ui.panel_well():
+
+                ui.markdown(
+                    """
+                    #### **Superplots**
+                    *made with*  `seaborn`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+                
+
+
+                # 1. Metric selection (for testing)
+                # 2. Color palette selection
+
+                ui.input_select(
+                    "testing_metric",
+                    "Test for metric:",
+                    select_metrics.tracks,
+                    selected='NET_DISTANCE'
+                    )
                 
                 
-                
-                
-            
-                
-            
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-
-        with ui.nav_panel("Corelation"):
-            with ui.card():
-
-                'uhh'
-
-
-
-
-        with ui.nav_panel("Testing"):
-            with ui.card():
-
-                @render_plotly   
-                def plotlyplot_normalized_tracks():  
-                    normalized_tracks = pu.visualize_normalized_tracks_interactive(
-                        df= Spot_stats_df.get(), 
-                        c_mode='random colors', 
-                        lut_metric='NET_DISTANCE'
+                ui.input_select(
+                    'palette',
+                    'Color palette:',
+                    select_mode.sns_palletes,
+                    selected='Set1'
                     )
 
-                    return normalized_tracks  
+
+
+                # 3. KDE alpha setting
+                # 4. KDE outline width setting
+                # 5. KDE bandwidth setting
+                # 6. KDE fill setting
+                # 7. KDE legend setting
+                # 8. KDE displayment setting
+                
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """ 
+                    )
                 
                 
+                ui.input_numeric(
+                    'kde_alpha',
+                    'KDE alpha:',
+                    0.3,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_kde_alpha():
+                    return input.kde_alpha()
+                
+
+                ui.input_numeric(
+                    'kde_outline',
+                    'KDE outline:',
+                    1,
+                    min=0,
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_kde_outline():
+                    return input.kde_outline()
+                
+                
+                ui.input_numeric(
+                    'kde_inset_width',
+                    'KDE bandwidth:',
+                    0.25,
+                    min=0,
+                    step=0.01
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_kde_inset_width():
+                    return input.kde_inset_width()
+                
+                
+                ui.input_checkbox(
+                    'kde_fill',
+                    'KDE fill',
+                    True
+                    )
+                
+                
+                ui.input_checkbox(
+                    'kde_legend',
+                    'KDE legend',
+                    True
+                    )
+                
+                
+                ui.input_checkbox(
+                    'show_kde',
+                    'Show KDE',
+                    False
+                    )
+                
 
 
+                # 9. Violin fill color setting
+                # 10. Violin edge color setting
+                # 11. Violin alpha setting
+                # 12. Violin displayment setting
+                
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+                
+                ui.input_select(
+                    'violin_color',
+                    'Violin fill color:',
+                    select_mode.colors,
+                    selected='whitesmoke'
+                    )
+                
+                
+                ui.input_select(
+                    'violin_edge_color',
+                    'Violin edge color:',
+                    select_mode.colors,
+                    selected='lightgrey'
+                    )
+                
+
+                ui.input_numeric(
+                    'violin_outline_width',
+                    'Violin outline width:',
+                    0.8,
+                    min=0,
+                    step=0.05
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_violin_outline_width():
+                    return input.violin_outline_width()
+                
+                
+                ui.input_numeric(
+                    'violin_alpha',
+                    'Violin alpha:',
+                    0.8,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_violin_alpha():
+                    return input.violin_alpha()
+                
+                
+                ui.input_checkbox(
+                    'show_violin',
+                    'Show violin',
+                    True
+                    )
+                
+
+
+                # 13. Swarm size setting
+                # 14. Swarm alpha setting
+                # 15. Swarm displayment setting
+
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+                
+                ui.input_numeric(
+                    'swarm_size',
+                    'Swarm size:',
+                    4,
+                    min=1,
+                    step=1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_swarm_size():
+                    return input.swarm_size()
+                
+                
+                ui.input_numeric(
+                    'swarm_alpha',
+                    'Swarm alpha:',
+                    0.5,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_swarm_alpha():
+                    return input.swarm_alpha()
+                
+                
+                ui.input_checkbox(
+                    'show_swarm',
+                    'Show swarm',
+                    True
+                    )
+                
+
+
+                # 16. Ball size setting
+                # 17. Ball outline color setting
+                # 18. Ball outline width setting
+                # 19. Ball alpha setting
+                # 20. Ball displayment setting
+
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+
+                ui.input_numeric(
+                    'ball_size',
+                    'Ball size:',
+                    175,
+                    min=1,
+                    step=5
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_ball_size():
+                    return input.ball_size()
+                
+                
+                ui.input_select(
+                    'ball_outline_color',
+                    'Ball outline color:',
+                    select_mode.colors,
+                    selected='black'
+                    )
+                
+                ui.input_numeric(
+                    'ball_outline_width',
+                    'Ball outline width:',
+                    1,
+                    min=0,
+                    step=0.1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_ball_outline_width():
+                    return input.ball_outline_width()
+                
+                
+                ui.input_numeric(
+                    'ball_alpha',
+                    'Ball alpha:',
+                    1,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_ball_alpha():
+                    return input.ball_alpha()
+                
+                
+                ui.input_checkbox(
+                    'show_balls',
+                    'Show balls',
+                    True
+                    )
+                
+
+
+                # 21. Mean line span setting
+                # 22. Median line span setting
+                # 23. Line width setting
+                # 24. Mean displayment setting
+                # 25. Median displayment setting
+
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+
+                ui.input_numeric(
+                    'mean_span',
+                    'Mean line span:',
+                    0.275,
+                    min=0,
+                    step=0.005
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_mean_span():
+                    return input.mean_span()
+                
+                
+                ui.input_numeric(
+                    'median_span',
+                    'Median line span:',
+                    0.250,
+                    min=0,
+                    step=0.005
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_median_span():
+                    return input.median_span()
+                
+                
+                ui.input_numeric(
+                    'line_width',
+                    'Line width:',
+                    1.6,
+                    min=0,
+                    step=0.1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_line_width():
+                    return input.line_width()
+                
+                
+                ui.input_checkbox(
+                    'show_mean',
+                    'Show mean',
+                    True
+                    )
+                
+                
+                ui.input_checkbox(
+                    'show_median',
+                    'Show median',
+                    True
+                    )
+                
+
+
+                # 26. Error bar capsize setting
+                # 27. Error bar line width setting
+                # 28. Error bar alpha setting
+                # 29. Error bar displayment setting
+
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+                
+                ui.input_numeric(
+                    'errorbar_capsize',
+                    'Error bar capsize:',
+                    11,
+                    min=0,
+                    step=1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_errorbar_capsize():
+                    return input.errorbar_capsize()
+                
+                
+                ui.input_numeric(
+                    'errorbar_lw',
+                    'Error bar line width:',
+                    1,
+                    min=0,
+                    step=0.1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_errorbar_lw():
+                    return input.errorbar_lw()
+                
+                
+                ui.input_numeric(
+                    'errorbar_alpha',
+                    'Error bar alpha:',
+                    0.8,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_errorbar_alpha():
+                    return input.errorbar_alpha()
+                
+                
+                ui.input_checkbox(
+                    'show_error_bars',
+                    'Show error bars',
+                    True
+                    )
                 
                 
                 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            #     with ui.nav_panel("Track visualisation"):
-            #         with ui.layout_columns(
-            #             col_widths=(6,6,6,6),
-            #             row_heights=(3, 4),	
-            #         ):
-        
-            #             with ui.card(full_screen=True):
-            #                 ui.card_header("Raw tracks visualization")
-            #                 @render.plot
-            #                 def raw_tracks():
-            #                     return pu.visualize_full_tracks(
-            #                         df=Spot_stats_df.get(), 
-            #                         df2=Track_stats_df.get(), 
-            #                         threshold=None, 
-            #                         lw=0.5
-            #                         )
-
-            #                 @render.download(label="Download", filename="Raw tracks visualization.png")
-            #                 def download_raw_tracks():
-            #                     figure = pu.visualize_full_tracks(
-            #                         df=Spot_stats_df.get(), 
-            #                         df2=Track_stats_df.get(), 
-            #                         threshold=None, 
-            #                         lw=0.5
-            #                         )
-            #                     with io.BytesIO() as buf:
-            #                         figure.savefig(buf, format="png", dpi=300)
-            #                         yield buf.getvalue()
-
-            #             with ui.card(full_screen=True):
-            #                 ui.card_header("Smoothened tracks visualization")
-            #                 @render.plot
-            #                 def smoothened_tracks():
-            #                     return pu.visualize_smoothened_tracks(
-            #                         df=Spot_stats_df.get(), 
-            #                         df2=Track_stats_df.get(), 
-            #                         threshold=None, 
-            #                         smoothing_type='moving_average', 
-            #                         smoothing_index=50, 
-            #                         lw=0.8
-            #                         )
-
-            #                 @render.download(label="Download", filename="Smoothened tracks visualization.png")
-            #                 def download_smoothened_tracks():
-            #                     figure = pu.visualize_smoothened_tracks(
-            #                         df=Spot_stats_df.get(), 
-            #                         df2=Track_stats_df.get(), 
-            #                         threshold=None, 
-            #                         smoothing_type='moving_average', 
-            #                         smoothing_index=50, 
-            #                         lw=0.8
-            #                         )
-            #                     with io.BytesIO() as buf:
-            #                         figure.savefig(buf, format="png", dpi=300)
-            #                         yield buf.getvalue()
-
-            #     with ui.nav_panel("Directionality plots"):
-            #         with ui.layout_columns():
-            #             with ui.card(full_screen=True):  
-            #                 ui.card_header("Directionality")
-            #                 with ui.layout_column_wrap(width=1 / 2):
-            #                     with ui.card(full_screen=False):
-            #                         ui.card_header("Scaled by confinement ratio")
-            #                         @render.plot
-            #                         def migration_direction_tracks1():
-            #                             figure = pu.migration_directions_with_kde_plus_mean(
-            #                                 df=Track_stats_df.get(), 
-            #                                 metric='MEAN_DIRECTION_RAD', 
-            #                                 subject='Cells', 
-            #                                 scaling_metric='CONFINEMENT_RATIO', 
-            #                                 cmap_normalization_metric=None, 
-            #                                 cmap=cmap_cells, 
-            #                                 threshold=None,
-            #                                 title_size2=title_size2
-            #                                 )
-            #                             return figure
-                                    
-            #                         @render.download(label="Download", filename="Track directionality (scaled by confinement ratio).png")
-            #                         def download_migration_direction_tracks1():
-            #                             figure = pu.migration_directions_with_kde_plus_mean(
-            #                                 df=Track_stats_df.get(), 
-            #                                 metric='MEAN_DIRECTION_RAD', 
-            #                                 subject='Cells', 
-            #                                 scaling_metric='CONFINEMENT_RATIO', 
-            #                                 cmap_normalization_metric=None, 
-            #                                 cmap=cmap_cells, 
-            #                                 threshold=None,
-            #                                 title_size2=title_size
-            #                                 )
-            #                             with io.BytesIO() as buf:
-            #                                 figure.savefig(buf, format="png", dpi=300)
-            #                                 yield buf.getvalue()
-                                    
-                                    
-                                
-            #                     with ui.card(full_screen=False):
-            #                         ui.card_header("Scaled by net distance")
-            #                         @render.plot
-            #                         def migration_direction_tracks2():
-            #                             figure = pu.migration_directions_with_kde_plus_mean(
-            #                                 df=Track_stats_df.get(), 
-            #                                 metric='MEAN_DIRECTION_RAD', 
-            #                                 subject='Cells', 
-            #                                 scaling_metric='NET_DISTANCE', 
-            #                                 cmap_normalization_metric=None, 
-            #                                 cmap=cmap_cells, 
-            #                                 threshold=None,
-            #                                 title_size2=title_size2
-            #                                 )
-            #                             return figure
-
-            #                         @render.download(label="Download", filename="Track directionality (scaled by net distance).png")
-            #                         def download_migration_direction_tracks2():
-            #                             figure = pu.migration_directions_with_kde_plus_mean(
-            #                                 df=Track_stats_df.get(), 
-            #                                 metric='MEAN_DIRECTION_RAD', 
-            #                                 subject='Cells', 
-            #                                 scaling_metric='NET_DISTANCE', 
-            #                                 cmap_normalization_metric=None, 
-            #                                 cmap=cmap_cells, 
-            #                                 threshold=None,
-            #                                 title_size2=title_size
-            #                                 )
-            #                             with io.BytesIO() as buf:
-            #                                 figure.savefig(buf, format="png", dpi=300)
-            #                                 yield buf.getvalue()
-                            
-            #             with ui.card(full_screen=True):
-            #                 ui.card_header("Migration heatmaps")
-            #                 with ui.layout_column_wrap(width=1 / 2):
-            #                     with ui.card(full_screen=False):
-            #                         ui.card_header("Standard")        
-            #                         @render.plot
-            #                         def tracks_migration_heatmap():
-            #                             return pu.df_gaussian_donut(
-            #                                 df=Track_stats_df.get(), 
-            #                                 metric='MEAN_DIRECTION_RAD', 
-            #                                 subject='Cells', 
-            #                                 heatmap='inferno', 
-            #                                 weight=None, 
-            #                                 threshold=None,
-            #                                 title_size2=title_size2,
-            #                                 label_size=label_size,
-            #                                 figtext_color=figtext_color,
-            #                                 figtext_size=figtext_size
-            #                                 )
-                                    
-            #                         @render.download(label="Download", filename="Cell migration heatmap.png")
-            #                         def download_tracks_migration_heatmap():
-            #                             figure = pu.df_gaussian_donut(
-            #                                 df=Track_stats_df.get(), 
-            #                                 metric='MEAN_DIRECTION_RAD', 
-            #                                 subject='Cells', 
-            #                                 heatmap='inferno', 
-            #                                 weight=None, 
-            #                                 threshold=None,
-            #                                 title_size2=title_size2,
-            #                                 label_size=label_size,
-            #                                 figtext_color=figtext_color,
-            #                                 figtext_size=figtext_size
-            #                                 )
-            #                             with io.BytesIO() as buf:
-            #                                 figure.savefig(buf, format="png", dpi=300)
-            #                                 yield buf.getvalue()
-
-            #                     with ui.card(full_screen=False):
-            #                         ui.card_header("Weighted")
-            #                         with ui.value_box(
-            #                         full_screen=False,
-            #                         theme="text-red"
-            #                         ):
-            #                             ""
-            #                             "Currently unavailable"
-            #                             ""
-
-#                 with ui.nav_panel("Whole dataset histograms"):
-                  
-#                     with ui.layout_column_wrap(width=2 / 2):
-#                         with ui.card(full_screen=False): 
-#                             with ui.layout_columns(
-#                                 col_widths=(12,12)
-#                             ): 
-#                                 with ui.card(full_screen=True):
-#                                     ui.card_header("Net distances travelled")
-#                                     @render.plot(
-#                                             width=3600,
-#                                             height=500
-#                                             )
-#                                     def cell_histogram_1():
-#                                         figure = pu.histogram_cells_distance(
-#                                             df=Track_stats_df.get(), 
-#                                             metric='NET_DISTANCE', 
-#                                             str='Net'
-#                                             )
-#                                         return figure
-                                    
-#                                     @render.download(label="Download", filename="Net distances travelled.png")
-#                                     def download_cell_histogram_1():
-#                                         figure = pu.histogram_cells_distance(
-#                                             df=Track_stats_df.get(), 
-#                                             metric='NET_DISTANCE', 
-#                                             str='Net'
-#                                             )
-#                                         with io.BytesIO() as buf:
-#                                             figure.savefig(buf, format="png", dpi=300)
-#                                             yield buf.getvalue()
-
-#                                 with ui.card(full_screen=True):
-#                                     ui.card_header("Track lengths")
-#                                     @render.plot(
-#                                             width=3800,
-#                                             height=1000
-#                                             )
-#                                     def cell_histogram_2():
-#                                         figure = pu.histogram_cells_distance(
-#                                             df=Track_stats_df.get(), 
-#                                             metric='TRACK_LENGTH', 
-#                                             str='Total'
-#                                             )
-#                                         return figure
-                                    
-#                                     @render.download(label="Download", filename="Track lengths.png")
-#                                     def download_cell_histogram_2():
-#                                         figure = pu.histogram_cells_distance(
-#                                             df=Track_stats_df.get(), 
-#                                             metric='TRACK_LENGTH', 
-#                                             str='Total'
-#                                             )
-#                                         with io.BytesIO() as buf:
-#                                             figure.savefig(buf, format="png", dpi=300)
-#                                             yield buf.getvalue()
-                                    
-
-
+                # 30. P-value test setting
+                # 31. Show grid setting
+                # 32. Open spine setting
+                # 33. Show legend setting
                 
-#         with ui.nav_panel("Frames"):
-            
-#             with ui.navset_card_tab(id="tab2"):
-#                 with ui.nav_panel("Histograms"):
-#                     with ui.layout_columns(
-#                         col_widths={"sm": (12,6,6)},
-#                         row_heights=(3,4),
-#                         # height="700px",
-#                     ):
-                        
-#                         with ui.card(full_screen=True):
-#                             ui.card_header("Speed histogram")
-#                             @render.plot
-#                             def migration_histogram():
-#                                 figure = pu.histogram_frame_speed(df=Frame_stats_df.get())
-#                                 return figure
-
-#                             @render.download(label="Download", filename="Speed histogram.png")
-#                             def download_migration_histogram():
-#                                 figure = pu.histogram_frame_speed(df=Frame_stats_df.get())
-#                                 with io.BytesIO() as buf:
-#                                     figure.savefig(buf, format="png", dpi=300)
-#                                     yield buf.getvalue()
-
-#                 with ui.nav_panel("Directionality plots"):
-#                     with ui.layout_columns():
-#                         with ui.card(full_screen=True):
-#                             ui.card_header("Directionality")
-#                             with ui.layout_column_wrap(width=1 / 2):
-#                                 with ui.card(full_screen=False):
-#                                     ui.card_header("Standard - Scaled by mean distance")
-#                                     @render.plot
-#                                     def migration_direction_frames1():
-#                                         return pu.migration_directions_with_kde_plus_mean(
-#                                             df=Frame_stats_df.get(), 
-#                                             metric='MEAN_DIRECTION_RAD', 
-#                                             subject='Frames (weighted)', 
-#                                             scaling_metric='MEAN_DISTANCE', 
-#                                             cmap_normalization_metric='POSITION_T', 
-#                                             cmap=cmap_frames, 
-#                                             threshold=None,
-#                                             title_size2=title_size2
-#                                             )
-                                    
-#                                     @render.download(label="Download", filename="Frame directionality (standard - scaled by mean distance).png")
-#                                     def download_migration_direction_frames1():
-#                                         figure = pu.migration_directions_with_kde_plus_mean(
-#                                             df=Frame_stats_df.get(), 
-#                                             metric='MEAN_DIRECTION_RAD', 
-#                                             subject='Frames (weighted)', 
-#                                             scaling_metric='MEAN_DISTANCE', 
-#                                             cmap_normalization_metric='POSITION_T', 
-#                                             cmap=cmap_frames, 
-#                                             threshold=None,
-#                                             title_size2=title_size2
-#                                             )
-#                                         with io.BytesIO() as buf:
-#                                             figure.savefig(buf, format="png", dpi=300)
-#                                             yield buf.getvalue()
-
-#                                 with ui.card(full_screen=False):
-#                                     ui.card_header("Weighted - Scaled by mean distance")
-#                                     @render.plot
-#                                     def migration_direction_frames2():
-#                                         return pu.migration_directions_with_kde_plus_mean(
-#                                             df=Frame_stats_df.get(), 
-#                                             metric='MEAN_DIRECTION_RAD_weight_mean_dis', 
-#                                             subject='Frames (weighted)', 
-#                                             scaling_metric='MEAN_DISTANCE', 
-#                                             cmap_normalization_metric='POSITION_T', 
-#                                             cmap=cmap_frames, 
-#                                             threshold=None,
-#                                             title_size2=title_size2
-#                                             )
-                                    
-#                                     @render.download(label="Download", filename="Frame directionality (weighted - scaled by mean distance).png")
-#                                     def download_migration_direction_frames2():
-#                                         figure = pu.migration_directions_with_kde_plus_mean(
-#                                             df=Frame_stats_df.get(), 
-#                                             metric='MEAN_DIRECTION_RAD_weight_mean_dis', 
-#                                             subject='Frames (weighted)', 
-#                                             scaling_metric='MEAN_DISTANCE', 
-#                                             cmap_normalization_metric='POSITION_T', 
-#                                             cmap=cmap_frames, 
-#                                             threshold=None,
-#                                             title_size2=title_size2
-#                                             )
-#                                         with io.BytesIO() as buf:
-#                                             figure.savefig(buf, format="png", dpi=300)
-#                                             yield buf.getvalue()
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
                 
-#                         with ui.card(full_screen=True):
-#                             ui.card_header("Migration heatmaps")
-#                             with ui.layout_column_wrap(width=1 / 2):
-#                                 with ui.card(full_screen=False):
-#                                     ui.card_header("Standard")        
-#                                     @render.plot
-#                                     def frame_migration_heatmap_1():
-#                                         return pu.df_gaussian_donut(
-#                                             df=Frame_stats_df.get(), 
-#                                             metric='MEAN_DIRECTION_RAD', 
-#                                             subject='Frames', 
-#                                             heatmap='viridis', 
-#                                             weight=None, 
-#                                             threshold=None,
-#                                             title_size2=title_size2,
-#                                             label_size=label_size,
-#                                             figtext_color=figtext_color,
-#                                             figtext_size=figtext_size
-#                                             )
-                                    
-#                                     @render.download(label="Download", filename="Frame migration heatmap (standard).png")
-#                                     def download_frame_migration_heatmap_1():
-#                                         figure = pu.df_gaussian_donut(
-#                                             df=Frame_stats_df.get(), 
-#                                             metric='MEAN_DIRECTION_RAD', 
-#                                             subject='Frames', 
-#                                             heatmap='viridis', 
-#                                             weight=None, 
-#                                             threshold=None,
-#                                             title_size2=title_size2,
-#                                             label_size=label_size,
-#                                             figtext_color=figtext_color,
-#                                             figtext_size=figtext_size
-#                                             )
-#                                         with io.BytesIO() as buf:
-#                                             figure.savefig(buf, format="png", dpi=300)
-#                                             yield buf.getvalue()
+                
+                ui.input_numeric(
+                    'plot_width',
+                    'Graph width:',
+                    16,
+                    min=1,
+                    step=1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_plot_width():
+                    return input.plot_width()
+                
+                
+                ui.input_numeric(
+                    'plot_height',
+                    'Graph height:',
+                    10,
+                    min=1,
+                    step=1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_plot_height():
+                    return input.plot_height()
+                
+                
+                ui.input_checkbox(
+                    'p_test',
+                    'P-value test',
+                    False
+                    )
+                
+                
+                ui.input_checkbox(
+                    'show_grid',
+                    'Show grid',
+                    True
+                    )
+                
+                
+                ui.input_checkbox(
+                    'open_spine',
+                    'Open spine',
+                    True
+                    )
+                
+                
+                ui.input_checkbox(
+                    'show_legend',
+                    'Show legend',
+                    True
+                    )
+                
+                
+            with ui.card():
 
-#                                 with ui.card(full_screen=False):
-#                                     ui.card_header("Weighted")
-#                                     @render.plot
-#                                     def frame_migration_heatmap_2():
-#                                         return pu.df_gaussian_donut(
-#                                             df=Frame_stats_df.get(), 
-#                                             metric='MEAN_DIRECTION_RAD_weight_mean_dis', 
-#                                             subject='Frames', 
-#                                             heatmap='viridis', 
-#                                             weight='mean distance traveled', 
-#                                             threshold=None,
-#                                             title_size2=title_size2,
-#                                             label_size=label_size,
-#                                             figtext_color=figtext_color,
-#                                             figtext_size=figtext_size
-#                                             )
-                                    
-#                                     @render.download(label="Download", filename="Frame migration heatmap (weighted).png")
-#                                     def download_frame_migration_heatmap_2():
-#                                         figure = pu.df_gaussian_donut(
-#                                             df=Frame_stats_df.get(), 
-#                                             metric='MEAN_DIRECTION_RAD_weight_mean_dis', 
-#                                             subject='Frames', 
-#                                             heatmap='viridis', 
-#                                             weight='mean distance traveled', 
-#                                             threshold=None,
-#                                             title_size2=title_size2,
-#                                             label_size=label_size,
-#                                             figtext_color=figtext_color,
-#                                             figtext_size=figtext_size
-#                                             )
-#                                         with io.BytesIO() as buf:
-#                                             figure.savefig(buf, format="png", dpi=300)
-#                                             yield buf.getvalue()
+                @render.plot
+                def seaborn_superplot():
+                    fig = pu.Superplot_seaborn(
+                        df=Track_stats_df.get(), 
+                        metric=input.testing_metric(), 
+                        Metric=select_metrics.tracks[input.testing_metric()], 
+                        palette=input.palette(), 
+                        kde_alpha=update_kde_alpha(),
+                        kde_outline=update_kde_outline(),
+                        kde_inset_width=update_kde_inset_width(),
+                        kde_fill=input.kde_fill(),
+                        kde_legend=input.kde_legend(),
+                        show_kde=input.show_kde(),
+                        violin_fill_color=input.violin_color(),
+                        violin_edge_color=input.violin_edge_color(),
+                        violin_outline_width=update_violin_outline_width(),
+                        violin_alpha=update_violin_alpha(),
+                        show_violin=input.show_violin(),
+                        swarm_size=update_swarm_size(),
+                        swarm_alpha=update_swarm_alpha(),
+                        show_swarm=input.show_swarm(),
+                        ball_size=update_ball_size(),
+                        ball_outline_color=input.ball_outline_color(),
+                        ball_outline_width=update_ball_outline_width(),
+                        ball_alpha=update_ball_alpha(),
+                        show_balls=input.show_balls(),
+                        mean_span=update_mean_span(),
+                        median_span=update_median_span(),
+                        line_width=update_line_width(),
+                        show_mean=input.show_mean(),
+                        show_median=input.show_median(),
+                        errorbar_capsize=update_errorbar_capsize(),
+                        errorbar_lw=update_errorbar_lw(),
+                        errorbar_alpha=update_errorbar_alpha(),
+                        show_error_bars=input.show_error_bars(),
+                        p_test=input.p_test(),
+                        show_grid=input.show_grid(),
+                        open_spine=input.open_spine(),
+                        show_legend=input.show_legend(),
+                        plot_width=update_plot_width(),
+                        plot_height=update_plot_height(),
+                        )
+                    return fig
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2312,108 +2398,27 @@ with ui.nav_panel("Visualisation"):
 
 
 # ===========================================================================================================================================================================================================================================================================
-# Stistics
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Superplots
 
-Spot_subdataframes_global = reactive.value()
-Track_subdataframes_global = reactive.value()
-Frame_subdataframes_global = reactive.value()
-addtnl_labels_global = reactive.value()
+# with ui.nav_panel("Superplots"):
 
 
-with ui.nav_panel("Statistics"):
 
-    with ui.layout_column_wrap(height='100%'):
-        with ui.card(full_screen=False):
-            @render.plot
-            def swarmplot():
-                metric = input.testing_metric()
-
-                if metric in Track_metrics.get():
-                    df = Track_stats_df.get()
-                if df.empty:
-                    return plt.figure()
-                # else:
-                #     return plt.figure()
-                return pu.swarm_plot(df, metric, select_metrics.spots_n_tracks[metric], show_violin=input.violins(), show_swarm=input.swarm(), show_mean=input.mean(), show_median=input.median(), show_error_bars=input.errorbars(), show_legend=input.legend(), p_testing=input.p_test())
-            
-            @render.download(label="Download figure", filename="Swarmplot.svg")
-            def download_swarmplot():
-                metric = input.testing_metric()
-
-                if metric in Track_metrics.get():
-                    df = Track_stats_df.get()
-                elif df.empty:
-                    return plt.figure()
-                # else:
-                #     return plt.figure()
-            
-                figure = pu.swarm_plot(df, metric, select_metrics.spots_n_tracks[metric], show_violin=input.violins(), show_swarm=input.swarm(), show_mean=input.mean(), show_median=input.median(), show_error_bars=input.errorbars(), show_legend=input.legend(), p_testing=input.p_test())
-                with io.BytesIO() as buf:
-                    figure.savefig(buf, format="svg")
-                    yield buf.getvalue()
-            
-
-
-    with ui.panel_well():
-
-        ui.input_select(  
-                "testing_metric",  
-                "Test for metric:",  
-                select_metrics.tracks 
-            )  
         
-        ui.input_checkbox(
-                'violins',
-                'show violins',
-                True
-            )
-
-        ui.input_checkbox(
-                'swarm',
-                'show swarm',
-                True
-            )
-    
-        ui.input_checkbox(
-                'mean',
-                'show mean',
-                True
-            )
-
-        ui.input_checkbox(
-                'median',
-                'show median',
-                True
-            )
-
-        ui.input_checkbox(
-                'errorbars',
-                'show error bars',
-                True
-            )
         
-        ui.input_checkbox(
-                'legend',
-                'show legend',
-                True
-            )
+        
 
-        ui.input_checkbox(
-                'p_test',
-                'P-test',
-                False
-            )
+        
+
+        
+
+        
+
+        
 
 
-
-
-
-
-
-
-
-
+        
 
 
 
@@ -2426,13 +2431,8 @@ with ui.nav_panel("Statistics"):
 
 
 ui.nav_spacer()  
+
 with ui.nav_control():  
     ui.input_dark_mode(mode="light")
 
 
-
-
-# ===========================================================================================================================================================================================================================================================================
-# Action buttons for additional browse windows used for inputting other data frames and also making a window for each input which will leave a mark on the dataframe e.g. Treatment CK12 - which will be also written into a column specifying the conditions 
-# Merging the dataframes
-# exporting downloads in form of a rasterized file
