@@ -404,6 +404,8 @@ def Visualize_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, condi
         face_color = 'darkgrey'
     
 
+    np.random.seed(42)  # For reproducibility
+    
     if c_mode in ['random colors', 'random greys', 'only-one-color']:
         colormap = None
 
@@ -635,6 +637,8 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
             grid_lines = 'None'
     
 
+    np.random.seed(42)  # For reproducibility
+
     if c_mode in ['random colors', 'random greys', 'only-one-color']:
         colormap = None
 
@@ -786,6 +790,8 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
         Spots_df = Spots_df[Spots_df['CONDITION'] == condition].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
     elif condition != 'all' and replicate != 'all':
         Spots_df = Spots_df[(Spots_df['CONDITION'] == condition) & (Spots_df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
+
+    np.random.seed(42)  # For reproducibility
 
     # Set colors based on chosen mode
     if c_mode in ['random colors', 'random greys', 'only-one-color']:
@@ -989,6 +995,8 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
         Spots_df = Spots_df[Spots_df['CONDITION'] == condition].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
     elif condition != 'all' and replicate != 'all':
         Spots_df = Spots_df[(Spots_df['CONDITION'] == condition) & (Spots_df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
+    
+    np.random.seed(42)  # For reproducibility
     
     # Set colors based on chosen mode
     if c_mode in ['random colors', 'random greys', 'only-one-color']:
