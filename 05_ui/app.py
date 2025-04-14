@@ -2362,6 +2362,53 @@ with ui.nav_panel("Visualisation"):
                         )
                     return fig
 
+                @render.download(label="Download SVG figure", filename="Seaborn superplot.svg")
+                def download_seaborn_superplot_svg():
+                    fig = pu.Superplot_seaborn(
+                        df=Track_stats_df.get(), 
+                        metric=input.testing_metric(), 
+                        Metric=select_metrics.tracks[input.testing_metric()], 
+                        palette=input.palette(), 
+                        kde_alpha=update_kde_alpha(),
+                        kde_outline=update_kde_outline(),
+                        kde_inset_width=update_kde_inset_width(),
+                        kde_fill=input.kde_fill(),
+                        kde_legend=input.kde_legend(),
+                        show_kde=input.show_kde(),
+                        violin_fill_color=input.violin_color(),
+                        violin_edge_color=input.violin_edge_color(),
+                        violin_outline_width=update_violin_outline_width(),
+                        violin_alpha=update_violin_alpha(),
+                        show_violin=input.show_violin(),
+                        swarm_size=update_swarm_size(),
+                        swarm_alpha=update_swarm_alpha(),
+                        show_swarm=input.show_swarm(),
+                        ball_size=update_ball_size(),
+                        ball_outline_color=input.ball_outline_color(),
+                        ball_outline_width=update_ball_outline_width(),
+                        ball_alpha=update_ball_alpha(),
+                        show_balls=input.show_balls(),
+                        mean_span=update_mean_span(),
+                        median_span=update_median_span(),
+                        line_width=update_line_width(),
+                        show_mean=input.show_mean(),
+                        show_median=input.show_median(),
+                        errorbar_capsize=update_errorbar_capsize(),
+                        errorbar_lw=update_errorbar_lw(),
+                        errorbar_alpha=update_errorbar_alpha(),
+                        show_error_bars=input.show_error_bars(),
+                        p_test=input.p_test(),
+                        show_grid=input.show_grid(),
+                        open_spine=input.open_spine(),
+                        show_legend=input.show_legend(),
+                        plot_width=update_plot_width(),
+                        plot_height=update_plot_height()
+                    )
+                    with io.BytesIO():
+                            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
+                            fig.savefig(tmp_file.name)
+                            tmp_file.close()
+                            yield Path(tmp_file.name).read_bytes()
 
 
 
