@@ -2048,7 +2048,7 @@ def Superplot_seaborn(
     plt.tick_params(axis='x', which='major', length=0)
     plt.grid(show_grid, axis='y', color='lightgrey', linewidth=1.5, alpha=0.2)
 
-
+    plt.tight_layout()
 
     return plt.gcf()
 
