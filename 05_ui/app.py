@@ -319,7 +319,6 @@ with ui.nav_panel("Input"):
 def file_detection():
     for i in range(1, count.get() + 1, 1):
         if input[f"file{i}"]() != None:
-            cells_in_possesion.set(True)
             file_detected.set(True)
         else:
             pass
@@ -337,8 +336,58 @@ def file_detection():
 # 2. Displaying the dataframes
 # 3. Enabling the user to download the dataframes as .csv files
 
+already_processed_file_detected = reactive.value(False)    # Creating a reactive value for the already processed file detection
 
 with ui.nav_panel("Data frames"):  
+
+    ui.markdown(
+        """
+        ***Got previously processed data?***
+        """
+        )
+
+
+    ui.input_file(
+        "already_proccesed_spot_stats", 
+        "", 
+        accept=[".csv"], 
+        multiple=False, 
+        placeholder="Give me that Spot stats CSV file!",
+        width='32%',
+        )
+    
+    ui.markdown(
+        """
+        <hr style="height: 4px; background-color: black; border: none" />
+        """
+        )
+
+    @reactive.calc 
+    def parsed_processed_file():                                                           
+             
+        processed_spot_stats_input: list[FileInfo] | None = input.already_proccesed_spot_stats()                      # Getting the list of default input data files
+
+        if processed_spot_stats_input is None:
+            return pd.DataFrame()
+        else:
+            return pd.DataFrame(pd.read_csv(processed_spot_stats_input[0]['datapath']))                           # Load each CSV file into a DataFrame
+
+    @reactive.effect
+    def already_processed_file_detection():
+        if input.already_proccesed_spot_stats() != None:
+            cells_in_possesion.set(True)
+            already_processed_file_detected.set(True)
+        else:
+            pass
+
+    @reactive.effect
+    def cells_in_possesion_detection():
+        for i in range(1, count.get() + 1, 1):
+            if input[f"file{i}"]() != None and input.already_proccesed_spot_stats() != None:
+                cells_in_possesion.set(True)    
+            else:
+                pass
+
 
 
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -373,24 +422,27 @@ with ui.nav_panel("Data frames"):
 
     @reactive.effect
     def update_Spot_stats_df():
-        if file_detected.get() == False:
-            return pd.DataFrame()
         
-        else:
+        if file_detected.get():
             Spot_stats = process_spot_data()
             raw_Spot_stats_df.set(Spot_stats)
             Spot_metrics.set(Spot_stats.columns)
+
+        elif already_processed_file_detected.get():
+            Spot_stats = parsed_processed_file()
+            raw_Spot_stats_df.set(Spot_stats)
+            Spot_metrics.set(Spot_stats.columns)
+
+        else:
+            return pd.DataFrame()
         
-        Spot_stats = process_spot_data()
-        raw_Spot_stats_df.set(Spot_stats)
-        Spot_metrics.set(Spot_stats.columns)
 
 
     # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     @reactive.calc
     def process_track_data():
-        if file_detected.get() == False:
+        if file_detected.get() == False and already_processed_file_detected.get() == False:
             return pd.DataFrame()
         
         Spot_stats = raw_Spot_stats_df.get()
@@ -414,7 +466,7 @@ with ui.nav_panel("Data frames"):
 
     @reactive.effect
     def update_Track_stats_df():
-        if file_detected.get() == False:
+        if file_detected.get() == False and already_processed_file_detected.get() == False:
             return pd.DataFrame()
         
         else:
@@ -422,16 +474,13 @@ with ui.nav_panel("Data frames"):
             raw_Track_stats_df.set(Track_stats)
             Track_metrics.set(Track_stats.columns)
 
-        Track_stats = process_track_data()
-        raw_Track_stats_df.set(Track_stats)
-        Track_metrics.set(Track_stats.columns)
 
 
     # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     @reactive.calc
     def process_time_data():
-        if file_detected.get() == False:
+        if file_detected.get() == False and already_processed_file_detected.get() == False:
             return pd.DataFrame()
 
         Spot_stats = Spot_stats_df.get()
@@ -456,7 +505,7 @@ with ui.nav_panel("Data frames"):
 
     @reactive.effect
     def update_Time_stats_df():
-        if file_detected.get() == False:
+        if file_detected.get() == False and already_processed_file_detected.get() == False:
             return pd.DataFrame()
         
         else:
@@ -464,9 +513,6 @@ with ui.nav_panel("Data frames"):
             raw_Time_stats_df.set(Time_stats)
             Time_stats_df.set(Time_stats)
 
-        Time_stats = process_time_data()
-        raw_Time_stats_df.set(Time_stats)
-        Time_stats_df.set(Time_stats)
 
 
 
@@ -482,7 +528,7 @@ with ui.nav_panel("Data frames"):
 
             @render.data_frame
             def render_spot_stats():
-                if file_detected.get() == False:
+                if file_detected.get() == False and already_processed_file_detected.get() == False:
                     return pd.DataFrame()
         
                 else:
@@ -501,7 +547,7 @@ with ui.nav_panel("Data frames"):
             
             @render.data_frame
             def render_track_stats():
-                if file_detected.get() == False:
+                if file_detected.get() == False and already_processed_file_detected.get() == False:
                     return pd.DataFrame()
                 else:
                     Track_stats = Track_stats_df.get()
@@ -519,7 +565,7 @@ with ui.nav_panel("Data frames"):
 
             @render.data_frame
             def render_time_stats():
-                if file_detected.get() == False:
+                if file_detected.get() == False and already_processed_file_detected.get() == False:
                     return pd.DataFrame()
                 else:
                     Time_stats = Time_stats_df.get()
@@ -586,7 +632,7 @@ def _update_slider_values(metric, filter, dfA, dfB, slider_values):
     
 
 def _thresholded_histogram(metric, filter_type, slider_range, dfA, dfB):
-    if file_detected.get() == False:
+    if file_detected.get() == False and already_processed_file_detected.get() == False:
         return None
     elif dfA == None:
         return None
@@ -746,10 +792,10 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
         @reactive.effect
         def set_thresholded_dataA():
-            if delayed_detection.get() == False:
-                _set_thresholded_data(Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df)
-            else:
-                pass
+            # if delayed_detection.get() == False:
+            _set_thresholded_data(Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df)
+            # else:
+            #     pass
 
         @reactive.effect
         def update_thresholded_dataA():
@@ -858,10 +904,10 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
         @reactive.effect
         def set_thresholded_dataB():
-            if delayed_detection.get() == False:
-                _set_thresholded_data(Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T)
-            else:
-                pass
+            # if delayed_detection.get() == False:
+            _set_thresholded_data(Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T)
+            # else:
+            #     pass
             
         @reactive.effect
         def update_thresholded_dataB():
