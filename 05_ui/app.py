@@ -815,21 +815,21 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
         @render.text
         def data_thresholding_numbersA1():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(raw_Track_stats_df.get())
             return a
 
         @render.text
         def data_thresholding_numbersA2():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
             return b
             
         @render.text
         def data_thresholding_numbersA3():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
             return c
@@ -927,21 +927,21 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
         @render.text
         def data_thresholding_numbersB1():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return a
 
         @render.text
         def data_thresholding_numbersB2():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return b
 
         @render.text
         def data_thresholding_numbersB3():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return c
@@ -1858,6 +1858,22 @@ with ui.nav_panel("Visualisation"):
                     )
                 
 
+        #   Normalize the data by counting the relative values in the time series (e.g. percents - 0-100%)
+        #   Program an exponential curve
+        #   Program a test which will measure which curve fit is better (linear or exponential) and set that to default
+        #   => The test may count the (90° - horizontal) distance of each scatter point from the line (for the exponential as well as the linear line), sum them up and compare. 
+        #   => The lower sum means a better the fit.
+
+
+
+
+
+
+
+
+
+                
+
                 
 
         with ui.nav_panel("Superplots"):
@@ -1871,7 +1887,7 @@ with ui.nav_panel("Visualisation"):
 
                 ui.markdown(
                     """
-                    #### **Superplots**
+                    #### **Swarmplot**
                     *made with*  `seaborn`
                     <hr style="height: 4px; background-color: black; border: none" />
                     """
@@ -2457,6 +2473,87 @@ with ui.nav_panel("Visualisation"):
                             yield Path(tmp_file.name).read_bytes()
 
 
+            with ui.panel_well():
+
+                ui.markdown(
+                    """
+                    #### **Stripplot**
+                    *made with*  `plotly`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+                
+                ui.input_selectize(
+                    "let_me_look_at_these_strip",
+                    "Let me look at these:",
+                    select_metrics.tracks,
+                    selected=['CONDITION','REPLICATE','TRACK_ID'],
+                    multiple=True
+                    )
+                
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+                ui.input_numeric(
+                    'lowband',
+                    'Lower band (outliars)',
+                    0,
+                    min=0,
+                    max=1,
+                    step=0.01
+                    )
+                
+                ui.input_numeric(
+                    'highband',
+                    'Upper band (outliars)',
+                    0.9,
+                    min=0,
+                    max=1,
+                    step=0.01
+                    )
+                
+                ui.input_checkbox(
+                    'see_outliars',
+                    'See outliars',
+                    False
+                    )
+                
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+
+                
+
+                
+
+
+
+
+            with ui.card():
+
+                "uhh"
+
+            #     @render.plot
+            #     def plotly_stripplot():
+            #         fig = pu.interactive_stripplot(
+            #             df=Track_stats_df.get(), 
+            #             metric=input.testing_metric(), 
+            #             Metrics=select_metrics.tracks, 
+            #             let_me_look_at_these=input.let_me_look_at_these_strip(), 
+            #             palette=input.palette(), 
+            #             width=input.graph_width(), 
+            #             height=input.graph_height(), 
+            #             # jitter_outline_width:float,
+            #             violin_edge_color=input.violin_edge_color(),
+            #             lowband=,
+            #             highband:float,
+            #             see_outliars:bool
+            #             )
 
 
 
