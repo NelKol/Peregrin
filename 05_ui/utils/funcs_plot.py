@@ -1707,21 +1707,27 @@ def Superplot_seaborn(
         violin_outline_width:float,
 
         show_mean:bool, 
-        mean_span:float, 
+        mean_span:float,
+        mean_color:str,
         show_median:bool,
         median_span:float, 
+        median_color:str,
         line_width:float,
+        set_main_line:str,
+
 
         show_error_bars:bool,
         errorbar_capsize:int,
+        errorbar_color:str,
         errorbar_lw:int,
         errorbar_alpha:float,  
         
         show_swarm:bool, 
         swarm_size:int, 
+        swarm_outline_color:str,
         swarm_alpha:float,
-        show_balls:bool,
 
+        show_balls:bool,
         ball_size:int,
         ball_outline_color:str, 
         ball_outline_width:int, 
@@ -1746,7 +1752,8 @@ def Superplot_seaborn(
     
 
     """
-    MEGALOMANIC DIRTY EDGY seaborn plotting function.
+    MEGALOMANIC - DIRTY - EDGY   
+    seaborn plotting function.
 
     1. Swarm plot
     2. Violin plot
@@ -1763,6 +1770,12 @@ def Superplot_seaborn(
 
     df['CONDITION'] = df['CONDITION'].astype(str)
     conditions = df['CONDITION'].unique()
+
+
+    if df['REPLICATE'].nunique() == 1:
+        hue = 'CONDITION'
+    else:
+        hue = 'REPLICATE'
     
 
     # ======================= KDE INSET =========================
@@ -1787,10 +1800,17 @@ def Superplot_seaborn(
 
         if show_swarm:
             sns.swarmplot(
-                data=df, x='CONDITION', y=metric,
-                hue='REPLICATE', palette=palette,
-                size=swarm_size, dodge=False, alpha=swarm_alpha,
-                legend=False, zorder=3,
+                data=df, 
+                x='CONDITION', 
+                y=metric,
+                hue=hue, 
+                palette=palette, 
+                size=swarm_size, 
+                dodge=False, 
+                alpha=swarm_alpha,
+                legend=False, 
+                zorder=3, 
+                edgecolor=swarm_outline_color, 
                 order=spaced_conditions
                 )
         
@@ -1798,22 +1818,35 @@ def Superplot_seaborn(
         # ------------------------ Violinplot -------------------------
         if show_violin:
             sns.violinplot(
-                data=df, x='CONDITION', y=metric,
-                color=violin_fill_color, edgecolor=violin_edge_color, width=violin_outline_width,
-                inner=None, alpha=violin_alpha, zorder=2,
+                data=df, 
+                x='CONDITION', 
+                y=metric, 
+                color=violin_fill_color, 
+                edgecolor=violin_edge_color, 
+                width=violin_outline_width, 
+                inner=None, 
+                alpha=violin_alpha, 
+                zorder=2, 
                 order=spaced_conditions
                 )
         
 
         # ------------------------ Scatterplot of replicate means ------------------------------
 
+        replicate_means = df.groupby(['CONDITION', 'REPLICATE'])[metric].mean().reset_index()
         if show_balls:
-            replicate_means = df.groupby(['CONDITION', 'REPLICATE'])[metric].mean().reset_index()
             sns.scatterplot(
-                data=replicate_means, x='CONDITION', y=metric,
-                hue='REPLICATE', palette=palette,
-                edgecolor=ball_outline_color, s=ball_size, legend=False,
-                alpha=ball_alpha, linewidth=ball_outline_width, zorder=4
+                data=replicate_means, 
+                x='CONDITION', 
+                y=metric, 
+                hue=hue, 
+                palette=palette, 
+                edgecolor=ball_outline_color, 
+                s=ball_size, 
+                legend=False, 
+                alpha=ball_alpha, 
+                linewidth=ball_outline_width, 
+                zorder=4
                 )
         
 
@@ -1905,7 +1938,7 @@ def Superplot_seaborn(
             sns.kdeplot(
                 data=group_df,
                 y=metric,
-                hue='REPLICATE',
+                hue=hue,
                 fill=kde_fill,
                 alpha=kde_alpha,
                 lw=kde_outline,
@@ -1945,14 +1978,14 @@ def Superplot_seaborn(
         # ------------------------------------------ Swarm plot -----------------------------------------------------------
 
         if show_swarm:
-            sns.swarmplot(data=df, x='CONDITION', y=metric, hue='REPLICATE', palette=palette, size=swarm_size, dodge=False, alpha=swarm_alpha, legend=False, zorder=2)
+            sns.swarmplot(data=df, x='CONDITION', y=metric, hue=hue, palette=palette, size=swarm_size, edgecolor=swarm_outline_color, dodge=False, alpha=swarm_alpha, legend=False, zorder=2)
         
 
         # ----------------------------------- Scatterplot of replicate means ------------------------------------------------------
 
+        replicate_means = df.groupby(['CONDITION', 'REPLICATE'])[metric].mean().reset_index()
         if show_balls:
-            replicate_means = df.groupby(['CONDITION', 'REPLICATE'])[metric].mean().reset_index()
-            sns.scatterplot(data=replicate_means, x='CONDITION', y=metric, hue='REPLICATE', palette=palette, edgecolor=ball_outline_color, s=ball_size, legend=False, alpha=ball_alpha, linewidth=ball_outline_width, zorder=3)
+            sns.scatterplot(data=replicate_means, x='CONDITION', y=metric, hue=hue, palette=palette, edgecolor=ball_outline_color, s=ball_size, legend=False, alpha=ball_alpha, linewidth=ball_outline_width, zorder=3)
 
 
         # -------------------------------------------- Violin plot ---------------------------------------------------------
@@ -2051,6 +2084,7 @@ def Superplot_seaborn(
     plt.tight_layout()
 
     return plt.gcf()
+
 
 
 def interactive_stripplot(
