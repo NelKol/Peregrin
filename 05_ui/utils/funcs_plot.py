@@ -1851,32 +1851,46 @@ def Superplot_seaborn(
         
 
         # ---------------------------- Mean, Meadian and Error bars --------------------------------
-
-        cond_num_list = list(range(len(conditions)*2))  
-
+ 
         condition_stats = df.groupby('CONDITION')[metric].agg(['mean', 'median', 'std']).reset_index()
 
+        cond_num_list = list(range(len(conditions)*2)) 
         for cond in cond_num_list:
+
             x_center = cond_num_list[cond]  # Get the x position for the condition
+
             if show_mean:
                 sns.lineplot(
                     x=[x_center - mean_span, x_center + mean_span],
                     y=[condition_stats['mean'].iloc[cond], condition_stats['mean'].iloc[cond]],
-                    color='black', linestyle='-', linewidth=line_width,
+                    color='black', 
+                    linestyle='-', 
+                    linewidth=line_width,
                     label='Mean' if cond == 0 else "", zorder=5
                     )
+                
             if show_median:
                 sns.lineplot(
                     x=[x_center - median_span, x_center + median_span],
                     y=[condition_stats['median'].iloc[cond], condition_stats['median'].iloc[cond]],
-                    color='black', linestyle='--', linewidth=line_width,
+                    color='black', 
+                    linestyle='--', 
+                    linewidth=line_width,
                     label='Median' if cond == 0 else "", zorder=5
                     )
+                
             if show_error_bars:
                 plt.errorbar(
-                    x_center, condition_stats['mean'].iloc[cond], yerr=condition_stats['std'].iloc[cond], fmt='None',
-                    color='black', alpha=errorbar_alpha,
-                    linewidth=errorbar_lw, capsize=errorbar_capsize, zorder=5, label='Mean ± SD' if cond == 0 else "",
+                    x_center, 
+                    condition_stats['mean'].iloc[cond], 
+                    yerr=condition_stats['std'].iloc[cond], 
+                    fmt='None',
+                    color='black', 
+                    alpha=errorbar_alpha,
+                    linewidth=errorbar_lw, 
+                    capsize=errorbar_capsize, 
+                    zorder=5, 
+                    label='Mean ± SD' if cond == 0 else "",
                     )
                 
 
@@ -1913,8 +1927,10 @@ def Superplot_seaborn(
             sns.lineplot(
                 x=x_val-0.5,
                 y=[condition_stats['median'].iloc[i]],
-                color='none', linewidth=0,
-                label="", zorder=0
+                color='none', 
+                linewidth=0,
+                label="", 
+                zorder=0
                 )
 
 
@@ -1966,32 +1982,66 @@ def Superplot_seaborn(
             ticks=range(len(spaced_conditions)),
             labels=[lbl if not lbl.startswith("spacer") else "" for lbl in spaced_conditions]
             )
-        
         plt.yticks(ticks=np.arange(0, y_ax_max, step=25))
 
 
 
 
+    # ======================= IF FALSE KDE INSET =========================
+    
     elif show_kde == False:
-
 
         # ------------------------------------------ Swarm plot -----------------------------------------------------------
 
         if show_swarm:
-            sns.swarmplot(data=df, x='CONDITION', y=metric, hue=hue, palette=palette, size=swarm_size, edgecolor=swarm_outline_color, dodge=False, alpha=swarm_alpha, legend=False, zorder=2)
+            sns.swarmplot(
+                data=df, 
+                x='CONDITION', 
+                y=metric, 
+                hue=hue, 
+                palette=palette, 
+                size=swarm_size, 
+                edgecolor=swarm_outline_color, 
+                dodge=False, 
+                alpha=swarm_alpha, 
+                legend=False, 
+                zorder=2
+                )
         
 
         # ----------------------------------- Scatterplot of replicate means ------------------------------------------------------
 
         replicate_means = df.groupby(['CONDITION', 'REPLICATE'])[metric].mean().reset_index()
         if show_balls:
-            sns.scatterplot(data=replicate_means, x='CONDITION', y=metric, hue=hue, palette=palette, edgecolor=ball_outline_color, s=ball_size, legend=False, alpha=ball_alpha, linewidth=ball_outline_width, zorder=3)
+            sns.scatterplot(
+                data=replicate_means,
+                x='CONDITION', 
+                y=metric, 
+                hue=hue, 
+                palette=palette, 
+                edgecolor=ball_outline_color, 
+                s=ball_size, 
+                legend=False, 
+                alpha=ball_alpha, 
+                linewidth=ball_outline_width, 
+                zorder=3
+                )
 
 
         # -------------------------------------------- Violin plot ---------------------------------------------------------
 
         if show_violin:
-            sns.violinplot(data=df, x='CONDITION', y=metric, color=violin_fill_color, edgecolor=violin_edge_color, width=violin_outline_width, inner=None, alpha=violin_alpha, zorder=1)
+            sns.violinplot(
+                data=df, 
+                x='CONDITION', 
+                y=metric, 
+                color=violin_fill_color, 
+                edgecolor=violin_edge_color, 
+                width=violin_outline_width, 
+                inner=None, 
+                alpha=violin_alpha, 
+                zorder=1
+                )
         
 
         #  ------------------------------------ Mean, median and errorbar lines -------------------------------------------
