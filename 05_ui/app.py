@@ -676,15 +676,7 @@ def _thresholded_histogram(metric, filter_type, slider_range, dfA, dfB):
 
 
 def _data_thresholding_numbers(df):
-    raw = raw_Track_stats_df.get().shape[0]
-    filtered = df.shape[0]
-    filtered_out = raw - filtered
-
-    # Filtered data in percents
-    filtered_prcbt = filtered / raw * 100
-    filtered_out_prcbt = filtered_out / raw * 100
-
-    return f"Cells in total: {raw}", f"In focus: {round(filtered_prcbt)} % ({filtered})", f"Filtered out: {round(filtered_out_prcbt)} % ({filtered_out})"
+    return f"Cells in total: {raw_Track_stats_df.get().shape[0]}", f"In focus: {round(df.shape[0] / raw_Track_stats_df.get().shape[0] * 100)} % ({df.shape[0]})", f"Filtered out: {round((raw_Track_stats_df.get().shape[0] - df.shape[0]) / raw_Track_stats_df.get().shape[0] * 100)} % ({raw_Track_stats_df.get().shape[0] - df.shape[0]})"
 
 
 def _thresholded_data(filter_type, metric, slider_range, dfA, dfB):
@@ -815,21 +807,21 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
         @render.text
         def data_thresholding_numbersA1():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(raw_Track_stats_df.get())
             return a
 
         @render.text
         def data_thresholding_numbersA2():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
             return b
             
         @render.text
         def data_thresholding_numbersA3():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
             return c
@@ -927,21 +919,21 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
         @render.text
         def data_thresholding_numbersB1():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return a
 
         @render.text
         def data_thresholding_numbersB2():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return b
 
         @render.text
         def data_thresholding_numbersB3():
-            if cells_in_possesion.get() == False:
+            if file_detected.get() == False and already_processed_file_detected.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return c
@@ -1858,6 +1850,22 @@ with ui.nav_panel("Visualisation"):
                     )
                 
 
+        #   Normalize the data by counting the relative values in the time series (e.g. percents - 0-100%)
+        #   Program an exponential curve
+        #   Program a test which will measure which curve fit is better (linear or exponential) and set that to default
+        #   => The test may count the (90° - horizontal) distance of each scatter point from the line (for the exponential as well as the linear line), sum them up and compare. 
+        #   => The lower sum means a better the fit.
+
+
+
+
+
+
+
+
+
+                
+
                 
 
         with ui.nav_panel("Superplots"):
@@ -1871,7 +1879,7 @@ with ui.nav_panel("Visualisation"):
 
                 ui.markdown(
                     """
-                    #### **Superplots**
+                    #### **Swarmplot**
                     *made with*  `seaborn`
                     <hr style="height: 4px; background-color: black; border: none" />
                     """
@@ -2371,35 +2379,48 @@ with ui.nav_panel("Visualisation"):
                         metric=input.testing_metric(), 
                         Metric=select_metrics.tracks[input.testing_metric()], 
                         palette=input.palette(), 
+
                         kde_alpha=update_kde_alpha(),
                         kde_outline=update_kde_outline(),
                         kde_inset_width=update_kde_inset_width(),
                         kde_fill=input.kde_fill(),
                         kde_legend=input.kde_legend(),
                         show_kde=input.show_kde(),
+
                         violin_fill_color=input.violin_color(),
                         violin_edge_color=input.violin_edge_color(),
                         violin_outline_width=update_violin_outline_width(),
                         violin_alpha=update_violin_alpha(),
                         show_violin=input.show_violin(),
+
                         swarm_size=update_swarm_size(),
+                        swarm_outline_color='black',
                         swarm_alpha=update_swarm_alpha(),
                         show_swarm=input.show_swarm(),
+
                         ball_size=update_ball_size(),
                         ball_outline_color=input.ball_outline_color(),
                         ball_outline_width=update_ball_outline_width(),
                         ball_alpha=update_ball_alpha(),
                         show_balls=input.show_balls(),
+
                         mean_span=update_mean_span(),
+                        mean_color='black',
                         median_span=update_median_span(),
+                        median_color='black',
                         line_width=update_line_width(),
                         show_mean=input.show_mean(),
                         show_median=input.show_median(),
+                        set_main_line=False,
+
                         errorbar_capsize=update_errorbar_capsize(),
                         errorbar_lw=update_errorbar_lw(),
+                        errorbar_color='black',
                         errorbar_alpha=update_errorbar_alpha(),
                         show_error_bars=input.show_error_bars(),
+
                         p_test=input.p_test(),
+
                         show_grid=input.show_grid(),
                         open_spine=input.open_spine(),
                         show_legend=input.show_legend(),
@@ -2457,6 +2478,87 @@ with ui.nav_panel("Visualisation"):
                             yield Path(tmp_file.name).read_bytes()
 
 
+            with ui.panel_well():
+
+                ui.markdown(
+                    """
+                    #### **Stripplot**
+                    *made with*  `plotly`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+                
+                ui.input_selectize(
+                    "let_me_look_at_these_strip",
+                    "Let me look at these:",
+                    select_metrics.tracks,
+                    selected=['CONDITION','REPLICATE','TRACK_ID'],
+                    multiple=True
+                    )
+                
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+                ui.input_numeric(
+                    'lowband',
+                    'Lower band (outliars)',
+                    0,
+                    min=0,
+                    max=1,
+                    step=0.01
+                    )
+                
+                ui.input_numeric(
+                    'highband',
+                    'Upper band (outliars)',
+                    0.9,
+                    min=0,
+                    max=1,
+                    step=0.01
+                    )
+                
+                ui.input_checkbox(
+                    'see_outliars',
+                    'See outliars',
+                    False
+                    )
+                
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+
+                
+
+                
+
+
+
+
+            with ui.card():
+
+                "uhh"
+
+            #     @render.plot
+            #     def plotly_stripplot():
+            #         fig = pu.interactive_stripplot(
+            #             df=Track_stats_df.get(), 
+            #             metric=input.testing_metric(), 
+            #             Metrics=select_metrics.tracks, 
+            #             let_me_look_at_these=input.let_me_look_at_these_strip(), 
+            #             palette=input.palette(), 
+            #             width=input.graph_width(), 
+            #             height=input.graph_height(), 
+            #             # jitter_outline_width:float,
+            #             violin_edge_color=input.violin_edge_color(),
+            #             lowband=,
+            #             highband:float,
+            #             see_outliars:bool
+            #             )
 
 
 
@@ -2466,6 +2568,54 @@ with ui.nav_panel("Visualisation"):
 
 
 
+with ui.nav_panel('Task list'):
+
+    ui.markdown(
+        """
+        # **Task list**
+
+
+        **Time series plots** - make the graphs more modifyeble
+
+        *Scatter with fitted line chart*
+        Add a possibility to:
+        - [ ] plot the median value per frame
+        - [ ] have a relative scale (0-100%) for the y axis and rescale the data
+        - [ ] algorithmically choose the best fit (linear or exponential) 
+        - [ ] get the equation output for the fitted line/curve
+        - [ ] *statistically test for the differences in the fitted lines/curves*
+
+        *Line chart*
+        - [ ] add a selection of the main line (between the mean and the median)
+
+        *Error band chart*
+
+        <hr style="border: none; border-top: 1px dotted; margin: 0" />
+
+        **Sections with graph settings**
+
+        - [ ] Annotate and label the setting sections properly
+        - [ ] Add a button to reset the settings to default values
+
+        <hr style="border: none; border-top: 1px dotted; margin: 0" />
+
+        **Data calcs speed efficiency**
+
+        - [ ] Optimize the speed and efficiency of the data calculations
+
+        <hr style="border: none; border-top: 1px dotted; margin: 0" />
+
+        **Functionality**
+
+        - [ ] Add a debounce to the add input field
+        - [ ] Add a throttle/debounce to the thresholding
+        - [ ] Add a debounce to all the heavy/plot calculations (optional)
+        - [ ] Check the mean value differences (lineplot - scatter) in the swarmplot
+        
+
+        """
+        )
+    
 
 
 

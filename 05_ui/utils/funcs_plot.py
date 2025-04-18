@@ -1707,21 +1707,27 @@ def Superplot_seaborn(
         violin_outline_width:float,
 
         show_mean:bool, 
-        mean_span:float, 
+        mean_span:float,
+        mean_color:str,
         show_median:bool,
         median_span:float, 
+        median_color:str,
         line_width:float,
+        set_main_line:str,
+
 
         show_error_bars:bool,
         errorbar_capsize:int,
+        errorbar_color:str,
         errorbar_lw:int,
         errorbar_alpha:float,  
         
         show_swarm:bool, 
         swarm_size:int, 
+        swarm_outline_color:str,
         swarm_alpha:float,
-        show_balls:bool,
 
+        show_balls:bool,
         ball_size:int,
         ball_outline_color:str, 
         ball_outline_width:int, 
@@ -1746,7 +1752,8 @@ def Superplot_seaborn(
     
 
     """
-    MEGALOMANIC DIRTY EDGY seaborn plotting function.
+    MEGALOMANIC - DIRTY - EDGY   
+    seaborn plotting function.
 
     1. Swarm plot
     2. Violin plot
@@ -1763,6 +1770,12 @@ def Superplot_seaborn(
 
     df['CONDITION'] = df['CONDITION'].astype(str)
     conditions = df['CONDITION'].unique()
+
+
+    if df['REPLICATE'].nunique() == 1:
+        hue = 'CONDITION'
+    else:
+        hue = 'REPLICATE'
     
 
     # ======================= KDE INSET =========================
@@ -1787,10 +1800,17 @@ def Superplot_seaborn(
 
         if show_swarm:
             sns.swarmplot(
-                data=df, x='CONDITION', y=metric,
-                hue='REPLICATE', palette=palette,
-                size=swarm_size, dodge=False, alpha=swarm_alpha,
-                legend=False, zorder=3,
+                data=df, 
+                x='CONDITION', 
+                y=metric,
+                hue=hue, 
+                palette=palette, 
+                size=swarm_size, 
+                dodge=False, 
+                alpha=swarm_alpha,
+                legend=False, 
+                zorder=3, 
+                edgecolor=swarm_outline_color, 
                 order=spaced_conditions
                 )
         
@@ -1798,52 +1818,79 @@ def Superplot_seaborn(
         # ------------------------ Violinplot -------------------------
         if show_violin:
             sns.violinplot(
-                data=df, x='CONDITION', y=metric,
-                color=violin_fill_color, edgecolor=violin_edge_color, width=violin_outline_width,
-                inner=None, alpha=violin_alpha, zorder=2,
+                data=df, 
+                x='CONDITION', 
+                y=metric, 
+                color=violin_fill_color, 
+                edgecolor=violin_edge_color, 
+                width=violin_outline_width, 
+                inner=None, 
+                alpha=violin_alpha, 
+                zorder=2, 
                 order=spaced_conditions
                 )
         
 
         # ------------------------ Scatterplot of replicate means ------------------------------
 
+        replicate_means = df.groupby(['CONDITION', 'REPLICATE'])[metric].mean().reset_index()
         if show_balls:
-            replicate_means = df.groupby(['CONDITION', 'REPLICATE'])[metric].mean().reset_index()
             sns.scatterplot(
-                data=replicate_means, x='CONDITION', y=metric,
-                hue='REPLICATE', palette=palette,
-                edgecolor=ball_outline_color, s=ball_size, legend=False,
-                alpha=ball_alpha, linewidth=ball_outline_width, zorder=4
+                data=replicate_means, 
+                x='CONDITION', 
+                y=metric, 
+                hue=hue, 
+                palette=palette, 
+                edgecolor=ball_outline_color, 
+                s=ball_size, 
+                legend=False, 
+                alpha=ball_alpha, 
+                linewidth=ball_outline_width, 
+                zorder=4
                 )
         
 
         # ---------------------------- Mean, Meadian and Error bars --------------------------------
-
-        cond_num_list = list(range(len(conditions)*2))  
-
+ 
         condition_stats = df.groupby('CONDITION')[metric].agg(['mean', 'median', 'std']).reset_index()
 
+        cond_num_list = list(range(len(conditions)*2)) 
         for cond in cond_num_list:
+
             x_center = cond_num_list[cond]  # Get the x position for the condition
+
             if show_mean:
                 sns.lineplot(
                     x=[x_center - mean_span, x_center + mean_span],
                     y=[condition_stats['mean'].iloc[cond], condition_stats['mean'].iloc[cond]],
-                    color='black', linestyle='-', linewidth=line_width,
+                    color='black', 
+                    linestyle='-', 
+                    linewidth=line_width,
                     label='Mean' if cond == 0 else "", zorder=5
                     )
+                
             if show_median:
                 sns.lineplot(
                     x=[x_center - median_span, x_center + median_span],
                     y=[condition_stats['median'].iloc[cond], condition_stats['median'].iloc[cond]],
-                    color='black', linestyle='--', linewidth=line_width,
+                    color='black', 
+                    linestyle='--', 
+                    linewidth=line_width,
                     label='Median' if cond == 0 else "", zorder=5
                     )
+                
             if show_error_bars:
                 plt.errorbar(
-                    x_center, condition_stats['mean'].iloc[cond], yerr=condition_stats['std'].iloc[cond], fmt='None',
-                    color='black', alpha=errorbar_alpha,
-                    linewidth=errorbar_lw, capsize=errorbar_capsize, zorder=5, label='Mean ± SD' if cond == 0 else "",
+                    x_center, 
+                    condition_stats['mean'].iloc[cond], 
+                    yerr=condition_stats['std'].iloc[cond], 
+                    fmt='None',
+                    color='black', 
+                    alpha=errorbar_alpha,
+                    linewidth=errorbar_lw, 
+                    capsize=errorbar_capsize, 
+                    zorder=5, 
+                    label='Mean ± SD' if cond == 0 else "",
                     )
                 
 
@@ -1880,8 +1927,10 @@ def Superplot_seaborn(
             sns.lineplot(
                 x=x_val-0.5,
                 y=[condition_stats['median'].iloc[i]],
-                color='none', linewidth=0,
-                label="", zorder=0
+                color='none', 
+                linewidth=0,
+                label="", 
+                zorder=0
                 )
 
 
@@ -1905,7 +1954,7 @@ def Superplot_seaborn(
             sns.kdeplot(
                 data=group_df,
                 y=metric,
-                hue='REPLICATE',
+                hue=hue,
                 fill=kde_fill,
                 alpha=kde_alpha,
                 lw=kde_outline,
@@ -1933,32 +1982,66 @@ def Superplot_seaborn(
             ticks=range(len(spaced_conditions)),
             labels=[lbl if not lbl.startswith("spacer") else "" for lbl in spaced_conditions]
             )
-        
         plt.yticks(ticks=np.arange(0, y_ax_max, step=25))
 
 
 
 
+    # ======================= IF FALSE KDE INSET =========================
+    
     elif show_kde == False:
-
 
         # ------------------------------------------ Swarm plot -----------------------------------------------------------
 
         if show_swarm:
-            sns.swarmplot(data=df, x='CONDITION', y=metric, hue='REPLICATE', palette=palette, size=swarm_size, dodge=False, alpha=swarm_alpha, legend=False, zorder=2)
+            sns.swarmplot(
+                data=df, 
+                x='CONDITION', 
+                y=metric, 
+                hue=hue, 
+                palette=palette, 
+                size=swarm_size, 
+                edgecolor=swarm_outline_color, 
+                dodge=False, 
+                alpha=swarm_alpha, 
+                legend=False, 
+                zorder=2
+                )
         
 
         # ----------------------------------- Scatterplot of replicate means ------------------------------------------------------
 
+        replicate_means = df.groupby(['CONDITION', 'REPLICATE'])[metric].mean().reset_index()
         if show_balls:
-            replicate_means = df.groupby(['CONDITION', 'REPLICATE'])[metric].mean().reset_index()
-            sns.scatterplot(data=replicate_means, x='CONDITION', y=metric, hue='REPLICATE', palette=palette, edgecolor=ball_outline_color, s=ball_size, legend=False, alpha=ball_alpha, linewidth=ball_outline_width, zorder=3)
+            sns.scatterplot(
+                data=replicate_means,
+                x='CONDITION', 
+                y=metric, 
+                hue=hue, 
+                palette=palette, 
+                edgecolor=ball_outline_color, 
+                s=ball_size, 
+                legend=False, 
+                alpha=ball_alpha, 
+                linewidth=ball_outline_width, 
+                zorder=3
+                )
 
 
         # -------------------------------------------- Violin plot ---------------------------------------------------------
 
         if show_violin:
-            sns.violinplot(data=df, x='CONDITION', y=metric, color=violin_fill_color, edgecolor=violin_edge_color, width=violin_outline_width, inner=None, alpha=violin_alpha, zorder=1)
+            sns.violinplot(
+                data=df, 
+                x='CONDITION', 
+                y=metric, 
+                color=violin_fill_color, 
+                edgecolor=violin_edge_color, 
+                width=violin_outline_width, 
+                inner=None, 
+                alpha=violin_alpha, 
+                zorder=1
+                )
         
 
         #  ------------------------------------ Mean, median and errorbar lines -------------------------------------------
@@ -2054,524 +2137,260 @@ def Superplot_seaborn(
 
 
 
-# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# ==============================================================================================================================================================================================================================================================================================
-
-# def poly_fit_chart(df, metric, Metric, condition='all', replicate='all', degree=[1], cmap='tab10', fill=False, point_size=75, outline=False, outline_width=1, opacity=0.6, replicates_separately=False, dir=None):
-
-#     if outline:
-#         outline_color = 'black'
-#     else:
-#         outline_color = ''
+def interactive_stripplot(
+    df: pd.DataFrame, 
+    metric:str, 
+    Metrics:dict, 
+    let_me_look_at_these:list, 
+    palette:str, 
+    width:int, 
+    height:int, 
+    jitter_outline_width:float,
+    violin_edge_color:str,
+    lowband:float,
+    highband:float,
+    see_outliars:bool
+    ):
     
-#     if condition == None or replicate == None:
-#         pass
-#     else:
-#         try:
-#             condition = int(condition)
-#         except ValueError or TypeError:
-#             pass
-#         try:
-#             replicate = int(replicate)
-#         except ValueError or TypeError:
-#             pass
-
-#     df = df.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
-
-#     if condition == 'all':
-#         df = df.groupby(['CONDITION', 'POSITION_T']).agg({metric: 'mean'}).reset_index()
-#         element = 'CONDITION'
-#         shorthand = 'CONDITION:N'
-#         what = ''
-#     elif condition != 'all' and replicate == 'all':
-#         if replicates_separately:
-#             df = df[df['CONDITION'] == condition]
-#             shorthand = 'REPLICATE:N'
-#             element = 'REPLICATE'
-#             what = f'for condition {condition}'
-#         else:
-#             df = df[df['CONDITION'] == condition].groupby(['CONDITION', 'POSITION_T']).agg({metric: 'mean'}).reset_index()
-#             shorthand = 'CONDITION:N'
-#             element = 'CONDITION'
-#             what = f'for condition {condition}'
-#     elif condition != 'all' and replicate != 'all':
-#         df = df[(df['CONDITION'] == condition) & (df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
-#         shorthand = 'REPLICATE:N'
-#         element = 'REPLICATE'
-#         what = f'for condition {condition} and replicate {replicate}'   
+    """
+    Create an interactive strip plot with aggregated violin plots using Plotly.
     
-
-#     # Retrieve unique conditions and assign colors from the selected qualitative colormap.
-#     elements = df[element].unique().tolist()
-#     colors = _make_q_cmap(elements, cmap)
-
-#     highlight = alt.selection_point(
-#         on="pointerover", fields=[element], nearest=True
-#         )
+    For each CONDITION:
+      - A grey aggregated violin plot is drawn with custom hover displaying 
+        min, median, mean and max values.
+      - Scatter (jitter) points are drawn per REPLICATE. By default these points 
+        are colored by replicate; however, if see_outliars is True, non‐outlying 
+        points are painted grey and only outliers retain their replicate colors.
+      - A solid horizontal line is added at the condition mean, along with a dashed line for the median.
+      - An error bar with cap is added at the condition mean representing one standard deviation.
+      - A diamond marker is added at each (CONDITION, REPLICATE) group representing that group’s mean.
     
-#     # Create a base chart with the common encodings.
-#     base = alt.Chart(df).encode(
-#         x=alt.X('POSITION_T', title='Time position'),
-#         y=alt.Y(metric, title=Metric),
-#         color=alt.Color(shorthand, title='Condition', scale=alt.Scale(domain=elements, range=colors))
-#         )
+    Parameters:
+        df (pd.DataFrame): Input data frame.
+        metric (str): Column name for the y-axis metric.
+        Metric (str): Display name for the y-axis metric.
+        let_me_look_at_these (list): Additional columns to include in scatter hover text.
+        palette (str): Seaborn color palette for replicates.
+        width (int): Plot width.
+        height (int): Plot height.
+        slope (bool): Whether to adjust jitter based on density and metric values.
+        jitter_outline_width (float): Outline width for jittered markers.
+        violin_edge_color (str): Color for violin borders.
+        see_outliars (bool): When True, paints non-outlying jitter points grey and outliers with their replicate colors.
     
-#     ignore = 0.1 
-
-#     if fill:
-#         scatter = base.mark_circle(
-#             size=point_size,
-#             stroke=outline_color,
-#             strokeWidth=outline_width,
-#         ).encode(
-#             opacity=alt.when(~highlight).then(alt.value(ignore)).otherwise(alt.value(opacity)),
-#             tooltip=alt.value(None),
-#         ).add_params(
-#             highlight
-#         )
-#     else:
-#         # Scatter layer: displays the actual data points.
-#         scatter = base.mark_point(
-#             size=point_size, 
-#             filled=fill, 
-#             strokeWidth=outline_width,
-#         ).encode(
-#             opacity=alt.when(~highlight).then(alt.value(ignore)).otherwise(alt.value(opacity)),
-#             # tooltip=alt.Tooltip(metric, title=f'Cond: {condition}, Repl: {condition}'),
-#             tooltip=['POSITION_T', metric, shorthand],
-#         ).add_params(
-#             highlight
-#         )
+    Returns:
+        go.Figure: The resulting Plotly figure.
+    """
+    # Map each condition to a unique numeric x value
+    conditions = df['CONDITION'].unique()
+    condition_map = {cond: i for i, cond in enumerate(conditions)}
     
-#     if degree[0] == 0:
-#         chart = alt.layer(scatter).properties(
-#             width=800,
-#             height=400,
-#             title=f'{Metric} with Polynomial Fits'
-#         ).configure_view(
-#             strokeWidth=1
-#         )
-#     else:
-#         # Build a list of polynomial fit layers, one for each specified degree.
-#         polynomial_fit = [
-#             base.transform_regression(
-#                 "POSITION_T", metric,
-#                 method="poly",
-#                 order=order,
-#                 groupby=[element],
-#                 as_=["POSITION_T", str(order)]
-#             ).mark_line(
-#             ).transform_fold(
-#                 [str(order)], as_=["degree", metric]
-#             ).encode(
-#                 x=alt.X('POSITION_T', title='Time position'),
-#                 y=alt.Y(metric, title=Metric),
-#                 color=alt.Color(shorthand, title='Condition', scale=alt.Scale(domain=elements, range=colors)),
-#                 size=alt.when(~highlight).then(alt.value(1.25)).otherwise(alt.value(3))
-#             )
-#             for order in degree
-#             ]
-        
-#         # Layer the scatter points with all polynomial fits.
-#         chart = alt.layer(scatter, *polynomial_fit).properties(
-#             width=700,
-#             height=350,
-#             title=f'{Metric} with Polynomial Fits for {what}'
-#         ).configure_view(
-#             strokeWidth=1
-#         ).interactive()
+    np.random.seed(42)
 
-#     chart.save(dir / 'cache/poly_fit_chart.svg')
-#     chart.save(dir / 'cache/poly_fit_chart.html')
+    # Create jittered x values based on the condition mapping
+    base_x_jitter = df['CONDITION'].map(condition_map)
+    jitter = np.random.uniform(-0.275, 0.275, size=len(df))
+    df['x_jitter'] = base_x_jitter + jitter
 
-#     return chart
-        
+    # Compute outlier flag per condition using the standard IQR method
+    # A point is an outlier if it falls below Q1 - 1.5*IQR or above Q3 + 1.5*IQR for its condition.
+    df['is_outlier'] = df[metric].transform(
+        lambda x: (x < (x.quantile(lowband) - 1.5*(x.quantile(highband)-x.quantile(lowband)))) | 
+                  (x > (x.quantile(highband) + 1.5*(x.quantile(highband)-x.quantile(lowband))))
+        )
 
-# # ==============================================================================================================================================================================================================================================================================================
-
-# def line_chart(df, metric, Metric, condition='all', replicate='all', cmap='tab10', interpolation=None, show_median=True, replicates_separately=False, dir=None):
-
-#     metric_mean = metric
-#     metric_median = metric.replace('MEAN', 'MEDIAN')
-
-#     if condition == None or replicate == None:
-#         pass
-#     else:
-#         try:
-#             condition = int(condition)
-#         except ValueError or TypeError:
-#             pass
-#         try:
-#             replicate = int(replicate)
-#         except ValueError or TypeError:
-#             pass
-
-#     df.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
-
-#     if condition == 'all':
-#         df = df.groupby(['CONDITION', 'POSITION_T']).agg({metric_mean: 'mean', metric_median: 'median'}).reset_index()
-#         shorthand = 'CONDITION:N'
-#         element = 'CONDITION'
-#         what = ''
-#     elif condition != 'all' and replicate == 'all':
-#         if replicates_separately:
-#             df = df[df['CONDITION'] == condition]
-#             shorthand = 'REPLICATE:N'
-#             element = 'REPLICATE'
-#             what = f'for condition {condition}'
-#         else:
-#             df = df[df['CONDITION'] == condition].groupby(['CONDITION', 'POSITION_T']).agg({metric_mean: 'mean', metric_median: 'median'}).reset_index()
-#             shorthand = 'CONDITION:N'
-#             element = 'CONDITION'
-#             what = f'for condition {condition}'
-#     elif condition != 'all' and replicate != 'all':
-#         df = df[(df['CONDITION'] == condition) & (df['REPLICATE'] == replicate)].sort_values(by=['POSITION_T'])
-#         shorthand = 'REPLICATE:N'
-#         element = 'REPLICATE'
-#         what = f'for condition {condition} and replicate {replicate}'   
-
-#     if show_median:
-#         median_opacity = 0.85
-#         Metric = Metric + ' and median'
-#     else:
-#         median_opacity = 0
+    # Group data for scatter points by CONDITION and REPLICATE
+    grouped = df.groupby(['CONDITION', 'REPLICATE'])
+    
+    # Assign a distinct color to each REPLICATE using the specified palette
+    unique_replicates = df['REPLICATE'].unique()
+    replicate_colors = dict(zip(unique_replicates, sns.color_palette(palette, len(unique_replicates)).as_hex()))
+    
+    fig = go.Figure()
+    
+    # Plot scatter (jitter) points for each replicate group
+    for (cond, repl), group_df in grouped:
+        # Prepare hover info for each point
+        hover_text = []
+        for _, row in group_df.iterrows():
+            hover_info = f"{Metrics[metric]}: {row[metric]}"
+            for col in let_me_look_at_these:
+                hover_info += f"<br>{Metrics[col]}: {row[col]}"
+            hover_text.append(hover_info)
             
-#     # Retrieve unique conditions and assign colors from the selected qualitative colormap.
-#     elements = df[element].unique().tolist()
-#     colors = _make_q_cmap(elements, cmap)
+        # When see_outliars is enabled, split into outliers and non-outliers
+        if see_outliars:
+            df_norm = group_df[~group_df['is_outlier']]
+            df_out = group_df[group_df['is_outlier']]
+            # Plot non-outlier points in grey
+            if not df_norm.empty:
+                fig.add_trace(go.Scatter(
+                    x=df_norm['x_jitter'],
+                    y=df_norm[metric],
+                    mode='markers',
+                    hoverinfo='text',
+                    hovertext=hover_text,  # Note: hovertext corresponds to the entire group.
+                    marker=dict(
+                        color='grey',
+                        size=8,
+                        opacity=0.55,
+                        line=dict(width=jitter_outline_width, color='black')
+                    ),
+                    showlegend=False
+                ))
+            # Plot outlier points in the replicate's assigned color
+            if not df_out.empty:
+                fig.add_trace(go.Scatter(
+                    x=df_out['x_jitter'],
+                    y=df_out[metric],
+                    mode='markers',
+                    hoverinfo='text',
+                    hovertext=hover_text,
+                    marker=dict(
+                        color=replicate_colors[repl],
+                        size=8,
+                        opacity=0.55,
+                        line=dict(width=jitter_outline_width, color='black')
+                    ),
+                    showlegend=False
+                ))
+        else:
+            # Default behavior: all points colored by replicate
+            fig.add_trace(go.Scatter(
+                x=group_df['x_jitter'],
+                y=group_df[metric],
+                mode='markers',
+                hoverinfo='text',
+                hovertext=hover_text,
+                marker=dict(
+                    color=replicate_colors[repl],
+                    size=8,
+                    opacity=0.55,
+                    line=dict(width=jitter_outline_width, color='black')
+                ),
+                showlegend=False
+            ))
     
-
-#     nearest = alt.selection_point(nearest=True, on="pointerover",
-#                               fields=['POSITION_T'], empty=False)    
+    # Add diamond markers representing the overall mean for each replicate in each condition.
+    for (cond, repl), group_df in grouped:
+        mean_val = group_df[metric].mean()
+        x_center = condition_map[cond]
+        fig.add_trace(go.Scatter(
+            x=[x_center],
+            y=[mean_val],
+            mode='markers',
+            marker=dict(
+                symbol='diamond',
+                size=12,
+                color=replicate_colors[repl],
+                line=dict(width=1, color='black')
+            ),
+            showlegend=False,
+            hoverinfo='skip',
+            zorder=20
+        ))
     
-#     color_scale = alt.Scale(domain=elements, range=colors)
+    # Plot one aggregated violin for each condition (not separated by replicate)
+    grouped_conditions = df.groupby('CONDITION')
+    for cond, group_df in grouped_conditions:
+        # Compute aggregate statistics for the condition
+        min_val = group_df[metric].min()
+        max_val = group_df[metric].max()
+        mean_val = group_df[metric].mean()
+        median_val = group_df[metric].median()
+        std_val = group_df[metric].std()
 
-#     mean_base = alt.Chart(df).encode(
-#         x=alt.X('POSITION_T', title='Time position'),
-#         y=alt.Y(metric_mean, title=None),
-#         color=alt.Color(shorthand, title='Condition', scale=color_scale),
-#         )
+        x_vals = np.full(len(group_df), condition_map[cond])
+        hovertemplate = (
+            f"Condition: {cond}<br>"
+            "Value: %{y:.2f}<br>"
+            f"Min: {min_val:.2f}<br>"
+            f"Median: {median_val:.2f}<br>"
+            f"Mean: {mean_val:.2f}<br>"
+            f"Max: {max_val:.2f}<extra></extra>"
+        )
+
+        fig.add_trace(go.Violin(
+            x=x_vals,
+            y=group_df[metric],
+            name=cond,
+            opacity=0.8,
+            fillcolor='grey',
+            line_color=violin_edge_color,
+            width=0.8,
+            showlegend=False,
+            hoverinfo='text',
+            hovertemplate=hovertemplate,
+            points=False
+        ))
+        
+        # Define x span for horizontal lines (centered on condition_map[cond])
+        x_center = condition_map[cond]
+        x_offset = 0.35  # Adjust as desired
+        
+        # Add a solid horizontal line at the condition mean
+        fig.add_shape(
+            type="line",
+            xref="x", yref="y",
+            x0=x_center - x_offset,
+            x1=x_center + x_offset,
+            y0=mean_val,
+            y1=mean_val,
+            line=dict(color="black", width=2, dash="solid"),
+            # layer="above"
+        )
+        
+        # Add a dashed horizontal line at the condition median
+        fig.add_shape(
+            type="line",
+            xref="x", yref="y",
+            x0=x_center - x_offset,
+            x1=x_center + x_offset,
+            y0=median_val,
+            y1=median_val,
+            line=dict(color="black", width=2, dash="dash"),
+            # layer="above"
+        )
+        
+        # Add an invisible scatter marker at the mean with error bars for standard deviation
+        fig.add_trace(go.Scatter(
+            x=[x_center],
+            y=[mean_val],
+            mode="markers",
+            marker=dict(color="black", size=0),
+            showlegend=False,
+            error_y=dict(
+                type="data",
+                array=[std_val],
+                visible=True,
+                color="black",
+                thickness=2,
+                width=4
+            ),
+            zorder=10
+        ))
+        
+    fig.update_layout(
+        xaxis=dict(
+            tickvals=list(condition_map.values()),
+            ticktext=list(condition_map.keys()),
+            title='Condition'
+        ),
+        yaxis_title=Metrics[metric],
+        template='plotly_white',
+        showlegend=False,
+        width=width,
+        height=height
+    )
     
-#     median_base = alt.Chart(df).encode(
-#         x=alt.X('POSITION_T', title='Time position'),
-#         y=alt.Y(metric_median, title='Median ' + Metric),
-#         color=alt.Color(shorthand, title='Condition', scale=color_scale),
-#         )
-
-#     if interpolation is not None:
-#         mean_line = mean_base.mark_line(interpolate=interpolation)
-#         median_line = median_base.mark_line(interpolate=interpolation, strokeDash=[4, 3]).encode(
-#             opacity=alt.value(median_opacity)
-#             )
-#         text_median = 0
-#     else:
-#         mean_line = mean_base.mark_line()
-#         median_line = median_base.mark_line(strokeDash=[4, 3]).encode(
-#             opacity=alt.value(median_opacity)
-#             )
-
-
-#     # Transparent selectors across the chart. This is what tells us
-#     # the x-value of the cursor
-#     mean_selectors = mean_base.mark_point().encode(
-#         opacity=alt.value(0),
-#         ).add_params(
-#         nearest
-#         )
-#     median_selectors = median_base.mark_point().encode(
-#         opacity=alt.value(0),
-#         ).add_params(
-#         nearest
-#         )
+    fig.add_annotation(
+        text="Stripplot with Aggregated Violin Plots and Replicate Means",
+        xref="paper",
+        yref="paper",
+        x=0.5,
+        y=1.15,
+        showarrow=False,
+        font=dict(size=16)
+    )
     
-#     when_near = alt.when(nearest)
-
-#     # Draw points on the line, and highlight based on selection
-#     mean_points = mean_base.mark_point().encode(
-#         opacity=when_near.then(alt.value(1)).otherwise(alt.value(0))
-#         )
-#     median_points = median_base.mark_point().encode(
-#         opacity=when_near.then(alt.value(median_opacity)).otherwise(alt.value(0))
-#         )
-
-#     # Draw text labels near the points, and highlight based on selection
-#     text_mean = mean_line.mark_text(align="left", dx=6, dy=-6).encode(
-#         color=alt.value('black'),	
-#         text=when_near.then(metric_mean).otherwise(alt.value(" "))
-#         )
-#     text_median = median_line.mark_text(align="left", dx=5, dy=-5).encode(
-#         color=alt.value('grey'),
-#         text=when_near.then(metric_median).otherwise(alt.value(" "))
-#         )
-
-#     # Draw a rule at the location of the selection
-#     rules = alt.Chart(df).mark_rule(color="gray").encode(
-#         x='POSITION_T',
-#         ).transform_filter(
-#         nearest
-#         )
-
-#     chart = alt.layer(
-#         mean_line, mean_points, text_mean, mean_selectors, rules, median_line, median_points, text_median, median_selectors
-#         ).properties(
-#         width=700,
-#         height=350,
-#         title=f'{Metric} across time {what}'
-#         ).configure_view(
-#         strokeWidth=1
-#         ).interactive()
-
-#     chart.save(dir / 'cache/line_chart.html')
-#     chart.save(dir / 'cache/line_chart.svg')
-
-#     return chart
-
-
-# # ===============================================================================================================================================================================================================================================================================================
-
-# def errorband_chart(df, metric, Metric, condition=1, replicate='all', cmap='tab10', interpolation=None, show_mean=True, extent='orig_std', replicates_separately=False, dir=None):
-
-#     metric_mean = metric
-#     metric_std = metric.replace('MEAN', 'STD')
-#     metric_min = metric.replace('MEAN', 'MIN')
-#     metric_max = metric.replace('MEAN', 'MAX')
-
-#     if condition == None or replicate == None:
-#         pass
-#     else:
-#         try:
-#             condition = int(condition)
-#         except ValueError or TypeError:
-#             pass
-#         try:
-#             replicate = int(replicate)
-#         except ValueError or TypeError:
-#             pass
-
-#     df.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
-
-#     if condition == 'all':
-#         df = df.groupby(['CONDITION','POSITION_T']).agg({metric_mean: 'mean', metric_std: 'std', metric_min: 'min', metric_max: 'max'}).reset_index()
-#         shorthand = 'CONDITION:N'
-#         element = 'CONDITION'
-#         element_ = 'Condition'
-#         what = ''
-#     elif condition != 'all' and replicate == 'all':
-#         if replicates_separately:
-#             df = df[df['CONDITION'] == condition]
-#             shorthand = 'REPLICATE:N'
-#             element = 'REPLICATE'
-#             element_ = 'Replicate'
-#             what = f'for condition {condition}'
-#         else:
-#             df = df[df['CONDITION'] == condition].groupby(['CONDITION', 'POSITION_T']).agg({metric_mean: 'mean', metric_std: 'std', metric_min: 'min', metric_max: 'max'}).reset_index()
-#             shorthand = 'CONDITION:N'
-#             element = 'CONDITION'
-#             element_ = 'Condition'
-#             what = f'for condition {condition}'
-#     elif condition != 'all' and replicate != 'all':
-#         df = df[(df['CONDITION'] == condition) & (df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
-#         shorthand = 'REPLICATE:N'
-#         element = 'REPLICATE'
-#         element_ = 'Replicate'
-#         what = f'for condition {condition} and replicate {replicate}'
-
-#     if show_mean:
-#         mean_opacity = 1
-#     else:
-#         mean_opacity = 0
-
-#     df['lower'] = df[metric_mean] - df[metric_std]
-#     df['upper'] = df[metric_mean] + df[metric_std]
-
-#     # Retrieve unique conditions and assign colors from the selected qualitative colormap.
-#     elements = df[element].unique().tolist()
-#     colors = _make_q_cmap(elements, cmap)
-#     color_scale=alt.Scale(domain=elements, range=colors)
-    
-#     if extent == 'min-max':
-#         band = alt.Chart(df).encode(
-#             x=alt.X('POSITION_T', title='Time position'),
-#             y=alt.Y(metric_min),
-#             y2=alt.Y2(metric_max),
-#             color=alt.Color(shorthand, title=element_, scale=color_scale),
-#             tooltip=alt.value(None)
-#             )
-#         if interpolation is not None:
-#             band = band.mark_errorband(interpolate=interpolation)
-#         else:
-#             band = band.mark_errorband()
-
-#     elif extent == 'orig_std':
-#         band = alt.Chart(df).encode(
-#             x=alt.X('POSITION_T', title='Time position'),
-#             y=alt.Y('upper'),
-#             y2=alt.Y2('lower'),
-#             color=alt.Color(shorthand, title=element_, scale=color_scale),   
-#             opacity=alt.value(0.25),
-#             tooltip=alt.value(None)
-#         )
-#         if interpolation is not None:
-#             band = band.mark_errorband(interpolate=interpolation)
-#         else:
-#             band = band.mark_errorband()
-
-#     else:
-#         band = alt.Chart(df).mark_errorband(extent=extent).encode(
-#             x=alt.X('POSITION_T', title='Time position'),
-#             y=alt.Y('upper'),
-#             y2=alt.Y2('lower'),
-#             color=alt.Color(shorthand, title=element_, scale=color_scale),
-#             opacity=alt.value(0.25),
-#             tooltip=alt.value(None)
-#         )
-#         if interpolation is not None:
-#             band = band.mark_errorband(interpolate=interpolation)  
-#         else:
-#             band = band.mark_errorband()
-
-#     mean_base = alt.Chart(df).encode(
-#         x=alt.X('POSITION_T', title='Time position'),
-#         y=alt.Y(metric_mean, title=None),
-#         color=alt.Color(shorthand, title=element_, scale=color_scale),
-#         opacity=alt.value(mean_opacity),
-#         strokeWidth=alt.value(3),
-#         tooltip=alt.value(None)
-#         )
-
-#     if interpolation is not None:
-#         mean_line = mean_base.mark_line(interpolate=interpolation)
-#     else:
-#         mean_line = mean_base.mark_line()
-
-#     nearest = alt.selection_point(nearest=True, on="pointerover",
-#                               fields=['POSITION_T'], empty=False)    
-    
-#     color_scale = alt.Scale(domain=elements, range=colors)
-
-#     # Transparent selectors across the chart. This is what tells us
-#     mean_selectors = mean_base.mark_point().encode(
-#         opacity=alt.value(0),
-#         ).add_params(
-#         nearest
-#         )
-    
-#     when_near = alt.when(nearest)
-
-#     mean_points = mean_base.mark_point().encode(
-#         opacity=when_near.then(alt.value(1)).otherwise(alt.value(0)),
-#         )    
-
-#     # Draw a rule at the location of the selection
-#     rules = alt.Chart(df).mark_rule(color="gray").encode(
-#         x='POSITION_T',
-#         ).transform_filter(
-#         nearest
-#         )
-
-#     # Calculate separate fields for each line of the tooltip.
-#     tooltip_data = alt.Chart(df).transform_calculate(
-#         tooltip_line1=f'"{element_}: " + datum.CONDITION',
-#         tooltip_line2=f'"Time point: " + datum.POSITION_T',
-#         tooltip_line3=f'"Mean: " + datum["{metric_mean}"]',
-#         tooltip_line4=f'"Std: " + datum["{metric_std}"]',
-#         tooltip_line5=f'"Min: " + datum["{metric_min}"]',
-#         tooltip_line6=f'"Max: " + datum["{metric_max}"]',
-#         )
-    
-#     if condition == 'all':
-#         text_opacity = 0
-#     else:
-#         text_opacity = 1
-
-#     l = -75
-
-#     # Create text marks for each line.
-#     tooltip_line1_mark = tooltip_data.mark_text(
-#         align='left',
-#         dx=6,
-#         dy=-30-l,  # adjust vertical offset as needed
-#         fontSize=12,
-#         fontWeight='bold'
-#         ).encode(
-#         x='POSITION_T',
-#         text=alt.condition(nearest, 'tooltip_line1:N', alt.value('')),
-#         opacity=alt.value(text_opacity)
-#         ).transform_filter(nearest)
-
-#     tooltip_line2_mark = tooltip_data.mark_text(
-#         align='left',
-#         dx=6,
-#         dy=-15-l,  # adjust vertical offset for the second line
-#         fontSize=12,
-#         fontWeight='bold'
-#         ).encode(
-#         x='POSITION_T',
-#         text=alt.condition(nearest, 'tooltip_line2:N', alt.value('')),
-#         opacity=alt.value(text_opacity)
-#         ).transform_filter(nearest)
-
-#     tooltip_line3_mark = tooltip_data.mark_text(
-#         align='left',
-#         dx=6,
-#         dy=0-l,  # adjust vertical offset for the third line
-#         fontSize=12,
-#         fontWeight='bold'
-#         ).encode(
-#         x='POSITION_T',
-#         text=alt.condition(nearest, 'tooltip_line3:N', alt.value('')),
-#         opacity=alt.value(text_opacity)
-#         ).transform_filter(nearest)
-    
-#     tooltip_line4_mark = tooltip_data.mark_text(
-#         align='left',
-#         dx=6,
-#         dy=15-l,  # adjust vertical offset for the fourth line
-#         fontSize=12,
-#         fontWeight='bold'
-#         ).encode(
-#         x='POSITION_T',
-#         text=alt.condition(nearest, 'tooltip_line4:N', alt.value('')),
-#         opacity=alt.value(text_opacity)
-#         ).transform_filter(nearest)
-    
-#     tooltip_line5_mark = tooltip_data.mark_text(
-#         align='left',
-#         dx=6,
-#         dy=30-l,  # adjust vertical offset for the fifth line
-#         fontSize=12,
-#         fontWeight='bold'
-#         ).encode(
-#         x='POSITION_T',
-#         text=alt.condition(nearest, 'tooltip_line5:N', alt.value('')),
-#         opacity=alt.value(text_opacity)
-#         ).transform_filter(nearest)
-    
-#     tooltip_line6_mark = tooltip_data.mark_text(
-#         align='left',
-#         dx=6,
-#         dy=45-l,  # adjust vertical offset for the sixth line
-#         fontSize=12,
-#         fontWeight='bold'
-#         ).encode(
-#         x='POSITION_T',
-#         text=alt.condition(nearest, 'tooltip_line6:N', alt.value('')),
-#         opacity=alt.value(text_opacity)
-#         ).transform_filter(nearest)
-
-#     # Layer the tooltip text marks with your other layers.
-#     chart = alt.layer(
-#         band, mean_line, mean_points, mean_selectors, rules,
-#         tooltip_line1_mark, tooltip_line2_mark, tooltip_line3_mark, tooltip_line4_mark, tooltip_line5_mark, tooltip_line6_mark
-#         ).properties(
-#         width=700,
-#         height=350,
-#         title=f'{Metric} with its standard deviation across time {what}'
-#         ).interactive()
-
-#     chart.save(dir / 'cache/errorband_chart.html')
-#     chart.save(dir / 'cache/errorband_chart.svg')
-
-#     return chart
-
-
+    return fig
