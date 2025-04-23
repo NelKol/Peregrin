@@ -1468,6 +1468,7 @@ with ui.nav_panel("Visualisation"):
 
 
                 
+
         # ==========================================================================================================================================================================================================================================================================
         # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         # Time series panel
@@ -1481,6 +1482,25 @@ with ui.nav_panel("Visualisation"):
                     #### **Time series with a polynomial fit**
                     *made with*  `altair`
                     <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+                
+                ui.input_radio_buttons(  
+                    "central_tendency",  
+                    "Measure of central tendency:",  
+                    ["mean", "median"],  
+                    )  
+                
+                ui.input_radio_buttons(
+                    "y_axis",
+                    "Y axis:",
+                    ["absolute", "relative"],
+                    selected="absolute"
+                    )
+                
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
                     """
                     )
 
@@ -2574,9 +2594,11 @@ with ui.nav_panel('Task list'):
         """
         # **Task list**
 
+        
 
         **Time series plots** - make the graphs more modifyeble
 
+        
         *Scatter with fitted line chart*
         Add a possibility to:
         - [ ] plot the median value per frame
@@ -2592,6 +2614,15 @@ with ui.nav_panel('Task list'):
 
         <hr style="border: none; border-top: 1px dotted; margin: 0" />
 
+        
+        **Superplots**
+
+        - [ ] Add a superviolin plot  
+        - [ ] Make the interactive stripplot have a data density related distribution      
+
+        <hr style="border: none; border-top: 1px dotted; margin: 0" /> 
+
+        
         **Sections with graph settings**
 
         - [ ] Annotate and label the setting sections properly
@@ -2599,12 +2630,16 @@ with ui.nav_panel('Task list'):
 
         <hr style="border: none; border-top: 1px dotted; margin: 0" />
 
+        
+
         **Data calcs speed efficiency**
 
         - [ ] Optimize the speed and efficiency of the data calculations
 
         <hr style="border: none; border-top: 1px dotted; margin: 0" />
 
+        
+        
         **Functionality**
 
         - [ ] Add a debounce to the add input field
