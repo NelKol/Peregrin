@@ -410,14 +410,7 @@ with ui.nav_panel("Data frames"):
         
         buttered = raw_Buttered_df.get()
 
-        distances_for_each_cell_per_frame_df = dc.calculate_traveled_distances_for_each_cell_per_frame(buttered)        # Call the function to calculate distances for each cell per frame and create the Spot_statistics .csv file
-        distances_for_each_cell_per_frame_df = dc.calculate_track_length_net_distances_and_confinement_ratios_per_each_cell_per_frame(distances_for_each_cell_per_frame_df)
-        direction_for_each_cell_per_frame_df = dc.calculate_direction_of_travel_for_each_cell_per_frame(buttered)       # Call the function to calculate direction_for_each_cell_per_frame_df
-
-        Spot_stats_dfs = [buttered, distances_for_each_cell_per_frame_df, direction_for_each_cell_per_frame_df]
-        Spot_stats = dc.merge_dfs(Spot_stats_dfs, on=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T']) # Merge the dataframes
-
-        return Spot_stats
+        return dc.Spots(buttered)
 
 
     @reactive.effect
@@ -450,18 +443,7 @@ with ui.nav_panel("Data frames"):
         if Spot_stats.empty:
             return pd.DataFrame()
 
-        tracks_lengths_and_net_distances_df = dc.calculate_track_lengths_and_net_distances(Spot_stats) # Calling function to calculate the total distance traveled for each cell from the distances_for_each_cell_per_frame_df
-        confinement_ratios_df = dc.calculate_confinement_ratio_for_each_cell(tracks_lengths_and_net_distances_df) # Call the function to calculate confinement ratios from the Track_statistics1_df and write it into the Track_statistics1_df
-        track_directions_df = dc.calculate_absolute_directions_per_cell(Spot_stats) # Call the function to calculate directions_per_cell_df
-        frames_per_track = dc.calculate_number_of_frames_per_cell(Spot_stats)
-        speeds_per_cell = dc.calculate_speed(Spot_stats, ['REPLICATE', 'TRACK_ID'])
-
-        Track_stats_dfs = [tracks_lengths_and_net_distances_df, confinement_ratios_df, track_directions_df, frames_per_track, speeds_per_cell]
-        Track_stats = dc.merge_dfs(Track_stats_dfs, on=['CONDITION', 'REPLICATE', 'TRACK_ID'])
-
-        Track_stats = Track_stats.sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID'])
-
-        return Track_stats
+        return dc.Tracks(Spot_stats)
     
 
     @reactive.effect
@@ -488,19 +470,7 @@ with ui.nav_panel("Data frames"):
         if Spot_stats.empty:
             return pd.DataFrame()
         
-        distances_per_frame_df = dc.calculate_distances_per_frame(Spot_stats) # Call the function to calculate distances_per_frame_df
-        absolute_directions_per_frame_df = dc.calculate_absolute_directions_per_frame(Spot_stats) # Call the function to calculate directions_per_frame_df
-        speeds_per_frame = dc.calculate_speed(Spot_stats, ['REPLICATE', 'POSITION_T']) # Call the function to calculate speeds_per_frame
-        mean_n_median_track_length_net_destance_confinement_ratios_per_frame = dc.calculate_mean_median_std_cr_nd_tl_per_frame(Spot_stats)
-
-        Time_stats_dfs = [mean_n_median_track_length_net_destance_confinement_ratios_per_frame, distances_per_frame_df, absolute_directions_per_frame_df, speeds_per_frame]
-
-        Time_stats = dc.merge_dfs(Time_stats_dfs, on=['CONDITION', 'REPLICATE', 'POSITION_T'])
-        # Frame_stats = Frame_stats.merge(Spot_stats['POSITION_T'].drop_duplicates(), on='POSITION_T')
-
-        Time_stats = Time_stats.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
-
-        return Time_stats
+        return dc.Time(Spot_stats)
     
 
     @reactive.effect
