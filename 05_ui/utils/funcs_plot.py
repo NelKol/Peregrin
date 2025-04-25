@@ -434,8 +434,8 @@ def Visualize_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, condi
     # Set up the plot limits
     # Define the desired dimensions in microns
     microns_per_pixel = 0.7381885238402274 # for 10x lens
-    x_min, x_max = 0, (1600 * microns_per_pixel**2)
-    y_min, y_max = 0, (1200 * microns_per_pixel**2)
+    x_min, x_max = 0, (1600 * microns_per_pixel)
+    y_min, y_max = 0, (1200 * microns_per_pixel)
 
     # Manually set the major tick locations and labels
     x_ticks_major = np.arange(x_min, x_max, 200)  # Adjust the step size as needed
@@ -664,8 +664,8 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
     # Set up the plot limits
     # Define the desired dimensions in microns
     microns_per_pixel = 0.7381885238402274 # for 10x lens
-    x_min, x_max = 0, (1600 * microns_per_pixel**2)
-    y_min, y_max = 0, (1200 * microns_per_pixel**2)
+    x_min, x_max = 0, (1600 * microns_per_pixel)
+    y_min, y_max = 0, (1200 * microns_per_pixel)
 
     ax.set_aspect('1', adjustable='box')
     ax.set_xlim(x_min, x_max)
