@@ -359,19 +359,10 @@ def df_gaussian_donut(df, metric, subject, heatmap, weight, threshold, title_siz
 
 def Visualize_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, condition:None, replicate:None, c_mode:str, only_one_color:str, lut_scaling_metric:str, background:str, smoothing_index:float, lw:float, show_tracks:bool, let_me_look_at_these:tuple, I_just_wanna_be_normal:bool, metric_dictionary:dict, end_track_markers:bool, marker_size:float, markers:None):
 
-    lw_ = lw
-
     if show_tracks:
         pass
     else:
-        lw_=0
-
-    let_me_look_at_these = list(let_me_look_at_these)
-
-    if 'level_0' in Tracks_df.columns:
-        Tracks_df.drop(columns=['level_0'], inplace=True)
-    
-    Tracks_df.reset_index(drop=False, inplace=True)
+        lw=0
 
 
     if condition == None or replicate == None:
@@ -385,6 +376,14 @@ def Visualize_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, condi
             replicate = int(replicate)
         except ValueError or TypeError:
             pass
+
+
+    let_me_look_at_these = list(let_me_look_at_these)
+
+    if 'level_0' in Tracks_df.columns:
+        Tracks_df.drop(columns=['level_0'], inplace=True)
+    
+    Tracks_df.reset_index(drop=False, inplace=True)
 
 
     if condition == 'all':
@@ -418,6 +417,24 @@ def Visualize_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, condi
         
         color_map_direct = dict(zip(Tracks_df['TRACK_ID'], track_colors))
         Tracks_df['COLOR'] = Tracks_df['TRACK_ID'].map(color_map_direct)
+
+    elif c_mode in ['differentiate conditions', 'differentiate replicates']:
+        if c_mode == 'differentiate conditions':
+            colormap = plt.get_cmap('Set1')  # Use qualitative colormap
+            unique_vals = Spots_df['CONDITION'].unique()
+            val_column = 'CONDITION'
+        else:
+            colormap = plt.get_cmap('Set1')
+            unique_vals = Spots_df['REPLICATE'].unique()
+            val_column = 'REPLICATE'
+
+        # Assign colors to each unique category
+        val_to_color = {
+            val: colormap(i % colormap.N)  # Wrap around if more values than colors
+            for i, val in enumerate(sorted(unique_vals))
+        }
+        # Map those colors to the tracks
+        Tracks_df['COLOR'] = Tracks_df[val_column].map(val_to_color)
 
     else:
         colormap = _get_cmap(c_mode)
@@ -459,17 +476,24 @@ def Visualize_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, condi
         track_row['REPLICATE'] = repl
         track_row['TRACK_ID'] = track
 
-        if colormap is not None:
-            # Normalize the metric for color mapping
+        
+        if colormap is not None and c_mode in ['differentiate conditions', 'differentiate replicates']:
+            key = track_row[val_column]  # val_column is either 'CONDITION' or 'REPLICATE'
+            color = colormap(unique_vals.tolist().index(key) % colormap.N)  # consistent mapping
+            group_df['COLOR'] = mcolors.to_hex(color)
+            
+        elif colormap is not None:
+            # This is for metric-based color mapping (quantitative)
             norm = plt.Normalize(metric_min, metric_max)
-
             color = colormap(norm(track_row[lut_scaling_metric]))
-            group_df['COLOR'] = color if isinstance(color, str) else [mcolors.to_hex(color)] * len(group_df)
-
+            group_df['COLOR'] = mcolors.to_hex(color)
+            
         elif c_mode in ['random colors', 'random greys']:
             group_df['COLOR'] = track_row['COLOR']
-        elif c_mode == 'only-one':
+
+        elif c_mode == 'only-one-color':
             group_df['COLOR'] = only_one_color
+            
 
         if (type(smoothing_index) is int or type(smoothing_index) is float) and smoothing_index > 1:
             group_df['POSITION_X'] = group_df['POSITION_X'].rolling(window=smoothing_index, min_periods=1).mean()
@@ -578,23 +602,16 @@ def Visualize_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, condi
         zerolinecolor=grid_color,
     )
 
-    fig.update_traces(line=dict(width=lw_), selector=dict(mode='lines'))
+    fig.update_traces(line=dict(width=lw), selector=dict(mode='lines'))
 
     return fig
 
 def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, condition:None, replicate:None, c_mode:str, only_one_color:str, lut_scaling_metric:str, background:str, smoothing_index:float, lw:float, show_tracks:bool, grid:bool, arrows:bool, arrowsize:int):
 
-    lw_ = lw
-
     if show_tracks:
         pass
     else:
-        lw_=0
-
-    if 'level_0' in Tracks_df.columns:
-        Tracks_df.drop(columns=['level_0'], inplace=True)
-    
-    Tracks_df.reset_index(drop=False, inplace=True)
+        lw=0
 
 
     if condition == None or replicate == None:
@@ -608,6 +625,12 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
             replicate = int(replicate)
         except ValueError or TypeError:
             pass
+
+
+    if 'level_0' in Tracks_df.columns:
+        Tracks_df.drop(columns=['level_0'], inplace=True)
+    
+    Tracks_df.reset_index(drop=False, inplace=True)
 
 
     if condition == 'all':
@@ -651,6 +674,24 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
         
         color_map_direct = dict(zip(Tracks_df['TRACK_ID'], track_colors))
         Tracks_df['COLOR'] = Tracks_df['TRACK_ID'].map(color_map_direct)
+
+    elif c_mode in ['differentiate conditions', 'differentiate replicates']:
+        if c_mode == 'differentiate conditions':
+            colormap = plt.get_cmap('Set1')  # Use qualitative colormap
+            unique_vals = Spots_df['CONDITION'].unique()
+            val_column = 'CONDITION'
+        else:
+            colormap = plt.get_cmap('Set1')
+            unique_vals = Spots_df['REPLICATE'].unique()
+            val_column = 'REPLICATE'
+
+        # Assign colors to each unique category
+        val_to_color = {
+            val: colormap(i % colormap.N)  # Wrap around if more values than colors
+            for i, val in enumerate(sorted(unique_vals))
+        }
+        # Map those colors to the tracks
+        Tracks_df['COLOR'] = Tracks_df[val_column].map(val_to_color)
 
     else:
         colormap = _get_cmap(c_mode)
@@ -710,17 +751,24 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
         track_row['REPLICATE'] = repl
         track_row['TRACK_ID'] = track
 
-        if colormap is not None:
-            # Normalize the metric for color mapping
+
+        if colormap is not None and c_mode in ['differentiate conditions', 'differentiate replicates']:
+            key = track_row[val_column]  # val_column is either 'CONDITION' or 'REPLICATE'
+            color = colormap(unique_vals.tolist().index(key) % colormap.N)  # consistent mapping
+            group_df['COLOR'] = mcolors.to_hex(color)
+            
+        elif colormap is not None:
+            # This is for metric-based color mapping (quantitative)
             norm = plt.Normalize(metric_min, metric_max)
-
             color = colormap(norm(track_row[lut_scaling_metric]))
-            group_df['COLOR'] = color if isinstance(color, str) else [mcolors.to_hex(color)] * len(group_df)
-
+            group_df['COLOR'] = mcolors.to_hex(color)
+            
         elif c_mode in ['random colors', 'random greys']:
             group_df['COLOR'] = track_row['COLOR']
-        elif c_mode == 'only-one':
+
+        elif c_mode == 'only-one-color':
             group_df['COLOR'] = only_one_color
+
 
         if (type(smoothing_index) is int or type(smoothing_index) is float) and smoothing_index > 1:
             group_df['POSITION_X'] = group_df['POSITION_X'].rolling(window=smoothing_index, min_periods=1).mean()
@@ -729,7 +777,7 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
             group_df['POSITION_X'] = group_df['POSITION_X']
             group_df['POSITION_Y'] = group_df['POSITION_Y']
 
-        ax.plot(group_df['POSITION_X'], group_df['POSITION_Y'], color=group_df['COLOR'].iloc[0], linewidth=lw_)
+        ax.plot(group_df['POSITION_X'], group_df['POSITION_Y'], color=group_df['COLOR'].iloc[0], linewidth=lw)
 
 
         if len(group_df['POSITION_X']) > 1 & arrows:
@@ -758,20 +806,13 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
 
 
 def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, condition:None, replicate:None, c_mode:str, only_one_color:str, lut_scaling_metric:str, smoothing_index:float, lw:float, show_tracks:bool, let_me_look_at_these:tuple, I_just_wanna_be_normal:bool, metric_dictionary:dict, end_track_markers:bool, marker_size:float, markers:None):
-    
-    lw_ = lw
 
     if show_tracks:
         pass
     else:
-        lw_=0
+        lw=0
 
-    let_me_look_at_these = list(let_me_look_at_these)
-    if 'level_0' in Tracks_df.columns:
-        Tracks_df.drop(columns=['level_0'], inplace=True)
     
-    Tracks_df.reset_index(drop=False, inplace=True)
-
     if condition == None or replicate == None:
         pass
     else:
@@ -783,6 +824,14 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
             replicate = int(replicate)
         except (ValueError, TypeError):
             pass
+    
+
+    let_me_look_at_these = list(let_me_look_at_these)
+    if 'level_0' in Tracks_df.columns:
+        Tracks_df.drop(columns=['level_0'], inplace=True)
+    
+    Tracks_df.reset_index(drop=False, inplace=True)
+
 
     if condition == 'all':
         Spots_df = Spots_df.sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
@@ -805,6 +854,25 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
         
         color_map_direct = dict(zip(Tracks_df['TRACK_ID'], track_colors))
         Tracks_df['COLOR'] = Tracks_df['TRACK_ID'].map(color_map_direct)
+
+    elif c_mode in ['differentiate conditions', 'differentiate replicates']:
+        if c_mode == 'differentiate conditions':
+            colormap = plt.get_cmap('Set1')  # Use qualitative colormap
+            unique_vals = Spots_df['CONDITION'].unique()
+            val_column = 'CONDITION'
+        else:
+            colormap = plt.get_cmap('Set1')
+            unique_vals = Spots_df['REPLICATE'].unique()
+            val_column = 'REPLICATE'
+
+        # Assign colors to each unique category
+        val_to_color = {
+            val: colormap(i % colormap.N)  # Wrap around if more values than colors
+            for i, val in enumerate(sorted(unique_vals))
+        }
+        # Map those colors to the tracks
+        Tracks_df['COLOR'] = Tracks_df[val_column].map(val_to_color)
+
     else:
         colormap = _get_cmap(c_mode)
         metric_min = Spots_df[lut_scaling_metric].min()
@@ -861,13 +929,20 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
         track_row['REPLICATE'] = repl
         track_row['TRACK_ID'] = track
 
-        if colormap is not None:
-            # Normalize the metric for color mapping
+        if colormap is not None and c_mode in ['differentiate conditions', 'differentiate replicates']:
+            key = track_row[val_column]  # val_column is either 'CONDITION' or 'REPLICATE'
+            color = colormap(unique_vals.tolist().index(key) % colormap.N)  # consistent mapping
+            group_df['COLOR'] = mcolors.to_hex(color)
+            
+        elif colormap is not None:
+            # This is for metric-based color mapping (quantitative)
             norm = plt.Normalize(metric_min, metric_max)
             color = colormap(norm(track_row[lut_scaling_metric]))
-            group_df['COLOR'] = color if isinstance(color, str) else [mcolors.to_hex(color)] * len(group_df)
+            group_df['COLOR'] = mcolors.to_hex(color)
+            
         elif c_mode in ['random colors', 'random greys']:
             group_df['COLOR'] = track_row['COLOR']
+
         elif c_mode == 'only-one-color':
             group_df['COLOR'] = only_one_color
 
@@ -885,7 +960,7 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
             r=group_df['r'],
             theta=group_df['theta_deg'],
             mode='lines',
-            line=dict(color=group_df['COLOR'].iloc[0], width=lw_),
+            line=dict(color=group_df['COLOR'].iloc[0], width=lw),
             name=f"Track {track}",
             hovertemplate=hover_text + "<extra></extra>"
         ))
@@ -965,18 +1040,12 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
 
     arrow_length = 1  # Length of the arrow in data units
 
-    lw_ = lw
-
     if show_tracks:
         pass
     else:
-        lw_=0
+        lw=0
 
-    if 'level_0' in Tracks_df.columns:
-        Tracks_df.drop(columns=['level_0'], inplace=True)
     
-    Tracks_df.reset_index(drop=False, inplace=True)
-
     if condition == None or replicate == None:
         pass
     else:
@@ -988,6 +1057,13 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
             replicate = int(replicate)
         except (ValueError, TypeError):
             pass
+    
+
+    if 'level_0' in Tracks_df.columns:
+        Tracks_df.drop(columns=['level_0'], inplace=True)
+    
+    Tracks_df.reset_index(drop=False, inplace=True)
+
 
     if condition == 'all':
         Spots_df = Spots_df.sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
@@ -1010,6 +1086,25 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
         
         color_map_direct = dict(zip(Tracks_df['TRACK_ID'], track_colors))
         Tracks_df['COLOR'] = Tracks_df['TRACK_ID'].map(color_map_direct)
+
+    elif c_mode in ['differentiate conditions', 'differentiate replicates']:
+        if c_mode == 'differentiate conditions':
+            colormap = plt.get_cmap('Set1')  # Use qualitative colormap
+            unique_vals = Spots_df['CONDITION'].unique()
+            val_column = 'CONDITION'
+        else:
+            colormap = plt.get_cmap('Set1')
+            unique_vals = Spots_df['REPLICATE'].unique()
+            val_column = 'REPLICATE'
+
+        # Assign colors to each unique category
+        val_to_color = {
+            val: colormap(i % colormap.N)  # Wrap around if more values than colors
+            for i, val in enumerate(sorted(unique_vals))
+        }
+        # Map those colors to the tracks
+        Tracks_df['COLOR'] = Tracks_df[val_column].map(val_to_color)
+
     else:
         colormap = _get_cmap(c_mode)
         metric_min = Spots_df[lut_scaling_metric].min()
@@ -1069,19 +1164,26 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
         track_row['REPLICATE'] = repl
         track_row['TRACK_ID'] = track
 
-        if colormap is not None:
-            # Normalize the metric for color mapping
+        if colormap is not None and c_mode in ['differentiate conditions', 'differentiate replicates']:
+            key = track_row[val_column]  # val_column is either 'CONDITION' or 'REPLICATE'
+            color = colormap(unique_vals.tolist().index(key) % colormap.N)  # consistent mapping
+            group_df['COLOR'] = mcolors.to_hex(color)
+            
+        elif colormap is not None:
+            # This is for metric-based color mapping (quantitative)
             norm = plt.Normalize(metric_min, metric_max)
             color = colormap(norm(track_row[lut_scaling_metric]))
-            group_df['COLOR'] = color if isinstance(color, str) else [mcolors.to_hex(color)] * len(group_df)
+            group_df['COLOR'] = mcolors.to_hex(color)
+            
         elif c_mode in ['random colors', 'random greys']:
             group_df['COLOR'] = track_row['COLOR']
+
         elif c_mode == 'only-one-color':
             group_df['COLOR'] = only_one_color
 
 
         # Plot the track using computed color.
-        ax.plot(group_df['theta'], group_df['r'], lw=lw_, color=group_df['COLOR'].iloc[0])
+        ax.plot(group_df['theta'], group_df['r'], lw=lw, color=group_df['COLOR'].iloc[0])
 
         # If arrows flag is True, add an arrow at the end of the track.
         if arrows:
