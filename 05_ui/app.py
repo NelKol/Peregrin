@@ -715,7 +715,8 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
         ui.input_select(  
             "metricA",  
             "Thresholding metric:",  
-            select_metrics.tracks 
+            select_metrics.tracks,
+            selected="NET_DISTANCE"
             )  
 
         ui.input_select(
@@ -754,10 +755,7 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
         @reactive.effect
         def set_thresholded_dataA():
-            # if delayed_detection.get() == False:
             _set_thresholded_data(Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df)
-            # else:
-            #     pass
 
         @reactive.effect
         def update_thresholded_dataA():
@@ -921,7 +919,7 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
 with ui.nav_panel("Visualisation"):
 
-    with ui.navset_pill_list(widths=(2, 9), selected="Time series"):
+    with ui.navset_pill_list(widths=(2, 9), selected="Tracks"):
 
 
 
@@ -1057,7 +1055,7 @@ with ui.nav_panel("Visualisation"):
                         let_me_look_at_these=see_hover.get(), 
                         background=input.background(),
                         smoothing_index=update_smoothing(),
-                        lw=update_line_width(),
+                        lw=update_track_line_width(),
                         marker_size=update_marker_size(),
                         end_track_markers=input.end_track_markers(),
                         markers=input.markers(),
@@ -1081,7 +1079,7 @@ with ui.nav_panel("Visualisation"):
                         let_me_look_at_these=see_hover.get(), 
                         background=input.background(),
                         smoothing_index=update_smoothing(),
-                        lw=update_line_width(),
+                        lw=update_track_line_width(),
                         marker_size=update_marker_size(),
                         end_track_markers=input.end_track_markers(),
                         markers=input.markers(),
@@ -1107,7 +1105,7 @@ with ui.nav_panel("Visualisation"):
                         only_one_color=input.only_one_color(),
                         lut_scaling_metric=input.lut_scaling(),
                         smoothing_index=update_smoothing(),
-                        lw=update_line_width(),
+                        lw=update_track_line_width(),
                         marker_size=update_marker_size(),
                         end_track_markers=input.end_track_markers(),
                         markers=input.markers(),
@@ -1129,7 +1127,7 @@ with ui.nav_panel("Visualisation"):
                         only_one_color=input.only_one_color(),
                         lut_scaling_metric=input.lut_scaling(),
                         smoothing_index=update_smoothing(),
-                        lw=update_line_width(),
+                        lw=update_track_line_width(),
                         marker_size=update_marker_size(),
                         end_track_markers=input.end_track_markers(),
                         markers=input.markers(),
@@ -1206,7 +1204,7 @@ with ui.nav_panel("Visualisation"):
                         background=input.background(),
                         grid=input.grid(),
                         smoothing_index=update_smoothing(),
-                        lw=update_line_width(),
+                        lw=update_track_line_width(),
                         arrows=input.arrows(),
                         arrowsize=update_arrow_size(),
                         show_tracks=input.show_tracks(),
@@ -1226,7 +1224,7 @@ with ui.nav_panel("Visualisation"):
                         background=input.background(),
                         grid=input.grid(),
                         smoothing_index=update_smoothing(),
-                        lw=update_line_width(),
+                        lw=update_track_line_width(),
                         arrows=input.arrows(),
                         arrowsize=update_arrow_size(),
                         show_tracks=input.show_tracks(),
@@ -1247,7 +1245,7 @@ with ui.nav_panel("Visualisation"):
                         c_mode=input.color_mode(), 
                         only_one_color=input.only_one_color(), 
                         smoothing_index=update_smoothing(),
-                        lw=update_line_width(),
+                        lw=update_track_line_width(),
                         grid=input.grid(),
                         arrows=input.arrows(),
                         arrowsize=update_arrow_size(),
@@ -1266,7 +1264,7 @@ with ui.nav_panel("Visualisation"):
                         c_mode=input.color_mode(), 
                         only_one_color=input.only_one_color(), 
                         smoothing_index=update_smoothing(),
-                        lw=update_line_width(),
+                        lw=update_track_line_width(),
                         grid=input.grid(),
                         arrows=input.arrows(),
                         arrowsize=update_arrow_size(),
@@ -1427,7 +1425,7 @@ with ui.nav_panel("Visualisation"):
                 
                 @debounce(1)
                 @reactive.calc
-                def update_line_width():
+                def update_track_line_width():
                     return input.track_line_width()
                 
                 ui.input_checkbox(
