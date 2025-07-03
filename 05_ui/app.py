@@ -403,21 +403,27 @@ with ui.nav_panel("Data frames"):
 
     # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-    @reactive.calc
-    def process_spot_data():
-        if file_detected.get() == False:
-            return pd.DataFrame()
-        
-        buttered = raw_Buttered_df.get()
+    _spot_data_cache = reactive.value()
 
-        return dc.Spots(buttered)
+    @reactive.effect
+    def update_spots():
+        _spot_data_cache.set(dc.Spots(raw_Buttered_df.get()))
+
+    # @reactive.calc
+    # def process_spot_data():
+    #     if file_detected.get() == False:
+    #         return pd.DataFrame()
+        
+    #     buttered = raw_Buttered_df.get()
+
+    #     return dc.Spots(buttered)
 
 
     @reactive.effect
     def update_Spot_stats_df():
         
         if file_detected.get():
-            Spot_stats = process_spot_data()
+            Spot_stats = _spot_data_cache()
             raw_Spot_stats_df.set(Spot_stats)
             Spot_metrics.set(Spot_stats.columns)
 
@@ -2468,85 +2474,7 @@ with ui.nav_panel("Visualisation"):
 
             with ui.panel_well():
 
-                ui.markdown(
-                    """
-                    #### **Stripplot**
-                    *made with*  `plotly`
-                    <hr style="height: 4px; background-color: black; border: none" />
-                    """
-                    )
-                
-                ui.input_selectize(
-                    "let_me_look_at_these_strip",
-                    "Let me look at these:",
-                    select_metrics.tracks,
-                    selected=['CONDITION','REPLICATE','TRACK_ID'],
-                    multiple=True
-                    )
-                
-                ui.markdown(
-                    """
-                    <hr style="border: none; border-top: 1px dotted" />
-                    """
-                    )
-                
-                ui.input_numeric(
-                    'lowband',
-                    'Lower band (outliars)',
-                    0,
-                    min=0,
-                    max=1,
-                    step=0.01
-                    )
-                
-                ui.input_numeric(
-                    'highband',
-                    'Upper band (outliars)',
-                    0.9,
-                    min=0,
-                    max=1,
-                    step=0.01
-                    )
-                
-                ui.input_checkbox(
-                    'see_outliars',
-                    'See outliars',
-                    False
-                    )
-                
-                ui.markdown(
-                    """
-                    <hr style="border: none; border-top: 1px dotted" />
-                    """
-                    )
 
-                
-
-                
-
-
-
-
-            with ui.card():
-
-                "uhh"
-
-            #     @render.plot
-            #     def plotly_stripplot():
-            #         fig = pu.interactive_stripplot(
-            #             df=Track_stats_df.get(), 
-            #             metric=input.testing_metric(), 
-            #             Metrics=select_metrics.tracks, 
-            #             let_me_look_at_these=input.let_me_look_at_these_strip(), 
-            #             palette=input.palette(), 
-            #             width=input.graph_width(), 
-            #             height=input.graph_height(), 
-            #             # jitter_outline_width:float,
-            #             violin_edge_color=input.violin_edge_color(),
-            #             lowband=,
-            #             highband:float,
-            #             see_outliars:bool
-            #             )
 
 
 
@@ -2614,6 +2542,7 @@ with ui.nav_panel('Task list'):
         - [ ] Add a throttle/debounce to the thresholding
         - [ ] Add a debounce to all the heavy/plot calculations (optional)
         - [ ] Check the mean value differences (lineplot - scatter) in the swarmplot
+        - [ ] možnosť stiahnuť súbor s infom o tom aké boli nastavenia pri plotovaní 
         
 
         """
