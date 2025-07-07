@@ -39,7 +39,7 @@ pd.options.mode.chained_assignment = None
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Creating reactive values for the data input
 
-raw_Buttered_df = reactive.value()      # Creating a reactive value for the stem/pre-processed base dataframe
+extracted_df = reactive.value()      # Creating a reactive value for the stem/pre-processed base dataframe
 raw_Spot_stats_df = reactive.value()    # Creating a reactive value for the stem/pre-processed spot stats dataframe
 raw_Track_stats_df = reactive.value()   # Creating a reactive value for the stem/pre-processed track stats file dataframe
 raw_Time_stats_df = reactive.value()    # Creating a reactive value for the stem/pre-processed time stats file dataframe
@@ -78,9 +78,9 @@ conditions = reactive.value()           # Creating a reactive value for the cond
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Creating reactive values for the data input status
 
-file_detected = reactive.value(False)
+files_available = reactive.value(False)
 delayed_detection = reactive.value(False)
-cells_in_possesion = reactive.value(False)
+cells_in_possession = reactive.value(False)
 
 
 # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -126,7 +126,7 @@ dir = Path(__file__).resolve().parent
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Creating a reactive value for visualized tracks hover info
-see_hover = reactive.value(['CONDITION', 'REPLICATE', 'TRACK_ID'])        # Creating a reactive value for the visualized tracks hover info
+see_hover = reactive.value(['Condition', 'Replicate', 'Track ID'])        # Creating a reactive value for the visualized tracks hover info
 
 
 
@@ -166,6 +166,22 @@ with ui.nav_panel("Input"):
         ui.input_action_button("add_input", "Add data input", class_="btn btn-primary")
         ui.input_action_button("remove_input", "Remove data input", class_="btn btn-primary")
 
+        ui.input_action_button(id="run", label="Run analysis", class_="btn btn-secondary", disabled=True)
+
+        ui.input_action_button("input_help", "Show help")
+
+        
+
+        @reactive.effect
+        @reactive.event(input.input_help)
+        def show_help():
+            ui.notification_show(
+                f"This help message will disappear after 60 seconds.",
+                type="message",
+                duration=60000
+            )
+
+
         ui.markdown(
             """
             ___
@@ -175,11 +191,64 @@ with ui.nav_panel("Input"):
         # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         # Default data input slot
 
+        supported_file_formats = [".csv", ".xls", ".xlsx", ".feather", ".parquet", ".h5", ".hdf5", ".json"]
+
         @render.ui
         def default_input():
-            default_browser = ui.input_file("file1", "Input CSV", accept=[".csv"], multiple=True, placeholder="No files selected")
-            default_label = ui.input_text("label1", "Condition", placeholder="label me :D")
+            default_browser = ui.input_file("file1", "Input files:", accept=supported_file_formats, multiple=True, placeholder="No files selected", button_label="Browse files...")
+            default_label = ui.input_text("label1", "Condition no. 1", placeholder="Label me! :D")
             return default_label, default_browser
+        
+
+        with ui.panel_absolute(  
+            width="350px",  
+            right="300px",  
+            top="150px",  
+            draggable=True,  
+        ):  
+            with ui.panel_well():
+                ui.markdown(
+                    """
+                    <h5>Select columns:</h5>
+                    <p>
+                    """
+                )
+                
+                ui.input_select(
+                    "select_id", 
+                    label="Track identifier:",
+                    choices=["e.g. TRACK_ID"],
+                    multiple=False,
+                )
+
+                ui.input_select(
+                    "select_time", 
+                    label="Time point:",
+                    choices=["e.g. POSITION_T"],
+                    multiple=False,
+                )
+
+                ui.input_select(
+                    "select_x", 
+                    label="X coordinate:",
+                    choices=["e.g. POSITION_X"],
+                    multiple=False,
+                )
+
+                ui.input_select(
+                    "select_y", 
+                    label="Y coordinate:",
+                    choices=["e.g. POSITION_Y"],
+                    multiple=False,
+                )
+
+                ui.markdown(
+                    """
+                    <span style="color:darkgrey; font-style:italic;">
+                        You can drag me around!
+                    </span>
+                    """
+                )
 
 
         # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -201,17 +270,18 @@ with ui.nav_panel("Input"):
                 # CSV file browser
                 browser = ui.input_file(                        
                     id=f"file{adding}", 
-                    label=f"Input CSV {adding}", 
-                    accept=[".csv"], 
+                    label=f"Input file (browse or drag-and-drop):", 
+                    accept=supported_file_formats, 
                     multiple=True, 
-                    placeholder="No files selected"
+                    placeholder="No files selected",
+                    button_label="Browse file..."
                     )
                 
                 # Data labeling text window (condition labeling)
                 label = ui.input_text(                          
                     id=f"label{adding}", 
-                    label=f"Condition", 
-                    placeholder="label me :D"
+                    label=f"Condition no. {adding}", 
+                    placeholder="Label me! :D"
                     )
 
                 # Container rendering the additional input slot container
@@ -261,20 +331,31 @@ with ui.nav_panel("Input"):
         
         else:
             all_data_dflt = []
+
             for dflt_file_count, file_dflt in enumerate(inpt_file_list_dflt, start=1):  # Enumerate and cycle through the files
-                df_dflt = pd.read_csv(file_dflt['datapath'])                            # Load each CSV file into a DataFrame
-                buttered_dflt = dc.butter(df_dflt)                                      # Butter the DataFrame
-                                                  
-                label_dflt = input.label1()                                             # Assigning the condition label to a 'CONDITION' column
-                if not label_dflt or label_dflt is None:                                # If no label is provided, assign a default - numeric - one
-                    buttered_dflt['CONDITION'] = 1
-                else:                                                                   # Else, assign the lable
-                    buttered_dflt['CONDITION'] = f'{label_dflt}'
-                buttered_dflt['REPLICATE'] = dflt_file_count                            # Assigning the replicate number
 
-                all_data_dflt.append(buttered_dflt)                                     # Stack the buttered and labeled DataFrames into a list
+                try:
+                    extracted_dflt = dc.extract(
+                            df = dc.load_DataFrame(file_dflt['datapath']), 
+                            id_col = input.select_id(),
+                            t_col = input.select_time(), 
+                            x_col = input.select_x(), 
+                            y_col = input.select_y(), 
+                            mirror_y = True
+                        )
+                except Exception as e:                                                  # Extracting the data from the file
+                    return pd.DataFrame()                                            # If the file cannot be read, return an empty DataFrame
 
-                default = pd.concat(all_data_dflt, axis=0)                              # Merge the DataFrames
+                label_dflt = input.label1()                                         # Assigning the condition label to a 'Condition' column
+                if not label_dflt or label_dflt is None:                            # If no label is provided, assign a default - numeric - one
+                    extracted_dflt['Condition'] = 1
+                else:                                                               # Else, assign the lable
+                    extracted_dflt['Condition'] = f'{label_dflt}'
+                extracted_dflt['Replicate'] = dflt_file_count                            # Assigning the replicate number
+
+                all_data_dflt.append(extracted_dflt)                                     # Stack the buttered and labeled DataFrames into a list
+
+                default = pd.concat(all_data_dflt, axis=0)                          # Merge the DataFrames
                 
 
         # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -291,18 +372,28 @@ with ui.nav_panel("Input"):
             
             else:
                 for additnl_file_count, file_addtnl in enumerate(inpt_file_list_addtnl, start=1):   # Enumerate and cycle through additional input files
-                    df_addtnl = pd.read_csv(file_addtnl["datapath"])                  
-                    buttered_addtnl = dc.butter(df_addtnl)
-
-                    label_addtnl = input[f"label{i}"]()                                 # Assigning the condition label to a 'CONDITION' column
-                    if not label_addtnl or label_addtnl is None:                        # If no label is provided, assign a default - numeric - one
-                        buttered_addtnl['CONDITION'] = i
-                    else:                                                               # Else, assign the given lable
-                        buttered_addtnl['CONDITION'] = f'{label_addtnl}'
-                    buttered_addtnl['REPLICATE'] = additnl_file_count                   # Assigning the replicate number
-
-                    all_data_addtnl.append(buttered_addtnl)                             # Stack the buttered and labeled DataFrames into a list
                     
+                    try:
+                        extracted_adtnl = dc.extract(
+                                df = dc.load_DataFrame(file_addtnl['datapath']),
+                                id_col = input.select_id(),
+                                t_col = input.select_time(),
+                                x_col = input.select_x(),
+                                y_col = input.select_y(),
+                                mirror_y = True
+                            ) 
+                    except Exception as e:                                                  # Extracting the data from the file
+                        return pd.DataFrame()                                            # If the file cannot be read, return an empty DataFrame
+
+                    label_addtnl = input[f"label{i}"]()                                 # Assigning the condition label to a 'Condition' column
+                    if not label_addtnl or label_addtnl is None:                        # If no label is provided, assign a default - numeric - one
+                        extracted_adtnl['Condition'] = i
+                    else:                                                               # Else, assign the given lable
+                        extracted_adtnl['Condition'] = f'{label_addtnl}'
+                    extracted_adtnl['Replicate'] = additnl_file_count                   # Assigning the replicate number
+
+                    all_data_addtnl.append(extracted_adtnl)                             # Stack the buttered and labeled DataFrames into a list
+
 
                     additional = pd.concat(all_data_addtnl, axis=0)                     # Merge the DataFrames
 
@@ -315,15 +406,55 @@ with ui.nav_panel("Input"):
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Creating a reactive effect detecting any files is selected
 
-@reactive.effect
-def file_detection():
-    for i in range(1, count.get() + 1, 1):
-        if input[f"file{i}"]() != None:
-            file_detected.set(True)
-        else:
-            pass
-        
+# @reactive.effect
+# def file_detection():
+#     for i in range(1, count.get() + 1, 1):
+#         if input[f"file{i}"]() != None:
+#             files_available.set(True)
+#             break
+#         else:
+#             files_available.set(False)
 
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Creating a reactive effect to update column selections when files are uploaded
+
+@reactive.effect
+def update_column_selections():
+    # Check if any files are uploaded
+    sample_file = None
+    
+    # Check default file input first
+    inpt_file_list_dflt: list[FileInfo] | None = input.file1()
+    if inpt_file_list_dflt is not None and len(inpt_file_list_dflt) > 0:
+        files_available.set(True)
+        sample_file = inpt_file_list_dflt[0]
+    
+    # If no default files, check additional file inputs
+    if not files_available.get():
+        for i in range(2, count.get() + 1, 1):
+            inpt_file_list_addtnl: list[FileInfo] | None = input[f"file{i}"]()
+            if inpt_file_list_addtnl is not None and len(inpt_file_list_addtnl) > 0:
+                files_available.set(True)
+                sample_file = inpt_file_list_addtnl[0]
+                break
+    
+    # Update column selections if files are available
+    if files_available.get() and sample_file is not None:
+        try:
+            sample_df = dc.load_DataFrame(sample_file['datapath'])
+            df_columns = sample_df.columns.to_list()
+            
+            # Update all select inputs with the column names
+            ui.update_select('select_id', choices=df_columns)
+            ui.update_select('select_time', choices=df_columns)
+            ui.update_select('select_x', choices=df_columns)
+            ui.update_select('select_y', choices=df_columns)
+            
+        except Exception as e:
+            pass
+
+    if files_available.get():
+        ui.update_action_button("run", disabled=False)
 
 
 
@@ -336,7 +467,7 @@ def file_detection():
 # 2. Displaying the dataframes
 # 3. Enabling the user to download the dataframes as .csv files
 
-already_processed_file_detected = reactive.value(False)    # Creating a reactive value for the already processed file detection
+already_processed_files_available = reactive.value(False)    # Creating a reactive value for the already processed file detection
 
 with ui.nav_panel("Data frames"):  
 
@@ -362,7 +493,7 @@ with ui.nav_panel("Data frames"):
         """
         )
 
-    @reactive.calc 
+    @reactive.calc
     def parsed_processed_file():                                                           
              
         processed_spot_stats_input: list[FileInfo] | None = input.already_proccesed_spot_stats()                      # Getting the list of default input data files
@@ -375,16 +506,16 @@ with ui.nav_panel("Data frames"):
     @reactive.effect
     def already_processed_file_detection():
         if input.already_proccesed_spot_stats() != None:
-            cells_in_possesion.set(True)
-            already_processed_file_detected.set(True)
+            cells_in_possession.set(True)
+            already_processed_files_available.set(True)
         else:
             pass
 
     @reactive.effect
-    def cells_in_possesion_detection():
+    def cells_in_possession_detection():
         for i in range(1, count.get() + 1, 1):
             if input[f"file{i}"]() != None and input.already_proccesed_spot_stats() != None:
-                cells_in_possesion.set(True)    
+                cells_in_possession.set(True)    
             else:
                 pass
 
@@ -393,12 +524,12 @@ with ui.nav_panel("Data frames"):
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     @reactive.effect
-    def update_buttered_df():
-        if file_detected.get() == False:
+    @reactive.event(input.run)  # Reactive effect on "Run analysis" button
+    def update_df():
+        if files_available.get() == False:
             return pd.DataFrame()
         
-        df = parsed_file()
-        raw_Buttered_df.set(df)
+        extracted_df.set(parsed_file())
 
 
     # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -407,27 +538,17 @@ with ui.nav_panel("Data frames"):
 
     @reactive.effect
     def update_spots():
-        _spot_data_cache.set(dc.Spots(raw_Buttered_df.get()))
-
-    # @reactive.calc
-    # def process_spot_data():
-    #     if file_detected.get() == False:
-    #         return pd.DataFrame()
-        
-    #     buttered = raw_Buttered_df.get()
-
-    #     return dc.Spots(buttered)
-
+        _spot_data_cache.set(dc.Spots(extracted_df.get()))
 
     @reactive.effect
     def update_Spot_stats_df():
         
-        if file_detected.get():
+        if files_available.get():
             Spot_stats = _spot_data_cache()
             raw_Spot_stats_df.set(Spot_stats)
             Spot_metrics.set(Spot_stats.columns)
 
-        elif already_processed_file_detected.get():
+        elif already_processed_files_available.get():
             Spot_stats = parsed_processed_file()
             raw_Spot_stats_df.set(Spot_stats)
             Spot_metrics.set(Spot_stats.columns)
@@ -441,7 +562,7 @@ with ui.nav_panel("Data frames"):
 
     @reactive.calc
     def process_track_data():
-        if file_detected.get() == False and already_processed_file_detected.get() == False:
+        if files_available.get() == False and already_processed_files_available.get() == False:
             return pd.DataFrame()
         
         Spot_stats = raw_Spot_stats_df.get()
@@ -454,7 +575,7 @@ with ui.nav_panel("Data frames"):
 
     @reactive.effect
     def update_Track_stats_df():
-        if file_detected.get() == False and already_processed_file_detected.get() == False:
+        if files_available.get() == False and already_processed_files_available.get() == False:
             return pd.DataFrame()
         
         else:
@@ -468,7 +589,7 @@ with ui.nav_panel("Data frames"):
 
     @reactive.calc
     def process_time_data():
-        if file_detected.get() == False and already_processed_file_detected.get() == False:
+        if files_available.get() == False and already_processed_files_available.get() == False:
             return pd.DataFrame()
 
         Spot_stats = Spot_stats_df.get()
@@ -481,7 +602,7 @@ with ui.nav_panel("Data frames"):
 
     @reactive.effect
     def update_Time_stats_df():
-        if file_detected.get() == False and already_processed_file_detected.get() == False:
+        if files_available.get() == False and already_processed_files_available.get() == False:
             return pd.DataFrame()
         
         else:
@@ -504,12 +625,10 @@ with ui.nav_panel("Data frames"):
 
             @render.data_frame
             def render_spot_stats():
-                if file_detected.get() == False and already_processed_file_detected.get() == False:
+                if files_available.get() == False and already_processed_files_available.get() == False:
                     return pd.DataFrame()
-        
                 else:
-                    Spot_stats = Spot_stats_df.get()
-                    return render.DataGrid(Spot_stats)
+                    return render.DataGrid(Spot_stats_df.get())
                 
             @render.download(label="Download", filename="Spot_stats.csv")
             def download_spot_stats():
@@ -523,11 +642,10 @@ with ui.nav_panel("Data frames"):
             
             @render.data_frame
             def render_track_stats():
-                if file_detected.get() == False and already_processed_file_detected.get() == False:
+                if files_available.get() == False and already_processed_files_available.get() == False:
                     return pd.DataFrame()
                 else:
-                    Track_stats = Track_stats_df.get()
-                    return render.DataGrid(Track_stats)
+                    return render.DataGrid(Track_stats_df.get())
                 
             @render.download(label="Download", filename="Track_stats.csv")
             def download_track_stats():
@@ -541,13 +659,12 @@ with ui.nav_panel("Data frames"):
 
             @render.data_frame
             def render_time_stats():
-                if file_detected.get() == False and already_processed_file_detected.get() == False:
+                if files_available.get() == False and already_processed_files_available.get() == False:
                     return pd.DataFrame()
                 else:
-                    Time_stats = Time_stats_df.get()
-                    return render.DataGrid(Time_stats)
+                    return render.DataGrid(Time_stats_df.get())
                 
-            @render.download(label="Download", filename="Time stats.csv")
+            @render.download(label="Download", filename="Time_stats.csv")
             def download_time_stats():
                 with io.BytesIO() as buf:
                     Time_stats_df.get().to_csv(buf, index=False)
@@ -608,7 +725,7 @@ def _update_slider_values(metric, filter, dfA, dfB, slider_values):
     
 
 def _thresholded_histogram(metric, filter_type, slider_range, dfA, dfB):
-    if file_detected.get() == False and already_processed_file_detected.get() == False:
+    if files_available.get() == False and already_processed_files_available.get() == False:
         return None
     elif dfA == None:
         return None
@@ -694,6 +811,54 @@ def _update_thresholded_data(metric, dfA, dfB, df0A, df0B, thresholded_df):
 with ui.sidebar(open="open", position="right", bg="f8f8f8"): 
 
 
+# Make the thresholding plot have more bins (better definition), something like 100 bins so you get percentiles
+# and plot a gaussian distribution on top of the histogram - a simple black line
+# Make the histogram interactive, allowing users to hover over bins to see exact values (percentile, number of cells in that percentile?)
+# Ideally be able to be able to add and remove thresholding filters
+# Come up with better thresholding logic, so that the code doesnt have to pass an unreasonable amount of dataframes around 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     # ================================================================================================================================================================================================================================================================================
     # Thresholding window no. 1
     # 
@@ -722,7 +887,7 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
             "metricA",  
             "Thresholding metric:",  
             select_metrics.tracks,
-            selected="NET_DISTANCE"
+            selected="Net distance"
             )  
 
         ui.input_select(
@@ -744,6 +909,7 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
         # Updating the slider range
         
         @reactive.effect
+        @reactive.event(cells_in_possession)  # Reactive effect on the filter selection
         def update_sliderA():
             return _update_slider(input.filterA(), "sliderA", slider_valuesT1)
 
@@ -781,21 +947,21 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
         @render.text
         def data_thresholding_numbersA1():
-            if file_detected.get() == False and already_processed_file_detected.get() == False:
+            if files_available.get() == False and already_processed_files_available.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(raw_Track_stats_df.get())
             return a
 
         @render.text
         def data_thresholding_numbersA2():
-            if file_detected.get() == False and already_processed_file_detected.get() == False:
+            if files_available.get() == False and already_processed_files_available.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
             return b
             
         @render.text
         def data_thresholding_numbersA3():
-            if file_detected.get() == False and already_processed_file_detected.get() == False:
+            if files_available.get() == False and already_processed_files_available.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
             return c
@@ -893,21 +1059,21 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 
         @render.text
         def data_thresholding_numbersB1():
-            if file_detected.get() == False and already_processed_file_detected.get() == False:
+            if files_available.get() == False and already_processed_files_available.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return a
 
         @render.text
         def data_thresholding_numbersB2():
-            if file_detected.get() == False and already_processed_file_detected.get() == False:
+            if files_available.get() == False and already_processed_files_available.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return b
 
         @render.text
         def data_thresholding_numbersB3():
-            if file_detected.get() == False and already_processed_file_detected.get() == False:
+            if files_available.get() == False and already_processed_files_available.get() == False:
                 return None
             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
             return c
@@ -956,7 +1122,7 @@ with ui.nav_panel("Visualisation"):
                     'Let me look at these:',
                     select_metrics.tracks,
                     multiple=True,
-                    selected=['CONDITION', 'REPLICATE', 'TRACK_ID'],
+                    selected=['Condition', 'Replicate', 'Track ID'],
                     )
                 
                 ui.input_action_button(
@@ -1383,7 +1549,7 @@ with ui.nav_panel("Visualisation"):
                     'lut_scaling',
                     'LUT scaling metric:',
                     select_metrics.lut,
-                    selected='NET_DISTANCE',
+                    selected='Net distance',
                     )
 
                 ui.input_select(
@@ -1783,7 +1949,7 @@ with ui.nav_panel("Visualisation"):
                     "ts_metric",
                     "Metric:",
                     select_metrics.time,
-                    selected='MEAN_CONFINEMENT_RATIO'
+                    selected='MEAN_Confinement ratio'
                     )
 
                 @reactive.effect
@@ -1888,7 +2054,7 @@ with ui.nav_panel("Visualisation"):
                     "testing_metric",
                     "Test for metric:",
                     select_metrics.tracks,
-                    selected='NET_DISTANCE'
+                    selected='Net distance'
                     )
                 
                 

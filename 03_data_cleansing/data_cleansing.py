@@ -10,8 +10,8 @@ df = pd.read_csv(input_file)
 # Definition of unneccesary float columns in the df which are to be convertet to integers
 unneccessary_float_columns = [
     'ID', 
-    'TRACK_ID', 
-    'POSITION_T', 
+    'Track ID', 
+    'Time point', 
     'FRAME'
     ]
 
@@ -25,26 +25,26 @@ def butter(df, float_columns):
     df = df.reset_index(drop=True)
 
     # Converts non-numeric values in selected columns to numeric values
-    df = df.apply(pd.to_numeric, errors='coerce').dropna(subset=['POSITION_X', 'POSITION_Y', 'POSITION_T'])
+    df = df.apply(pd.to_numeric, errors='coerce').dropna(subset=['X coordinate', 'Y coordinate', 'Time point'])
 
-    # Sorts the data in the DataFrame by TRACK_ID and POSITION_T (time position)
-    df = df.sort_values(by=['TRACK_ID', 'POSITION_T'])    
+    # Sorts the data in the DataFrame by Track ID and Time point (time position)
+    df = df.sort_values(by=['Track ID', 'Time point'])    
 
     # For some reason, the y coordinates extracted from trackmate are mirrored. That ofcourse would not affect the statistical tests, only the data visualization. However, to not get mindfucked..
     # Reflect y-coordinates around the midpoint for the directionality to be accurate, according to the microscope videos.
-    y_mid = (df['POSITION_Y'].min() + df['POSITION_Y'].max()) / 2
-    df['POSITION_Y'] = 2 * y_mid - df['POSITION_Y']
+    y_mid = (df['Y coordinate'].min() + df['Y coordinate'].max()) / 2
+    df['Y coordinate'] = 2 * y_mid - df['Y coordinate']
 
     # The dataset itself has a very chaotic, multirow column "title system". Therefore in this list are again defined columns, which from now on will be used for consistency.
     df.columns = [
         'LABEL', 
         'ID', 
-        'TRACK_ID', 
+        'Track ID', 
         'QUALITY', 
-        'POSITION_X', 
-        'POSITION_Y', 
+        'X coordinate', 
+        'Y coordinate', 
         'POSITION_Z', 
-        'POSITION_T', 
+        'Time point', 
         'FRAME', 
         'RADIUS', 
         'VISIBILITY', 
