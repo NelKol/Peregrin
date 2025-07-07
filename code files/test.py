@@ -65,9 +65,6 @@ def parsed_file(input_files):  # File-reading
             df = load_DataFrame(file_dflt)
 
 
-            .get
-
-
             df['Condition'] = condition  # Assign the condition number
             df['Replicate'] = file_count  # Assign the replicate number
 
