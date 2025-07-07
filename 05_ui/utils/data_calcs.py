@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from math import floor, ceil
+import os.path as op
 
 
 
@@ -51,6 +52,49 @@ def try_convert_numeric(x):
     except ValueError:
         return x
 
+
+def load_DataFrame(filepath: str) -> pd.DataFrame:
+    """
+    Loads a DataFrame from a file based on its extension.
+    Supported formats: CSV, Excel, Feather, Parquet, HDF5, JSON.
+    """
+
+    _, ext = op.splitext(filepath.lower())
+
+    try:
+        if ext == '.csv':
+            return pd.read_csv(filepath)
+        elif ext in ['.xls', '.xlsx']:
+            return pd.read_excel(filepath)
+        elif ext == '.feather':
+            return pd.read_feather(filepath)
+        elif ext == '.parquet':
+            return pd.read_parquet(filepath)
+        elif ext in ['.h5', '.hdf5']:
+            return pd.read_hdf(filepath)
+        elif ext == '.json':
+            return pd.read_json(filepath)
+        else:
+            raise ValueError(f"{ext} is not a supported file format.")
+    except Exception as e:
+        raise RuntimeError(f"Failed to load file '{filepath}': {e}")
+
+def extract(df: pd.DataFrame, id_col: str, t_col: str, x_col: str, y_col: str, mirror_y: bool = True) -> pd.DataFrame:    
+
+    df = df[[id_col, t_col, x_col, y_col]].apply(pd.to_numeric, errors='coerce').dropna()
+
+    if mirror_y:
+        '''
+        Note: 
+            For some reason, the y coordinates extracted from trackmate are mirrored. That ofcourse would not affect the statistical tests, only the data visualization. However, to not get mindfucked..
+            Reflect y-coordinates around the midpoint for the directionality to be accurate, according to the microscope videos.
+        '''
+        y_mid = (df[y_col].min() + df[y_col].max()) / 2
+        df[y_col] = 2 * y_mid - df[y_col]
+
+    return df.rename(columns={id_col: 'Track ID', t_col: 'Time point', x_col: 'X coordinate', y_col: 'Y coordinate'})
+
+
 def merge_dfs(dataframes, on):
 
     # Initialize the first DataFrame as the base for merging
@@ -71,34 +115,6 @@ def merge_dfs(dataframes, on):
     
     merged_df = merged_df.map(try_convert_numeric)
     return merged_df
-
-def butter(df):                                                                                      # Smoothing the raw dataframe
-
-    float_columns = [ # Definition of unneccesary float columns in the df which are to be convertet to integers
-    'ID', 
-    'TRACK_ID', 
-    'POSITION_T', 
-    'FRAME'
-    ]
-
-    df = pd.DataFrame(df)  
-    df = df.apply(pd.to_numeric, errors='coerce').dropna(subset=['POSITION_X', 'POSITION_Y', 'POSITION_T'])                                 # Gets rid of the multiple index rows by converting the values to a numeric type and then dropping the NaN values
-
-
-    # For some reason, the y coordinates extracted from trackmate are mirrored. That ofcourse would not affect the statistical tests, only the data visualization. However, to not get mindfucked..
-    # Reflect y-coordinates around the midpoint for the directionality to be accurate, according to the microscope videos.
-    y_mid = (df['POSITION_Y'].min() + df['POSITION_Y'].max()) / 2
-    df['POSITION_Y'] = 2 * y_mid - df['POSITION_Y']
-
-    columns_list = df.columns.tolist()
-    columns_list.remove('LABEL')
-
-    df = df[columns_list]
-
-    # Here we convert the unnecessary floats (from the list in which we defined them) to integers
-    df[float_columns] = df[float_columns].astype(int)
-
-    return df
 
 
 
