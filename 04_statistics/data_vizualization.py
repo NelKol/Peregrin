@@ -47,8 +47,8 @@ def split_dataframe_by_percentiles(df, column_name):
 
 
     return df_thresholded_at_10th_percentile, df_thresholded_at_20th_percentile, df_thresholded_at_30th_percentile, df_thresholded_at_40th_percentile, df_thresholded_at_50th_percentile, df_thresholded_at_60th_percentile, df_thresholded_at_70th_percentile, df_thresholded_at_80th_percentile, df_thresholded_at_90th_percentile
-Track_stats_thresholded_at_10th_percentile, Track_stats_thresholded_at_20th_percentile, Track_stats_thresholded_at_30th_percentile, Track_stats_thresholded_at_40th_percentile, Track_stats_thresholded_at_50th_percentile, Track_stats_thresholded_at_60th_percentile, Track_stats_thresholded_at_70th_percentile, Track_stats_thresholded_at_80th_percentile, Track_stats_thresholded_at_90th_percentile = split_dataframe_by_percentiles(Track_stats, 'NET_DISTANCE')
-# Should try: split_dataframe_by_percentiles(df, column_name); column_name = 'NET_DISTANCE', 'TRACK_LENGTH', 'CONFINEMENT_RATIO', 'SPEED_MEDIAN AND OR MEAN, ETC 
+Track_stats_thresholded_at_10th_percentile, Track_stats_thresholded_at_20th_percentile, Track_stats_thresholded_at_30th_percentile, Track_stats_thresholded_at_40th_percentile, Track_stats_thresholded_at_50th_percentile, Track_stats_thresholded_at_60th_percentile, Track_stats_thresholded_at_70th_percentile, Track_stats_thresholded_at_80th_percentile, Track_stats_thresholded_at_90th_percentile = split_dataframe_by_percentiles(Track_stats, 'Net distance')
+# Should try: split_dataframe_by_percentiles(df, column_name); column_name = 'Net distance', 'Track length', 'Confinement ratio', 'Speed median AND OR MEAN, ETC 
 
 
 
@@ -81,28 +81,28 @@ def track_visuals(df, df2):
     fig, ax = plt.subplots(figsize=(13, 10))
 
     # Ensuring that dataframse have required data
-    track_ids = df2['TRACK_ID'].unique()
+    Track_IDs = df2['Track ID'].unique()
 
-    # Filter df2 to only include rows where TRACK_ID is in df's track_ids
-    df_filtered = df[df['TRACK_ID'].isin(track_ids)]
+    # Filter df2 to only include rows where Track ID is in df's Track IDs
+    df_filtered = df[df['Track ID'].isin(Track_IDs)]
 
-    net_distances = df2[['TRACK_ID', 'NET_DISTANCE']]
+    net_distances = df2[['Track ID', 'Net distance']]
 
-    # Normalize the NET_DISTANCE to a 0-1 range
-    dmin = net_distances['NET_DISTANCE'].min()
-    dmax = net_distances['NET_DISTANCE'].max()
+    # Normalize the Net distance to a 0-1 range
+    dmin = net_distances['Net distance'].min()
+    dmax = net_distances['Net distance'].max()
     norm = plt.Normalize(vmin=dmin, vmax=dmax)
     colormap = plt.cm.jet
 
     # Create a dictionary to store the color for each track based on its confinement ratio
     track_colors = {}
-    for track_id in track_ids:
-        ratio = net_distances[net_distances['TRACK_ID'] == track_id]['NET_DISTANCE'].values[0]
-        track_colors[track_id] = colormap(norm(ratio))
+    for Track_ID in Track_IDs:
+        ratio = net_distances[net_distances['Track ID'] == Track_ID]['Net distance'].values[0]
+        track_colors[Track_ID] = colormap(norm(ratio))
 
     # Set up the plot limits
-    x_min, x_max = df_filtered['POSITION_X'].min(), df_filtered['POSITION_X'].max()
-    y_min, y_max = df_filtered['POSITION_Y'].min(), df_filtered['POSITION_Y'].max()
+    x_min, x_max = df_filtered['X coordinate'].min(), df_filtered['X coordinate'].max()
+    y_min, y_max = df_filtered['Y coordinate'].min(), df_filtered['Y coordinate'].max()
     ax.set_aspect('1', adjustable='box')
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
@@ -133,7 +133,7 @@ def track_visuals(df, df2):
     #      label.set_fontproperties(roboto_ticks)
     ax.tick_params(axis='both', which='major', labelsize=8)
 
-    return fig, ax, track_ids, track_colors, norm, colormap
+    return fig, ax, Track_IDs, track_colors, norm, colormap
 
 def visualize_full_tracks(df, df2, threshold, lw=1):  #Trakcs visualisation
 
@@ -144,17 +144,17 @@ def visualize_full_tracks(df, df2, threshold, lw=1):  #Trakcs visualisation
         threshold = '_' + threshold
 
     # Using the  track_visuals function
-    fig_visuals, ax_visuals, track_ids_visuals, track_colors_visuals, norm_visuals, colormap_visuals = track_visuals(df, df2)
+    fig_visuals, ax_visuals, Track_IDs_visuals, track_colors_visuals, norm_visuals, colormap_visuals = track_visuals(df, df2)
 
     # Plot the full tracks
-    for track_id in track_ids_visuals:
-        track_data = df[df['TRACK_ID'] == track_id]
-        x = track_data['POSITION_X']
-        y = track_data['POSITION_Y']
-        ax_visuals.plot(x, y, lw=lw, color=track_colors_visuals[track_id], label=f'Track {track_id}')
-        
-        # Get the original color from track_colors_visuals[track_id]
-        original_color = mcolors.to_rgb(track_colors_visuals[track_id])
+    for Track_ID in Track_IDs_visuals:
+        track_data = df[df['Track ID'] == Track_ID]
+        x = track_data['X coordinate']
+        y = track_data['Y coordinate']
+        ax_visuals.plot(x, y, lw=lw, color=track_colors_visuals[Track_ID], label=f'Track {Track_ID}')
+
+        # Get the original color from track_colors_visuals[Track_ID]
+        original_color = mcolors.to_rgb(track_colors_visuals[Track_ID])
         # Darken the color by reducing the brightness (by scaling each RGB channel)
         darkened_color = np.array(original_color) * 0.7  # Adjust 0.7 to a value between 0 and 1 for different darkness levels
         # Ensure that no channel goes below 0 (clip values if necessary)
@@ -195,13 +195,13 @@ def visualize_smoothened_tracks(df, df2, threshold, smoothing_type=None, smoothi
         threshold = '_' + threshold
 
     # Using the track_visuals function
-    fig_visuals, ax_visuals, track_ids_visuals, track_colors_visuals, norm_visuals, colormap_visuals = track_visuals(df, df2)
+    fig_visuals, ax_visuals, Track_IDs_visuals, track_colors_visuals, norm_visuals, colormap_visuals = track_visuals(df, df2)
 
     # Plot the full tracks
-    for track_id in track_ids_visuals:
-        track_data = df[df['TRACK_ID'] == track_id]
-        x = track_data['POSITION_X']
-        y = track_data['POSITION_Y']
+    for Track_ID in Track_IDs_visuals:
+        track_data = df[df['Track ID'] == Track_ID]
+        x = track_data['X coordinate']
+        y = track_data['Y coordinate']
         
         # Apply smoothing to the track (if applicable)
         if smoothing_type == 'moving_average':
@@ -211,10 +211,10 @@ def visualize_smoothened_tracks(df, df2, threshold, smoothing_type=None, smoothi
             x_smoothed = x
             y_smoothed = y
 
-        ax_visuals.plot(x_smoothed, y_smoothed, lw=lw, color=track_colors_visuals[track_id], label=f'Track {track_id}')
+        ax_visuals.plot(x_smoothed, y_smoothed, lw=lw, color=track_colors_visuals[Track_ID], label=f'Track {Track_ID}')
 
-        # Get the original color from track_colors_visuals[track_id]
-        original_color = mcolors.to_rgb(track_colors_visuals[track_id])
+        # Get the original color from track_colors_visuals[Track ID]
+        original_color = mcolors.to_rgb(track_colors_visuals[Track_ID])
         # Darken the color by reducing the brightness (by scaling each RGB channel)
         darkened_color = np.array(original_color) * 0.7  # Adjust 0.7 to a value between 0 and 1 for different darkness levels
         # Ensure that no channel goes below 0 (clip values if necessary)
@@ -225,7 +225,7 @@ def visualize_smoothened_tracks(df, df2, threshold, smoothing_type=None, smoothi
 
         if len(x_smoothed) > 1:
             # Extract the mean direction from df2 for the current track
-            mean_direction_rad = df2[df2['TRACK_ID'] == track_id]['MEAN_DIRECTION_RAD'].values[0]
+            mean_direction_rad = df2[df2['Track ID'] == Track_ID]['Direction mean (rad)'].values[0]
             
             # Use trigonometry to calculate the direction (dx, dy) from the angle
             dx = np.cos(mean_direction_rad)  # Change in x based on angle
@@ -251,7 +251,7 @@ visualize_smoothened_tracks(df, Track_stats, None, smoothing_type='moving_averag
 
 def histogram_cells_distance(df, metric, str):
     
-    # Sort the DataFrame by 'TRACK_LENGTH' in ascending order
+    # Sort the DataFrame by 'Track length' in ascending order
     df_sorted = df.sort_values(by=metric)
 
     norm = mcolors.Normalize(vmin=df_sorted["NUM_FRAMES"].min(), vmax=df_sorted["NUM_FRAMES"].max())
@@ -331,8 +331,8 @@ def histogram_cells_distance(df, metric, str):
     # Show the plot
     plt.savefig(f"02f_Histogram_{str}_distance_traveled_per_cell.png")
     plt.show()
-histogram_cells_distance(Track_stats, 'NET_DISTANCE', 'Net')
-histogram_cells_distance(Track_stats, 'TRACK_LENGTH', 'Total')
+histogram_cells_distance(Track_stats, 'Net distance', 'Net')
+histogram_cells_distance(Track_stats, 'Track length', 'Total')
 
 def histogram_nth_percentile_distance(df, metric, num_groups, percentiles, str, threshold):
 
@@ -342,7 +342,7 @@ def histogram_nth_percentile_distance(df, metric, num_groups, percentiles, str, 
     else:
         threshold = '_' + threshold
 
-    # Sort the DataFrame by 'NET_DISTANCE' in ascending order
+    # Sort the DataFrame by 'Net distance' in ascending order
     df_sorted = df.sort_values(by=metric)
 
     # Number of groups (chimneys) and size of each group (5% each)
@@ -428,23 +428,23 @@ def histogram_nth_percentile_distance(df, metric, num_groups, percentiles, str, 
     # Show the plot
     plt.savefig(f"02f_Histogram_{str}_distance_traveled_{percentiles}th_percentiles{threshold}.png")
     plt.show()
-histogram_nth_percentile_distance(Track_stats, 'TRACK_LENGTH', 20, 5, 'Total', None)
-histogram_nth_percentile_distance(Track_stats, 'TRACK_LENGTH', 100, 1, 'Total', None)
-histogram_nth_percentile_distance(Track_stats, 'NET_DISTANCE', 20, 5, 'Net', None)
-histogram_nth_percentile_distance(Track_stats, 'NET_DISTANCE', 100, 1, 'Net', None)
-# histogram_nth_percentile_distance(Track_stats_thresholded_at_20th_percentile, 'TRACK_LENGTH', 20, 5, 'Total', 'thresholded_at_20th_percentile') # 20th
-# histogram_nth_percentile_distance(Track_stats_thresholded_at_20th_percentile, 'NET_DISTANCE', 20, 5, 'Net', 'thresholded_at_20th_percentile')
-# histogram_nth_percentile_distance(Track_stats_thresholded_at_40th_percentile, 'TRACK_LENGTH', 20, 5, 'Total', 'thresholded_at_40th_percentile') # 40th
-# histogram_nth_percentile_distance(Track_stats_thresholded_at_40th_percentile, 'NET_DISTANCE', 20, 5, 'Net', 'thresholded_at_40th_percentile')
-# histogram_nth_percentile_distance(Track_stats_thresholded_at_60th_percentile, 'TRACK_LENGTH', 20, 5, 'Total', 'thresholded_at_60th_percentile') # 60th
-# histogram_nth_percentile_distance(Track_stats_thresholded_at_60th_percentile, 'NET_DISTANCE', 20, 5, 'Net', 'thresholded_at_60th_percentile')
-# histogram_nth_percentile_distance(Track_stats_thresholded_at_80th_percentile, 'TRACK_LENGTH', 20, 5, 'Total', 'thresholded_at_80th_percentile') # 80th
-# histogram_nth_percentile_distance(Track_stats_thresholded_at_80th_percentile, 'NET_DISTANCE', 20, 5, 'Net', 'thresholded_at_80th_percentile')
+histogram_nth_percentile_distance(Track_stats, 'Track length', 20, 5, 'Total', None)
+histogram_nth_percentile_distance(Track_stats, 'Track length', 100, 1, 'Total', None)
+histogram_nth_percentile_distance(Track_stats, 'Net distance', 20, 5, 'Net', None)
+histogram_nth_percentile_distance(Track_stats, 'Net distance', 100, 1, 'Net', None)
+# histogram_nth_percentile_distance(Track_stats_thresholded_at_20th_percentile, 'Track length', 20, 5, 'Total', 'thresholded_at_20th_percentile') # 20th
+# histogram_nth_percentile_distance(Track_stats_thresholded_at_20th_percentile, 'Net distance', 20, 5, 'Net', 'thresholded_at_20th_percentile')
+# histogram_nth_percentile_distance(Track_stats_thresholded_at_40th_percentile, 'Track length', 20, 5, 'Total', 'thresholded_at_40th_percentile') # 40th
+# histogram_nth_percentile_distance(Track_stats_thresholded_at_40th_percentile, 'Net distance', 20, 5, 'Net', 'thresholded_at_40th_percentile')
+# histogram_nth_percentile_distance(Track_stats_thresholded_at_60th_percentile, 'Track length', 20, 5, 'Total', 'thresholded_at_60th_percentile') # 60th
+# histogram_nth_percentile_distance(Track_stats_thresholded_at_60th_percentile, 'Net distance', 20, 5, 'Net', 'thresholded_at_60th_percentile')
+# histogram_nth_percentile_distance(Track_stats_thresholded_at_80th_percentile, 'Track length', 20, 5, 'Total', 'thresholded_at_80th_percentile') # 80th
+# histogram_nth_percentile_distance(Track_stats_thresholded_at_80th_percentile, 'Net distance', 20, 5, 'Net', 'thresholded_at_80th_percentile')
 
 def histogram_frame_speed(df):
-    frames = Frame_stats['POSITION_T'][1:-1]
-    mean_speed = Frame_stats['SPEED_MEAN'][1:-1]
-    median_speed = Frame_stats['SPEED_MEDIAN'][1:-1]
+    frames = Frame_stats['Time point'][1:-1]
+    mean_speed = Frame_stats['Speed mean'][1:-1]
+    median_speed = Frame_stats['Speed median'][1:-1]
 
     # Apply Savitzky-Golay filter for smoothing
     mean_speed_smooth = savgol_filter(mean_speed, window_length=11, polyorder=1)
@@ -470,9 +470,9 @@ def histogram_frame_speed(df):
 histogram_frame_speed(Frame_stats)
 
 def histogram_cell_speed(df):
-    # Sort the DataFrame by 'TRACK_LENGTH' in ascending order
-    df_sorted_a = Track_stats.sort_values(by='SPEED_MEAN', ascending=False)
-    df_sorted_b = Track_stats.sort_values(by='SPEED_MEDIAN', ascending=False)
+    # Sort the DataFrame by 'Track length' in ascending order
+    df_sorted_a = Track_stats.sort_values(by='Speed mean', ascending=False)
+    df_sorted_b = Track_stats.sort_values(by='Speed median', ascending=False)
 
     # Create new artificial IDs for sorting purposes (1 for lowest distance, N for highest)
     df_sorted_a["Artificial_ID"] = range(1, len(df_sorted_a) + 1)
@@ -480,12 +480,12 @@ def histogram_cell_speed(df):
 
     # defining variables
     cell_id_a = df_sorted_a["Artificial_ID"]
-    mean_speed_a = df_sorted_a['SPEED_MEAN']
-    median_speed_a = df_sorted_a['SPEED_MEDIAN']
+    mean_speed_a = df_sorted_a['Speed mean']
+    median_speed_a = df_sorted_a['Speed median']
 
     cell_id_b = df_sorted_b["Artificial_ID"]
-    mean_speed_b = df_sorted_b['SPEED_MEAN']
-    median_speed_b = df_sorted_b['SPEED_MEDIAN']
+    mean_speed_b = df_sorted_b['Speed mean']
+    median_speed_b = df_sorted_b['Speed median']
 
     # mean_speed_smooth = savgol_filter(mean_speed_a, window_length=11, polyorder=1)
     # median_speed_smooth = savgol_filter(median_speed_b, window_length=11, polyorder=1)
@@ -628,14 +628,14 @@ def migration_directions_with_kde_plus_mean(df, metric, subject, scaling_metric,
     # Save the plot
     plt.savefig(f'02c_Plot_directions_of_travel_with_mean_and_kernel_density_estimate_{subject}_{scaling_metric}{threshold}.png', dpi=500)
     # plt.show()
-migration_directions_with_kde_plus_mean(Track_stats, 'MEAN_DIRECTION_RAD', 'Cells', 'CONFINEMENT_RATIO', None, cmap_cells, None)
-migration_directions_with_kde_plus_mean(Track_stats, 'MEAN_DIRECTION_RAD', 'Cells', 'NET_DISTANCE', None, cmap_cells, None)
-# migration_directions_with_kde_plus_mean(Track_stats, 'MEAN_DIRECTION_DEG_weight_confinement', 'Cells (weighted)', 'CONFINEMENT_RATIO', None, cmap_cells, None)
-# migration_directions_with_kde_plus_mean(Track_stats, 'MEAN_DIRECTION_DEG_weight_confinement', 'Cells (weighted)', 'NET_DISTANCE', None, cmap_cells, None)
-# migration_directions_with_kde_plus_mean(Track_stats, 'MEAN_DIRECTION_RAD_weight_net_dis', 'Cells (weighted)', 'CONFINEMENT_RATIO', None, cmap_cells, None)
-# migration_directions_with_kde_plus_mean(Track_stats, 'MEAN_DIRECTION_DEG_weight_net_dis', 'Cells (weighted)', 'NET_DISTANCE', None, cmap_cells, None)
-migration_directions_with_kde_plus_mean(Frame_stats, 'MEAN_DIRECTION_RAD', 'Frames (weighted)', 'MEAN_DISTANCE', 'POSITION_T', cmap_frames, None)
-migration_directions_with_kde_plus_mean(Frame_stats, 'MEAN_DIRECTION_RAD_weight_mean_dis', 'Frames (weighted)', 'MEAN_DISTANCE', 'POSITION_T', cmap_frames, None) 
+migration_directions_with_kde_plus_mean(Track_stats, 'Direction mean (rad)', 'Cells', 'Confinement ratio', None, cmap_cells, None)
+migration_directions_with_kde_plus_mean(Track_stats, 'Direction mean (rad)', 'Cells', 'Net distance', None, cmap_cells, None)
+# migration_directions_with_kde_plus_mean(Track_stats, 'Direction mean (deg)_weight_confinement', 'Cells (weighted)', 'Confinement ratio', None, cmap_cells, None)
+# migration_directions_with_kde_plus_mean(Track_stats, 'Direction mean (deg)_weight_confinement', 'Cells (weighted)', 'Net distance', None, cmap_cells, None)
+# migration_directions_with_kde_plus_mean(Track_stats, 'Direction mean (rad)_weight_net_dis', 'Cells (weighted)', 'Confinement ratio', None, cmap_cells, None)
+# migration_directions_with_kde_plus_mean(Track_stats, 'Direction mean (deg)_weight_net_dis', 'Cells (weighted)', 'Net distance', None, cmap_cells, None)
+migration_directions_with_kde_plus_mean(Frame_stats, 'Direction mean (rad)', 'Frames (weighted)', 'MEAN_DISTANCE', 'Time point', cmap_frames, None)
+migration_directions_with_kde_plus_mean(Frame_stats, 'Direction mean (rad)_weight_mean_dis', 'Frames (weighted)', 'MEAN_DISTANCE', 'Time point', cmap_frames, None) 
 
 def donut(df, ax, outer_radius, inner_radius, kde_bw):
     # Extend the data circularly to account for wrap-around at 0 and 2*pi
@@ -714,12 +714,12 @@ def df_gaussian_donut(df, metric, subject, heatmap, weight, threshold):
         plt.savefig(f'04a_Plot_donut_heatmap-migration_direction_{subject}{weight}{threshold}.png', dpi=300)
 
     # plt.show()
-df_gaussian_donut(Track_stats, 'MEAN_DIRECTION_RAD', 'Cells', 'inferno', None, None)
-df_gaussian_donut(Track_stats, 'MEAN_DIRECTION_RAD', 'Cells', 'inferno', 'mean distance traveled', None)
-# df_gaussian_donut(Track_stats_thresholded_at_20th_percentile, 'MEAN_DIRECTION_RAD', 'Cells', 'inferno', 'thresholded_at_20th_percentile') # 20th
-# df_gaussian_donut(Track_stats_thresholded_at_40th_percentile, 'MEAN_DIRECTION_RAD', 'Cells', 'inferno', 'thresholded_at_40th_percentile') # 40th
-# df_gaussian_donut(Track_stats_thresholded_at_60th_percentile, 'MEAN_DIRECTION_RAD', 'Cells', 'inferno', 'thresholded_at_60th_percentile') # 60th
-# df_gaussian_donut(Track_stats_thresholded_at_80th_percentile, 'MEAN_DIRECTION_RAD', 'Cells', 'inferno', 'thresholded_at_80th_percentile') # 80th
-# df_gaussian_donut(Track_stats_thresholded_at_90th_percentile, 'MEAN_DIRECTION_RAD', 'Cells', 'inferno', 'thresholded_at_90th_percentile') # 90th
-df_gaussian_donut(Frame_stats, 'MEAN_DIRECTION_RAD', 'Frames', 'viridis', None, None)
-df_gaussian_donut(Frame_stats, 'MEAN_DIRECTION_RAD_weight_mean_dis', 'Frames', 'viridis', 'mean distance traveled', None)
+df_gaussian_donut(Track_stats, 'Direction mean (rad)', 'Cells', 'inferno', None, None)
+df_gaussian_donut(Track_stats, 'Direction mean (rad)', 'Cells', 'inferno', 'mean distance traveled', None)
+# df_gaussian_donut(Track_stats_thresholded_at_20th_percentile, 'Direction mean (rad)', 'Cells', 'inferno', 'thresholded_at_20th_percentile') # 20th
+# df_gaussian_donut(Track_stats_thresholded_at_40th_percentile, 'Direction mean (rad)', 'Cells', 'inferno', 'thresholded_at_40th_percentile') # 40th
+# df_gaussian_donut(Track_stats_thresholded_at_60th_percentile, 'Direction mean (rad)', 'Cells', 'inferno', 'thresholded_at_60th_percentile') # 60th
+# df_gaussian_donut(Track_stats_thresholded_at_80th_percentile, 'Direction mean (rad)', 'Cells', 'inferno', 'thresholded_at_80th_percentile') # 80th
+# df_gaussian_donut(Track_stats_thresholded_at_90th_percentile, 'Direction mean (rad)', 'Cells', 'inferno', 'thresholded_at_90th_percentile') # 90th
+df_gaussian_donut(Frame_stats, 'Direction mean (rad)', 'Frames', 'viridis', None, None)
+df_gaussian_donut(Frame_stats, 'Direction mean (rad)_weight_mean_dis', 'Frames', 'viridis', 'mean distance traveled', None)

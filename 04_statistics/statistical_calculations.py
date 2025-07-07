@@ -12,7 +12,7 @@ def calculate_traveled_distances_for_each_cell_per_frame(df):
         group = group.copy()
         # Compute the Euclidean distance between consecutive frames
         group['DISTANCE'] = np.sqrt(
-            (group['POSITION_X'].diff() ** 2) +
+            (group['X coordinate'].diff() ** 2) +
             (group['POSITION_Y'].diff() ** 2)
         )
         return group
@@ -35,7 +35,7 @@ def calculate_track_lengths_and_net_distances(df):
     track_lengths = df.groupby('TRACK_ID')['DISTANCE'].sum().reset_index()
 
     # Rename columns for clarity
-    track_lengths.columns = ['TRACK_ID', 'TRACK_LENGTH']
+    track_lengths.columns = ['TRACK_ID', 'Track length']
     
     # Get the start and end positions for each track, calculate the enclosed distance and group by 'TRACK_ID'
     def calculate_distance(start, end):
@@ -44,11 +44,11 @@ def calculate_track_lengths_and_net_distances(df):
     def net_distance_per_track(track_df):
         if track_df.empty:
             return np.nan
-        start_position = track_df.iloc[0][['POSITION_X', 'POSITION_Y']].values
-        end_position = track_df.iloc[-1][['POSITION_X', 'POSITION_Y']].values
+        start_position = track_df.iloc[0][['X coordinate', 'POSITION_Y']].values
+        end_position = track_df.iloc[-1][['X coordinate', 'POSITION_Y']].values
         return calculate_distance(start_position, end_position)
 
-    net_distances = df.groupby('TRACK_ID').apply(net_distance_per_track).reset_index(name='NET_DISTANCE')
+    net_distances = df.groupby('TRACK_ID').apply(net_distance_per_track).reset_index(name='Net distance')
 
     track_lengths_and_net_distances = pd.merge(track_lengths, net_distances, on='TRACK_ID', how='outer')
 
@@ -57,13 +57,13 @@ def calculate_track_lengths_and_net_distances(df):
 
 def calculate_confinement_ratio_for_each_cell(df):
     # Calculate the confinement ratio
-    df['CONFINEMENT_RATIO'] = df['NET_DISTANCE'] / df['TRACK_LENGTH']
-    Track_stats_df = df[['TRACK_ID','CONFINEMENT_RATIO']]
+    df['Confinement ratio'] = df['Net distance'] / df['Track length']
+    Track_stats_df = df[['TRACK_ID','Confinement ratio']]
     return pd.DataFrame(Track_stats_df)
 
 def calculate_distances_per_frame(df):
     min_distance_per_frame = df.groupby('POSITION_T')['DISTANCE'].min().reset_index()
-    min_distance_per_frame.rename(columns={'DISTANCE': 'min_DISTANCE'}, inplace=True)
+    min_distance_per_frame.rename(columns={'DISTANCE': 'Distance min'}, inplace=True)
     max_distance_per_frame = df.groupby('POSITION_T')['DISTANCE'].max().reset_index()
     max_distance_per_frame.rename(columns={'DISTANCE': 'max_DISTANCE'}, inplace=True)
     mean_distances_per_frame = df.groupby('POSITION_T')['DISTANCE'].mean().reset_index()
@@ -83,7 +83,7 @@ def calculate_direction_of_travel_for_each_cell_per_frame(df):
     directions = []
     for track_id in df['TRACK_ID'].unique():
         track_data = df[df['TRACK_ID'] == track_id]
-        dx = track_data['POSITION_X'].diff().iloc[1:]
+        dx = track_data['X coordinate'].diff().iloc[1:]
         dy = track_data['POSITION_Y'].diff().iloc[1:]
         rad = (np.arctan2(dy, dx))
         for i in range(len(rad)):
@@ -124,44 +124,44 @@ def calculate_absolute_directions_per_cell(df):
 
     return pd.DataFrame({
         'TRACK_ID': mean_direction_rad.index, 
-        'MEAN_DIRECTION_DEG': mean_direction_deg, 
-        'STD_DEVIATION_DEG': std_deviatin_deg, 
+        'Direction mean (deg)': mean_direction_deg, 
+        'Direction std (deg)': std_deviatin_deg, 
         'MEDIAN_DIRECTION_DEG': median_direction_deg, 
-        'MEAN_DIRECTION_RAD': mean_direction_rad, 
-        'STD_DEVIATION_RAD': std_deviation_rad, 
+        'Direction mean (rad)': mean_direction_rad, 
+        'Direction std (rad)': std_deviation_rad, 
         'MEADIAN_DIRECTION_RAD': median_direction_rad
         }).reset_index(drop=True)
 
 def calculate_weighted_directions_per_cell(df):
     df = df.dropna(subset=['TRACK_ID'])
 
-    confinement_ratio_weighted_mean_direction_rad = df['MEAN_DIRECTION_RAD'] * df['CONFINEMENT_RATIO'] / df['CONFINEMENT_RATIO']
+    confinement_ratio_weighted_mean_direction_rad = df['Direction mean (rad)'] * df['Confinement ratio'] / df['Confinement ratio']
     confinement_ratio_weighted_mean_direction_deg = np.degrees(confinement_ratio_weighted_mean_direction_rad) % 360
-    confinement_ratio_weighted_std_deviation_rad = df['STD_DEVIATION_RAD'] * df['CONFINEMENT_RATIO'] / df['CONFINEMENT_RATIO']	
+    confinement_ratio_weighted_std_deviation_rad = df['Direction std (rad)'] * df['Confinement ratio'] / df['Confinement ratio']	
     confinement_ratio_weighted_std_deviation_deg = np.degrees(confinement_ratio_weighted_std_deviation_rad) % 360
-    confinement_ratio_weighted_median_direction_rad = df['MEADIAN_DIRECTION_RAD'] * df['CONFINEMENT_RATIO'] / df['CONFINEMENT_RATIO']
+    confinement_ratio_weighted_median_direction_rad = df['MEADIAN_DIRECTION_RAD'] * df['Confinement ratio'] / df['Confinement ratio']
     confinement_ratio_weighted_median_direction_deg = np.degrees(confinement_ratio_weighted_median_direction_rad) % 360
 
-    net_distance_weighted_mean_direction_rad = df['MEAN_DIRECTION_RAD'] * df['NET_DISTANCE'] / df['NET_DISTANCE']
+    net_distance_weighted_mean_direction_rad = df['Direction mean (rad)'] * df['Net distance'] / df['Net distance']
     net_distance_weighted_mean_direction_deg = np.degrees(net_distance_weighted_mean_direction_rad) % 360
-    net_distance_weighted_std_deviation_rad = df['STD_DEVIATION_RAD'] * df['NET_DISTANCE'] / df['NET_DISTANCE']
+    net_distance_weighted_std_deviation_rad = df['Direction std (rad)'] * df['Net distance'] / df['Net distance']
     net_distance_weighted_std_deviation_deg = np.degrees(net_distance_weighted_std_deviation_rad) % 360
-    net_distance_weighted_median_direction_rad = df['MEADIAN_DIRECTION_RAD'] * df['NET_DISTANCE'] / df['NET_DISTANCE']
+    net_distance_weighted_median_direction_rad = df['MEADIAN_DIRECTION_RAD'] * df['Net distance'] / df['Net distance']
     net_distance_weighted_median_direction_deg = np.degrees(net_distance_weighted_median_direction_rad) % 360    
 
     return pd.DataFrame({
     'TRACK_ID': df.index, 
-    'MEAN_DIRECTION_DEG_weight_confinement': confinement_ratio_weighted_mean_direction_deg, 
-    'STD_DEVIATION_DEG_weight_confinement': confinement_ratio_weighted_std_deviation_deg, 
+    'Direction mean (deg)_weight_confinement': confinement_ratio_weighted_mean_direction_deg, 
+    'Direction std (deg)_weight_confinement': confinement_ratio_weighted_std_deviation_deg, 
     'MEDIAN_DIRECTION_DEG_weight_confinement': confinement_ratio_weighted_median_direction_deg, 
-    'MEAN_DIRECTION_RAD_weight_confinement': confinement_ratio_weighted_mean_direction_rad, 
-    'STD_DEVIATION_RAD_weight_confinement': confinement_ratio_weighted_std_deviation_rad, 
+    'Direction mean (rad)_weight_confinement': confinement_ratio_weighted_mean_direction_rad, 
+    'Direction std (rad)_weight_confinement': confinement_ratio_weighted_std_deviation_rad, 
     'MEADIAN_DIRECTION_RAD_weight_confinement': confinement_ratio_weighted_median_direction_rad,
-    'MEAN_DIRECTION_DEG_weight_net_dis': net_distance_weighted_mean_direction_deg, 
-    'STD_DEVIATION_DEG_weight_net_dis': net_distance_weighted_std_deviation_deg, 
+    'Direction mean (deg)_weight_net_dis': net_distance_weighted_mean_direction_deg, 
+    'Direction std (deg)_weight_net_dis': net_distance_weighted_std_deviation_deg, 
     'MEDIAN_DIRECTION_DEG_weight_net_dis': net_distance_weighted_median_direction_deg, 
-    'MEAN_DIRECTION_RAD_weight_net_dis': net_distance_weighted_mean_direction_rad, 
-    'STD_DEVIATION_RAD_weight_net_dis': net_distance_weighted_std_deviation_rad, 
+    'Direction mean (rad)_weight_net_dis': net_distance_weighted_mean_direction_rad, 
+    'Direction std (rad)_weight_net_dis': net_distance_weighted_std_deviation_rad, 
     'MEADIAN_DIRECTION_RAD_weight_net_dis': net_distance_weighted_median_direction_rad
     }).reset_index(drop=True)
 
@@ -175,11 +175,11 @@ def calculate_absolute_directions_per_frame(df):
     median_direction_deg = np.degrees(median_direction_rad) % 360
     return pd.DataFrame({
         'POSITION_T': mean_direction_rad.index, 
-        'MEAN_DIRECTION_DEG': mean_direction_deg, 
-        'STD_DEVIATION_DEG': std_deviatin_deg, 
+        'Direction mean (deg)': mean_direction_deg, 
+        'Direction std (deg)': std_deviatin_deg, 
         'MEDIAN_DIRECTION_DEG': median_direction_deg, 
-        'MEAN_DIRECTION_RAD': mean_direction_rad, 
-        'STD_DEVIATION_RAD': std_deviation_rad, 
+        'Direction mean (rad)': mean_direction_rad, 
+        'Direction std (rad)': std_deviation_rad, 
         'MEADIAN_DIRECTION_RAD': median_direction_rad
         }).reset_index(drop=True)
 
@@ -198,12 +198,12 @@ def calculate_weighted_directions_per_frame(df):
     
     result_df = pd.DataFrame({
         'POSITION_T': weighted_mean_direction_rad.index,
-        'MEAN_DIRECTION_DEG_weight_mean_dis': weighted_mean_direction_deg,
-        'STD_DEVIATION_DEG_weight_mean_dis': weighted_std_deviation_deg,
+        'Direction mean (deg)_weight_mean_dis': weighted_mean_direction_deg,
+        'Direction std (deg)_weight_mean_dis': weighted_std_deviation_deg,
         'MEDIAN_DIRECTION_DEG_weight_mean_dis': weighted_median_direction_deg,
-        'MEAN_DIRECTION_RAD_weight_mean_dis': weighted_mean_direction_rad,
-        'STD_DEVIATION_RAD_weight_mean_dis': weighted_std_deviation_rad,
-        'MEDIAN_DIRECTION_RAD_weight_mean_dis': weighted_median_direction_rad
+        'Direction mean (rad)_weight_mean_dis': weighted_mean_direction_rad,
+        'Direction std (rad)_weight_mean_dis': weighted_std_deviation_rad,
+        'Direction median (rad)_weight_mean_dis': weighted_median_direction_rad
     }).reset_index(drop=True)
 
     result_df['POSITION_T'] = result_df['POSITION_T'] + 1
@@ -219,15 +219,15 @@ def calculate_number_of_frames_per_cell(spot_stats_df):
 def calculate_speed(df, variable):
 
     min_speed_microns_min = df.groupby(variable)['DISTANCE'].min().reset_index()
-    min_speed_microns_min.rename(columns={'DISTANCE': 'SPEED_MIN'}, inplace=True)
+    min_speed_microns_min.rename(columns={'DISTANCE': 'Speed min'}, inplace=True)
     max_speed_microns_min = df.groupby(variable)['DISTANCE'].max().reset_index()
-    max_speed_microns_min.rename(columns={'DISTANCE': 'SPEED_MAX'}, inplace=True)
+    max_speed_microns_min.rename(columns={'DISTANCE': 'Speed max'}, inplace=True)
     mean_speed_microns_min = df.groupby(variable)['DISTANCE'].mean().reset_index()
-    mean_speed_microns_min.rename(columns={'DISTANCE': 'SPEED_MEAN'}, inplace=True)
+    mean_speed_microns_min.rename(columns={'DISTANCE': 'Speed mean'}, inplace=True)
     std_deviation_speed_microns_min = df.groupby(variable)['DISTANCE'].std().reset_index()
-    std_deviation_speed_microns_min.rename(columns={'DISTANCE': 'SPEED_STD_DEVIATION'}, inplace=True)
+    std_deviation_speed_microns_min.rename(columns={'DISTANCE': 'Speed std'}, inplace=True)
     median_speed_microns_min = df.groupby(variable)['DISTANCE'].median().reset_index()
-    median_speed_microns_min.rename(columns={'DISTANCE': 'SPEED_MEDIAN'}, inplace=True)
+    median_speed_microns_min.rename(columns={'DISTANCE': 'Speed median'}, inplace=True)
     merge = pd.merge(min_speed_microns_min, max_speed_microns_min, on=variable)
     merge = pd.merge(merge, mean_speed_microns_min, on=variable)
     merge = pd.merge(merge, std_deviation_speed_microns_min, on=variable)

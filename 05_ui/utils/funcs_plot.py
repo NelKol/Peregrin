@@ -391,25 +391,27 @@ def Visualize_tracks_plotly(
     if condition == 'all':
         filtered_spots = Spots_df.copy()
     elif replicate == 'all':
-        filtered_spots = Spots_df[Spots_df['CONDITION'] == condition]
+        filtered_spots = Spots_df[Spots_df['Condition'] == condition]
     else:
         filtered_spots = Spots_df[
-            (Spots_df['CONDITION'] == condition) &
-            (Spots_df['REPLICATE'] == replicate)
+            (Spots_df['Condition'] == condition) &
+            (Spots_df['Replicate'] == replicate)
         ]
 
-    # Sort once
-    filtered_spots = filtered_spots.sort_values(
-        by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T']
-    )
+    # Sort once, but only if all columns exist
+    sort_cols = ['Condition', 'Replicate', 'Track ID', 'Position T']
+    missing_cols = [col for col in sort_cols if col not in filtered_spots.columns]
+    if not missing_cols:
+        filtered_spots = filtered_spots.sort_values(by=sort_cols)
+    # else: skip sorting if columns are missing
 
     # Smoothing
     if smoothing_index > 1:
         def smooth(g):
-            g['POSITION_X'] = g['POSITION_X'].rolling(smoothing_index, min_periods=1).mean()
-            g['POSITION_Y'] = g['POSITION_Y'].rolling(smoothing_index, min_periods=1).mean()
+            g['X coordinate'] = g['X coordinate'].rolling(smoothing_index, min_periods=1).mean()
+            g['Y coordinate'] = g['Y coordinate'].rolling(smoothing_index, min_periods=1).mean()
             return g
-        filtered_spots = filtered_spots.groupby(['CONDITION', 'REPLICATE', 'TRACK_ID'], group_keys=False).apply(smooth)
+        filtered_spots = filtered_spots.groupby(['Condition', 'Replicate', 'Track ID'], group_keys=False).apply(smooth)
 
     # Color mapping
     np.random.seed(42)
@@ -419,28 +421,28 @@ def Visualize_tracks_plotly(
             'random greys': [_generate_random_grey() for _ in range(len(Tracks_df))],
             'only-one-color': [only_one_color for _ in range(len(Tracks_df))]
         }[c_mode]
-        Tracks_df['COLOR'] = color_vals
-        color_map = Tracks_df.set_index('TRACK_ID')['COLOR'].to_dict()
-        filtered_spots['COLOR'] = filtered_spots['TRACK_ID'].map(color_map)
+        Tracks_df['Color'] = color_vals
+        color_map = Tracks_df.set_index('Track ID')['Color'].to_dict()
+        filtered_spots['Color'] = filtered_spots['Track ID'].map(color_map)
     elif c_mode in ['differentiate conditions', 'differentiate replicates']:
-        val_column = 'CONDITION' if c_mode == 'differentiate conditions' else 'REPLICATE'
+        val_column = 'Condition' if c_mode == 'differentiate conditions' else 'Replicate'
         cmap = plt.get_cmap('Set1')
         unique_vals = filtered_spots[val_column].unique()
         val_to_color = {
             val: mcolors.to_hex(cmap(i % cmap.N))
             for i, val in enumerate(sorted(unique_vals))
         }
-        filtered_spots['COLOR'] = filtered_spots[val_column].map(val_to_color)
+        filtered_spots['Color'] = filtered_spots[val_column].map(val_to_color)
     else:
         colormap = _get_cmap(c_mode)
         metric_min = filtered_spots[lut_scaling_metric].min()
         metric_max = filtered_spots[lut_scaling_metric].max()
         norm = plt.Normalize(metric_min, metric_max)
-        filtered_spots['COLOR'] = filtered_spots[lut_scaling_metric].map(lambda v: mcolors.to_hex(colormap(norm(v))))
+        filtered_spots['Color'] = filtered_spots[lut_scaling_metric].map(lambda v: mcolors.to_hex(colormap(norm(v))))
 
     # Tick & layout
-    x_min, x_max = filtered_spots['POSITION_X'].min(), filtered_spots['POSITION_X'].max()
-    y_min, y_max = filtered_spots['POSITION_Y'].min(), filtered_spots['POSITION_Y'].max()
+    x_min, x_max = filtered_spots['X coordinate'].min(), filtered_spots['X coordinate'].max()
+    y_min, y_max = filtered_spots['Y coordinate'].min(), filtered_spots['Y coordinate'].max()
     x_ticks = np.arange(x_min, x_max, 200)
     y_ticks = np.arange(y_min, y_max, 200)
     grid_color = 'gainsboro' if background == 'light' else 'silver'
@@ -448,21 +450,21 @@ def Visualize_tracks_plotly(
 
     # Group and render
     fig = go.Figure()
-    for (cond, repl, track), group_df in filtered_spots.groupby(['CONDITION', 'REPLICATE', 'TRACK_ID']):
-        color = group_df['COLOR'].iloc[0]
+    for (cond, repl, track), group_df in filtered_spots.groupby(['Condition', 'Replicate', 'Track ID']):
+        color = group_df['Color'].iloc[0]
         hover_dict = {
             metric_dictionary[m]: Tracks_df.loc[
-                (Tracks_df['CONDITION'] == cond) &
-                (Tracks_df['REPLICATE'] == repl) &
-                (Tracks_df['TRACK_ID'] == track)
+                (Tracks_df['Condition'] == cond) &
+                (Tracks_df['Replicate'] == repl) &
+                (Tracks_df['Track ID'] == track)
             ][m].values[0]
             for m in let_me_look_at_these if m in Tracks_df.columns
         }
         hover_text = "<br>".join(f"{k}: {v}" for k, v in hover_dict.items())
 
         fig.add_trace(go.Scatter(
-            x=group_df['POSITION_X'],
-            y=group_df['POSITION_Y'],
+            x=group_df['X coordinate'],
+            y=group_df['Y coordinate'],
             mode='lines',
             line=dict(color=color, width=lw),
             hoverinfo='text',
@@ -473,8 +475,8 @@ def Visualize_tracks_plotly(
         if end_track_markers:
             if I_just_wanna_be_normal:
                 fig.add_trace(go.Scatter(
-                    x=[group_df['POSITION_X'].iloc[-1]],
-                    y=[group_df['POSITION_Y'].iloc[-1]],
+                    x=[group_df['X coordinate'].iloc[-1]],
+                    y=[group_df['Y coordinate'].iloc[-1]],
                     mode='markers',
                     marker=dict(symbol=markers, size=marker_size, color=color),
                     showlegend=False,
@@ -485,11 +487,11 @@ def Visualize_tracks_plotly(
                     symbol = _cell
                 elif markers in ['scaled', 'trains']:
                     track_len = Tracks_df.loc[
-                        (Tracks_df['CONDITION'] == cond) &
-                        (Tracks_df['REPLICATE'] == repl) &
-                        (Tracks_df['TRACK_ID'] == track)
-                    ]['TRACK_LENGTH'].values[0]
-                    min_len, max_len = Tracks_df['TRACK_LENGTH'].min(), Tracks_df['TRACK_LENGTH'].max()
+                        (Tracks_df['Condition'] == cond) &
+                        (Tracks_df['Replicate'] == repl) &
+                        (Tracks_df['Track ID'] == track)
+                    ]['Track length'].values[0]
+                    min_len, max_len = Tracks_df['Track length'].min(), Tracks_df['Track length'].max()
                     percentile = 100 * (track_len - min_len) / (max_len - min_len)
                     symbol = _assign_marker(percentile, _get_markers(markers))
                 elif markers in ['random','farm','safari','insects','birds','forest','aquarium']:
@@ -498,8 +500,8 @@ def Visualize_tracks_plotly(
                     symbol = ''
 
                 fig.add_trace(go.Scatter(
-                    x=[group_df['POSITION_X'].iloc[-1]],
-                    y=[group_df['POSITION_Y'].iloc[-1]],
+                    x=[group_df['X coordinate'].iloc[-1]],
+                    y=[group_df['Y coordinate'].iloc[-1]],
                     mode='text',
                     text=symbol,
                     textposition='middle center',
@@ -550,12 +552,16 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
     Tracks_df.reset_index(drop=False, inplace=True)
 
 
-    if condition == 'all':
-        Spots_df = Spots_df.sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
-    elif condition != 'all' and replicate == 'all':
-        Spots_df = Spots_df[Spots_df['CONDITION'] == condition].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
-    elif condition != 'all' and replicate != 'all':
-        Spots_df = Spots_df[(Spots_df['CONDITION'] == condition) & (Spots_df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
+    sort_cols = ['Condition', 'Replicate', 'Track ID', 'Time point']
+    missing_cols = [col for col in sort_cols if col not in Spots_df.columns]
+    if not missing_cols:
+        if condition == 'all':
+            Spots_df = Spots_df.sort_values(by=sort_cols)
+        elif condition != 'all' and replicate == 'all':
+            Spots_df = Spots_df[Spots_df['Condition'] == condition].sort_values(by=sort_cols)
+        elif condition != 'all' and replicate != 'all':
+            Spots_df = Spots_df[(Spots_df['Condition'] == condition) & (Spots_df['Replicate'] == replicate)].sort_values(by=sort_cols)
+    # else: skip sorting if columns are missing
 
 
     if background =='light':
@@ -589,18 +595,18 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
         else:
             track_colors = [only_one_color for _ in range(len(Tracks_df))]
         
-        color_map_direct = dict(zip(Tracks_df['TRACK_ID'], track_colors))
-        Tracks_df['COLOR'] = Tracks_df['TRACK_ID'].map(color_map_direct)
+        color_map_direct = dict(zip(Tracks_df['Track ID'], track_colors))
+        Tracks_df['Color'] = Tracks_df['Track ID'].map(color_map_direct)
 
     elif c_mode in ['differentiate conditions', 'differentiate replicates']:
         if c_mode == 'differentiate conditions':
             colormap = plt.get_cmap('Set1')  # Use qualitative colormap
-            unique_vals = Spots_df['CONDITION'].unique()
-            val_column = 'CONDITION'
+            unique_vals = Spots_df['Condition'].unique()
+            val_column = 'Condition'
         else:
             colormap = plt.get_cmap('Set1')
-            unique_vals = Spots_df['REPLICATE'].unique()
-            val_column = 'REPLICATE'
+            unique_vals = Spots_df['Replicate'].unique()
+            val_column = 'Replicate'
 
         # Assign colors to each unique category
         val_to_color = {
@@ -608,7 +614,7 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
             for i, val in enumerate(sorted(unique_vals))
         }
         # Map those colors to the tracks
-        Tracks_df['COLOR'] = Tracks_df[val_column].map(val_to_color)
+        Tracks_df['Color'] = Tracks_df[val_column].map(val_to_color)
 
     else:
         colormap = _get_cmap(c_mode)
@@ -618,16 +624,16 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
 
     fig, ax = plt.subplots(figsize=(13, 10))
 
-    x_min = Spots_df['POSITION_X'].min()
-    x_max = Spots_df['POSITION_X'].max()
-    y_min = Spots_df['POSITION_Y'].min()
-    y_max = Spots_df['POSITION_Y'].max()
+    x_min = Spots_df['X coordinate'].min()
+    x_max = Spots_df['X coordinate'].max()
+    y_min = Spots_df['Y coordinate'].min()
+    y_max = Spots_df['Y coordinate'].max()
 
     ax.set_aspect('1', adjustable='box')
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
-    ax.set_xlabel('Position X [microns]')
-    ax.set_ylabel('Position Y [microns]')
+    ax.set_xlabel('X coordinate [microns]')
+    ax.set_ylabel('Y coordinate [microns]')
     ax.set_title('Track Visualization', fontsize=12)
     ax.set_facecolor(face_color)
     ax.grid(True, which='both', axis='both', color=grid_color, linestyle=grid_lines, linewidth=1, alpha=grid_alpha)
@@ -649,8 +655,8 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
     ax.tick_params(axis='both', which='major', labelsize=8)
 
 
-    Spots_grouped = Spots_df.groupby(['CONDITION', 'REPLICATE', 'TRACK_ID'])
-    Tracks_df.set_index(['CONDITION', 'REPLICATE', 'TRACK_ID'], inplace=True)
+    Spots_grouped = Spots_df.groupby(['Condition', 'Replicate', 'Track ID'])
+    Tracks_df.set_index(['Condition', 'Replicate', 'Track ID'], inplace=True)
 
     fig = go.Figure()
 
@@ -662,50 +668,50 @@ def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, c
         """
 
         track_row = Tracks_df.loc[(cond, repl, track)]
-        track_row['CONDITION'] = cond
-        track_row['REPLICATE'] = repl
-        track_row['TRACK_ID'] = track
+        track_row['Condition'] = cond
+        track_row['Replicate'] = repl
+        track_row['Track ID'] = track
 
 
         if colormap is not None and c_mode in ['differentiate conditions', 'differentiate replicates']:
-            key = track_row[val_column]  # val_column is either 'CONDITION' or 'REPLICATE'
+            key = track_row[val_column]  # val_column is either 'Condition' or 'Replicate'
             color = colormap(unique_vals.tolist().index(key) % colormap.N)  # consistent mapping
-            group_df['COLOR'] = mcolors.to_hex(color)
+            group_df['Color'] = mcolors.to_hex(color)
             
         elif colormap is not None:
             # This is for metric-based color mapping (quantitative)
             norm = plt.Normalize(metric_min, metric_max)
             color = colormap(norm(track_row[lut_scaling_metric]))
-            group_df['COLOR'] = mcolors.to_hex(color)
-            
+            group_df['Color'] = mcolors.to_hex(color)
+
         elif c_mode in ['random colors', 'random greys']:
-            group_df['COLOR'] = track_row['COLOR']
+            group_df['Color'] = track_row['Color']
 
         elif c_mode == 'only-one-color':
-            group_df['COLOR'] = only_one_color
+            group_df['Color'] = only_one_color
 
 
         if (type(smoothing_index) is int or type(smoothing_index) is float) and smoothing_index > 1:
-            group_df['POSITION_X'] = group_df['POSITION_X'].rolling(window=smoothing_index, min_periods=1).mean()
-            group_df['POSITION_Y'] = group_df['POSITION_Y'].rolling(window=smoothing_index, min_periods=1).mean()
+            group_df['X coordinate'] = group_df['X coordinate'].rolling(window=smoothing_index, min_periods=1).mean()
+            group_df['Y coordinate'] = group_df['Y coordinate'].rolling(window=smoothing_index, min_periods=1).mean()
         else:
-            group_df['POSITION_X'] = group_df['POSITION_X']
-            group_df['POSITION_Y'] = group_df['POSITION_Y']
+            group_df['X coordinate'] = group_df['X coordinate']
+            group_df['Y coordinate'] = group_df['Y coordinate']
 
-        ax.plot(group_df['POSITION_X'], group_df['POSITION_Y'], color=group_df['COLOR'].iloc[0], linewidth=lw)
+        ax.plot(group_df['X coordinate'], group_df['Y coordinate'], color=group_df['Color'].iloc[0], linewidth=lw)
 
 
-        if len(group_df['POSITION_X']) > 1 & arrows:
+        if len(group_df['X coordinate']) > 1 & arrows:
             # Use trigonometry to calculate the direction (dx, dy) from the angle
-            dx = np.cos(track_row['MEAN_DIRECTION_RAD'])  # Change in x based on angle
-            dy = np.sin(track_row['MEAN_DIRECTION_RAD'])  # Change in y based on angle
-            
+            dx = np.cos(track_row['Direction mean (rad)'])  # Change in x based on angle
+            dy = np.sin(track_row['Direction mean (rad)'])  # Change in y based on angle
+
             # Create an arrow to indicate direction
             arrow = FancyArrowPatch(
-                posA=(group_df['POSITION_X'].iloc[-2], group_df['POSITION_Y'].iloc[-2]),  # Start position (second-to-last point)
-                posB=(group_df['POSITION_X'].iloc[-2] + dx, group_df['POSITION_Y'].iloc[-2] + dy),  # End position based on direction
+                posA=(group_df['X coordinate'].iloc[-2], group_df['Y coordinate'].iloc[-2]),  # Start position (second-to-last point)
+                posB=(group_df['X coordinate'].iloc[-2] + dx, group_df['Y coordinate'].iloc[-2] + dy),  # End position based on direction
                 arrowstyle='-|>',  # Style of the arrow (you can adjust the style as needed)
-                color=group_df['COLOR'].iloc[0],  # Set the color of the arrow
+                color=group_df['Color'].iloc[0],  # Set the color of the arrow
                 mutation_scale=arrowsize,  # Scale the size of the arrow head (adjust this based on the plot scale)
                 linewidth=1.2,  # Line width for the arrow
                 zorder=30  # Ensure the arrow is drawn on top of the line
@@ -748,12 +754,16 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
     Tracks_df.reset_index(drop=False, inplace=True)
 
 
-    if condition == 'all':
-        Spots_df = Spots_df.sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
-    elif condition != 'all' and replicate == 'all':
-        Spots_df = Spots_df[Spots_df['CONDITION'] == condition].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
-    elif condition != 'all' and replicate != 'all':
-        Spots_df = Spots_df[(Spots_df['CONDITION'] == condition) & (Spots_df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
+    sort_cols = ['Condition', 'Replicate', 'Track ID', 'Time point']
+    missing_cols = [col for col in sort_cols if col not in Spots_df.columns]
+    if not missing_cols:
+        if condition == 'all':
+            Spots_df = Spots_df.sort_values(by=sort_cols)
+        elif condition != 'all' and replicate == 'all':
+            Spots_df = Spots_df[Spots_df['Condition'] == condition].sort_values(by=sort_cols)
+        elif condition != 'all' and replicate != 'all':
+            Spots_df = Spots_df[(Spots_df['Condition'] == condition) & (Spots_df['Replicate'] == replicate)].sort_values(by=sort_cols)
+    # else: skip sorting if columns are missing
 
     np.random.seed(42)  # For reproducibility
 
@@ -767,18 +777,18 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
         else:
             track_colors = [only_one_color for _ in range(len(Tracks_df))]
         
-        color_map_direct = dict(zip(Tracks_df['TRACK_ID'], track_colors))
-        Tracks_df['COLOR'] = Tracks_df['TRACK_ID'].map(color_map_direct)
+        color_map_direct = dict(zip(Tracks_df['Track ID'], track_colors))
+        Tracks_df['Color'] = Tracks_df['Track ID'].map(color_map_direct)
 
     elif c_mode in ['differentiate conditions', 'differentiate replicates']:
         if c_mode == 'differentiate conditions':
             colormap = plt.get_cmap('Set1')  # Use qualitative colormap
-            unique_vals = Spots_df['CONDITION'].unique()
-            val_column = 'CONDITION'
+            unique_vals = Spots_df['Condition'].unique()
+            val_column = 'Condition'
         else:
             colormap = plt.get_cmap('Set1')
-            unique_vals = Spots_df['REPLICATE'].unique()
-            val_column = 'REPLICATE'
+            unique_vals = Spots_df['Replicate'].unique()
+            val_column = 'Replicate'
 
         # Assign colors to each unique category
         val_to_color = {
@@ -786,18 +796,18 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
             for i, val in enumerate(sorted(unique_vals))
         }
         # Map those colors to the tracks
-        Tracks_df['COLOR'] = Tracks_df[val_column].map(val_to_color)
+        Tracks_df['Color'] = Tracks_df[val_column].map(val_to_color)
 
     else:
         colormap = _get_cmap(c_mode)
         metric_min = Spots_df[lut_scaling_metric].min()
         metric_max = Spots_df[lut_scaling_metric].max()
 
-    min_track_length = Tracks_df['TRACK_LENGTH'].min()
-    max_track_length = Tracks_df['TRACK_LENGTH'].max()
+    min_track_length = Tracks_df['Track length'].min()
+    max_track_length = Tracks_df['Track length'].max()
 
-    Spots_grouped = Spots_df.groupby(['CONDITION', 'REPLICATE', 'TRACK_ID'])
-    Tracks_df.set_index(['CONDITION', 'REPLICATE', 'TRACK_ID'], inplace=True)
+    Spots_grouped = Spots_df.groupby(['Condition', 'Replicate', 'Track ID'])
+    Tracks_df.set_index(['Condition', 'Replicate', 'Track ID'], inplace=True)
 
     processed_groups = []
 
@@ -805,15 +815,15 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
     for (cond, repl, track), group_df in Spots_grouped:
         # Apply smoothing if required
         if isinstance(smoothing_index, (int, float)) and smoothing_index > 1:
-            group_df['POSITION_X'] = group_df['POSITION_X'].rolling(window=int(smoothing_index), min_periods=1).mean()
-            group_df['POSITION_Y'] = group_df['POSITION_Y'].rolling(window=int(smoothing_index), min_periods=1).mean()
+            group_df['X coordinate'] = group_df['X coordinate'].rolling(window=int(smoothing_index), min_periods=1).mean()
+            group_df['Y coordinate'] = group_df['Y coordinate'].rolling(window=int(smoothing_index), min_periods=1).mean()
 
         # Normalize positions to start at (0, 0)
-        start_x = group_df['POSITION_X'].iloc[0]
-        start_y = group_df['POSITION_Y'].iloc[0]
+        start_x = group_df['X coordinate'].iloc[0]
+        start_y = group_df['Y coordinate'].iloc[0]
 
-        group_df['POSITION_X'] -= start_x
-        group_df['POSITION_Y'] -= start_y
+        group_df['X coordinate'] -= start_x
+        group_df['Y coordinate'] -= start_y
 
         processed_groups.append(group_df)
 
@@ -822,8 +832,8 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
 
 
     # Convert to polar coordinates (theta in radians & degrees)
-    Spots_df['r'] = np.sqrt(Spots_df['POSITION_X']**2 + Spots_df['POSITION_Y']**2)
-    Spots_df['theta'] = np.arctan2(Spots_df['POSITION_Y'], Spots_df['POSITION_X'])
+    Spots_df['r'] = np.sqrt(Spots_df['X coordinate']**2 + Spots_df['Y coordinate']**2)
+    Spots_df['theta'] = np.arctan2(Spots_df['Y coordinate'], Spots_df['X coordinate'])
     Spots_df['theta_deg'] = np.degrees(Spots_df['theta'])
     
     # Determine maximum radius for layout
@@ -834,32 +844,32 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
     # Create Plotly polar figure
     fig = go.Figure()
 
-    Spots_grouped = Spots_df.groupby(['CONDITION', 'REPLICATE', 'TRACK_ID'])
+    Spots_grouped = Spots_df.groupby(['Condition', 'Replicate', 'Track ID'])
 
     # Loop over tracks and add a polar trace for each
     for (cond, repl, track), group_df in Spots_grouped:
 
         track_row = Tracks_df.loc[(cond, repl, track)]
-        track_row['CONDITION'] = cond
-        track_row['REPLICATE'] = repl
-        track_row['TRACK_ID'] = track
+        track_row['Condition'] = cond
+        track_row['Replicate'] = repl
+        track_row['Track ID'] = track
 
         if colormap is not None and c_mode in ['differentiate conditions', 'differentiate replicates']:
-            key = track_row[val_column]  # val_column is either 'CONDITION' or 'REPLICATE'
+            key = track_row[val_column]  # val_column is either 'Condition' or 'Replicate'
             color = colormap(unique_vals.tolist().index(key) % colormap.N)  # consistent mapping
-            group_df['COLOR'] = mcolors.to_hex(color)
+            group_df['Color'] = mcolors.to_hex(color)
             
         elif colormap is not None:
             # This is for metric-based color mapping (quantitative)
             norm = plt.Normalize(metric_min, metric_max)
             color = colormap(norm(track_row[lut_scaling_metric]))
-            group_df['COLOR'] = mcolors.to_hex(color)
+            group_df['Color'] = mcolors.to_hex(color)
             
         elif c_mode in ['random colors', 'random greys']:
-            group_df['COLOR'] = track_row['COLOR']
+            group_df['Color'] = track_row['Color']
 
         elif c_mode == 'only-one-color':
-            group_df['COLOR'] = only_one_color
+            group_df['Color'] = only_one_color
 
 
         # Create hover text if extra metrics are provided
@@ -875,7 +885,7 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
             r=group_df['r'],
             theta=group_df['theta_deg'],
             mode='lines',
-            line=dict(color=group_df['COLOR'].iloc[0], width=lw),
+            line=dict(color=group_df['Color'].iloc[0], width=lw),
             name=f"Track {track}",
             hovertemplate=hover_text + "<extra></extra>"
         ))
@@ -890,7 +900,7 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
                     marker=dict(
                         symbol=markers,
                         size=marker_size,
-                        color=group_df['COLOR'].iloc[0],
+                        color=group_df['Color'].iloc[0],
                     ),
                     showlegend=False,
                     hoverinfo='skip'
@@ -900,7 +910,7 @@ def Visualize_normalized_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataF
                     marker = _cell  # Ensure you define _cell if needed
                 elif markers in ['scaled', 'trains']:
                     markers_ = _get_markers(markers)
-                    percentile_value = ((track_row['TRACK_LENGTH'] - min_track_length) / (max_track_length - min_track_length)) * 100
+                    percentile_value = ((track_row['Track length'] - min_track_length) / (max_track_length - min_track_length)) * 100
                     marker = _assign_marker(percentile_value, markers_)
                 elif markers in ['random','farm','safari','insects','birds','forest','aquarium']:
                     markers_ = _get_markers(markers)
@@ -980,12 +990,16 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
     Tracks_df.reset_index(drop=False, inplace=True)
 
 
-    if condition == 'all':
-        Spots_df = Spots_df.sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
-    elif condition != 'all' and replicate == 'all':
-        Spots_df = Spots_df[Spots_df['CONDITION'] == condition].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
-    elif condition != 'all' and replicate != 'all':
-        Spots_df = Spots_df[(Spots_df['CONDITION'] == condition) & (Spots_df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
+    sort_cols = ['Condition', 'Replicate', 'Track ID', 'Time point']
+    missing_cols = [col for col in sort_cols if col not in Spots_df.columns]
+    if not missing_cols:
+        if condition == 'all':
+            Spots_df = Spots_df.sort_values(by=sort_cols)
+        elif condition != 'all' and replicate == 'all':
+            Spots_df = Spots_df[Spots_df['Condition'] == condition].sort_values(by=sort_cols)
+        elif condition != 'all' and replicate != 'all':
+            Spots_df = Spots_df[(Spots_df['Condition'] == condition) & (Spots_df['Replicate'] == replicate)].sort_values(by=sort_cols)
+    # else: skip sorting if columns are missing
     
     np.random.seed(42)  # For reproducibility
     
@@ -999,18 +1013,18 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
         else:
             track_colors = [only_one_color for _ in range(len(Tracks_df))]
         
-        color_map_direct = dict(zip(Tracks_df['TRACK_ID'], track_colors))
-        Tracks_df['COLOR'] = Tracks_df['TRACK_ID'].map(color_map_direct)
+        color_map_direct = dict(zip(Tracks_df['Track ID'], track_colors))
+        Tracks_df['Color'] = Tracks_df['Track ID'].map(color_map_direct)
 
     elif c_mode in ['differentiate conditions', 'differentiate replicates']:
         if c_mode == 'differentiate conditions':
             colormap = plt.get_cmap('Set1')  # Use qualitative colormap
-            unique_vals = Spots_df['CONDITION'].unique()
-            val_column = 'CONDITION'
+            unique_vals = Spots_df['Condition'].unique()
+            val_column = 'Condition'
         else:
             colormap = plt.get_cmap('Set1')
-            unique_vals = Spots_df['REPLICATE'].unique()
-            val_column = 'REPLICATE'
+            unique_vals = Spots_df['Replicate'].unique()
+            val_column = 'Replicate'
 
         # Assign colors to each unique category
         val_to_color = {
@@ -1018,7 +1032,7 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
             for i, val in enumerate(sorted(unique_vals))
         }
         # Map those colors to the tracks
-        Tracks_df['COLOR'] = Tracks_df[val_column].map(val_to_color)
+        Tracks_df['Color'] = Tracks_df[val_column].map(val_to_color)
 
     else:
         colormap = _get_cmap(c_mode)
@@ -1026,8 +1040,8 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
         metric_max = Spots_df[lut_scaling_metric].max()
 
 
-    Spots_grouped = Spots_df.groupby(['CONDITION', 'REPLICATE', 'TRACK_ID'])
-    Tracks_df.set_index(['CONDITION', 'REPLICATE', 'TRACK_ID'], inplace=True)
+    Spots_grouped = Spots_df.groupby(['Condition', 'Replicate', 'Track ID'])
+    Tracks_df.set_index(['Condition', 'Replicate', 'Track ID'], inplace=True)
     
     processed_groups = []
 
@@ -1035,15 +1049,15 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
     for (cond, repl, track), group_df in Spots_grouped:
         # Apply smoothing if required
         if isinstance(smoothing_index, (int, float)) and smoothing_index > 1:
-            group_df['POSITION_X'] = group_df['POSITION_X'].rolling(window=int(smoothing_index), min_periods=1).mean()
-            group_df['POSITION_Y'] = group_df['POSITION_Y'].rolling(window=int(smoothing_index), min_periods=1).mean()
+            group_df['X coordinate'] = group_df['X coordinate'].rolling(window=int(smoothing_index), min_periods=1).mean()
+            group_df['Y coordinate'] = group_df['Y coordinate'].rolling(window=int(smoothing_index), min_periods=1).mean()
 
         # Normalize positions to start at (0, 0)
-        start_x = group_df['POSITION_X'].iloc[0]
-        start_y = group_df['POSITION_Y'].iloc[0]
+        start_x = group_df['X coordinate'].iloc[0]
+        start_y = group_df['Y coordinate'].iloc[0]
 
-        group_df['POSITION_X'] -= start_x
-        group_df['POSITION_Y'] -= start_y
+        group_df['X coordinate'] -= start_x
+        group_df['Y coordinate'] -= start_y
 
         processed_groups.append(group_df)
 
@@ -1051,10 +1065,10 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
     Spots_df = pd.concat(processed_groups)
 
     # Convert to polar coordinates.
-    Spots_df['r'] = np.sqrt(Spots_df['POSITION_X']**2 + Spots_df['POSITION_Y']**2)
-    Spots_df['theta'] = np.arctan2(Spots_df['POSITION_Y'], Spots_df['POSITION_X'])
+    Spots_df['r'] = np.sqrt(Spots_df['X coordinate']**2 + Spots_df['Y coordinate']**2)
+    Spots_df['theta'] = np.arctan2(Spots_df['Y coordinate'], Spots_df['X coordinate'])
 
-    Spots_grouped = Spots_df.groupby(['CONDITION', 'REPLICATE', 'TRACK_ID'])
+    Spots_grouped = Spots_df.groupby(['Condition', 'Replicate', 'Track ID'])
     
     fig, ax = plt.subplots(figsize=(12.5, 9.5), subplot_kw={'projection': 'polar'})
     y_max = Spots_df['r'].max() * 1.1
@@ -1075,30 +1089,30 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
     for (cond, repl, track), group_df in Spots_grouped:
 
         track_row = Tracks_df.loc[(cond, repl, track)]
-        track_row['CONDITION'] = cond
-        track_row['REPLICATE'] = repl
-        track_row['TRACK_ID'] = track
+        track_row['Condition'] = cond
+        track_row['Replicate'] = repl
+        track_row['Track ID'] = track
 
         if colormap is not None and c_mode in ['differentiate conditions', 'differentiate replicates']:
-            key = track_row[val_column]  # val_column is either 'CONDITION' or 'REPLICATE'
+            key = track_row[val_column]  # val_column is either 'Condition' or 'Replicate'
             color = colormap(unique_vals.tolist().index(key) % colormap.N)  # consistent mapping
-            group_df['COLOR'] = mcolors.to_hex(color)
+            group_df['Color'] = mcolors.to_hex(color)
             
         elif colormap is not None:
             # This is for metric-based color mapping (quantitative)
             norm = plt.Normalize(metric_min, metric_max)
             color = colormap(norm(track_row[lut_scaling_metric]))
-            group_df['COLOR'] = mcolors.to_hex(color)
+            group_df['Color'] = mcolors.to_hex(color)
             
         elif c_mode in ['random colors', 'random greys']:
-            group_df['COLOR'] = track_row['COLOR']
+            group_df['Color'] = track_row['Color']
 
         elif c_mode == 'only-one-color':
-            group_df['COLOR'] = only_one_color
+            group_df['Color'] = only_one_color
 
 
         # Plot the track using computed color.
-        ax.plot(group_df['theta'], group_df['r'], lw=lw, color=group_df['COLOR'].iloc[0])
+        ax.plot(group_df['theta'], group_df['r'], lw=lw, color=group_df['Color'].iloc[0])
 
         # If arrows flag is True, add an arrow at the end of the track.
         if arrows:
@@ -1108,7 +1122,7 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
             theta_end = last_point['theta']
 
             # Get the mean direction from the track metadata (in radians)
-            mean_dir = track_row['MEAN_DIRECTION_RAD']
+            mean_dir = track_row['Direction mean (rad)']
 
             # Convert last point from polar to Cartesian coordinates.
             x_end = r_end * np.cos(theta_end)
@@ -1127,7 +1141,7 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
                 xy=(theta_tip, r_tip),
                 xytext=(theta_end, r_end),
                 arrowprops=dict(arrowstyle='-|>', 
-                color=group_df['COLOR'].iloc[0], 
+                color=group_df['Color'].iloc[0], 
                 lw=lw, 
                 mutation_scale=arrowsize),
                 annotation_clip=False
@@ -1152,9 +1166,9 @@ def Visualize_normalized_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.D
 
 def Lut_map(Tracks_df:pd.DataFrame, c_mode:str, lut_scaling_metric:str, metrics_dict:dict):
 
-    lut_norm_df = Tracks_df[['TRACK_ID', lut_scaling_metric]].drop_duplicates()
+    lut_norm_df = Tracks_df[['Track ID', lut_scaling_metric]].drop_duplicates()
 
-    # Normalize the NET_DISTANCE to a 0-1 range
+    # Normalize the Net distance to a 0-1 range
     lut_min = lut_norm_df[lut_scaling_metric].min()
     lut_max = lut_norm_df[lut_scaling_metric].max()
     norm = plt.Normalize(vmin=lut_min, vmax=lut_max)
@@ -1203,28 +1217,28 @@ def Scatter_poly_fit_chart_altair(Time_df:pd.DataFrame, condition:None, replicat
         except ValueError or TypeError:
             pass
 
-    Time_df = Time_df.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
+    Time_df = Time_df.sort_values(by=['Condition', 'Replicate', 'Time point'])
 
     if condition == 'all':
-        Time_df = Time_df.groupby(['CONDITION', 'POSITION_T']).agg({metric: 'mean'}).reset_index()
-        element = 'CONDITION'
-        shorthand = 'CONDITION:N'
+        Time_df = Time_df.groupby(['Condition', 'Time point']).agg({metric: 'mean'}).reset_index()
+        element = 'Condition'
+        shorthand = 'Condition:N'
         what = ''
     elif condition != 'all' and replicate == 'all':
         if replicates_separately:
-            Time_df = Time_df[Time_df['CONDITION'] == condition]
-            shorthand = 'REPLICATE:N'
-            element = 'REPLICATE'
+            Time_df = Time_df[Time_df['Condition'] == condition]
+            shorthand = 'Replicate:N'
+            element = 'Replicate'
             what = f'for condition {condition}'
         else:
-            Time_df = Time_df[Time_df['CONDITION'] == condition].groupby(['CONDITION', 'POSITION_T']).agg({metric: 'mean'}).reset_index()
-            shorthand = 'CONDITION:N'
-            element = 'CONDITION'
+            Time_df = Time_df[Time_df['Condition'] == condition].groupby(['Condition', 'Time point']).agg({metric: 'mean'}).reset_index()
+            shorthand = 'Condition:N'
+            element = 'Condition'
             what = f'for condition {condition}'
     elif condition != 'all' and replicate != 'all':
-        Time_df = Time_df[(Time_df['CONDITION'] == condition) & (Time_df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
-        shorthand = 'REPLICATE:N'
-        element = 'REPLICATE'
+        Time_df = Time_df[(Time_df['Condition'] == condition) & (Time_df['Replicate'] == replicate)].sort_values(by=['Condition', 'Replicate', 'Time point'])
+        shorthand = 'Replicate:N'
+        element = 'Replicate'
         what = f'for condition {condition} and replicate {replicate}'   
     
 
@@ -1238,7 +1252,7 @@ def Scatter_poly_fit_chart_altair(Time_df:pd.DataFrame, condition:None, replicat
     
     # Create a base chart with the common encodings.
     base = alt.Chart(Time_df).encode(
-        x=alt.X('POSITION_T', title='Time position'),
+        x=alt.X('Time point', title='Time position'),
         y=alt.Y(metric, title=Metric),
         color=alt.Color(shorthand, title='Condition', scale=alt.Scale(domain=elements, range=colors))
         )
@@ -1265,7 +1279,7 @@ def Scatter_poly_fit_chart_altair(Time_df:pd.DataFrame, condition:None, replicat
         ).encode(
             opacity=alt.when(~highlight).then(alt.value(ignore)).otherwise(alt.value(opacity)),
             # tooltip=alt.Tooltip(metric, title=f'Cond: {condition}, Repl: {condition}'),
-            tooltip=['POSITION_T', metric, shorthand],
+            tooltip=['Time point', metric, shorthand],
         ).add_params(
             highlight
         )
@@ -1282,16 +1296,16 @@ def Scatter_poly_fit_chart_altair(Time_df:pd.DataFrame, condition:None, replicat
         # Build a list of polynomial fit layers, one for each specified degree.
         polynomial_fit = [
             base.transform_regression(
-                "POSITION_T", metric,
+                "Time point", metric,
                 method="poly",
                 order=order,
                 groupby=[element],
-                as_=["POSITION_T", str(order)]
+                as_=["Time point", str(order)]
             ).mark_line(
             ).transform_fold(
                 [str(order)], as_=["degree", metric]
             ).encode(
-                x=alt.X('POSITION_T', title='Time position'),
+                x=alt.X('Time point', title='Time position'),
                 y=alt.Y(metric, title=Metric),
                 color=alt.Color(shorthand, title='Condition', scale=alt.Scale(domain=elements, range=colors)),
                 size=alt.when(~highlight).then(alt.value(1.25)).otherwise(alt.value(3))
@@ -1331,28 +1345,28 @@ def Line_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None, repl
         except ValueError or TypeError:
             pass
 
-    Time_df.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
+    Time_df.sort_values(by=['Condition', 'Replicate', 'Time point'])
 
     if condition == 'all':
-        Time_df = Time_df.groupby(['CONDITION','POSITION_T']).agg({metric_mean: 'mean', metric_median: 'median'}).reset_index()
-        shorthand = 'CONDITION:N'
-        element = 'CONDITION'
+        Time_df = Time_df.groupby(['Condition','Time point']).agg({metric_mean: 'mean', metric_median: 'median'}).reset_index()
+        shorthand = 'Condition:N'
+        element = 'Condition'
         what = None
     elif condition != 'all' and replicate == 'all':
         if replicates_separately:
-            Time_df = Time_df[Time_df['CONDITION'] == condition]
-            shorthand = 'REPLICATE:N'
-            element = 'REPLICATE'
+            Time_df = Time_df[Time_df['Condition'] == condition]
+            shorthand = 'Replicate:N'
+            element = 'Replicate'
             what = f'for condition {condition}'
         else:
-            Time_df = Time_df[Time_df['CONDITION'] == condition].groupby(['CONDITION', 'POSITION_T']).agg({metric_mean: 'mean', metric_median: 'median'}).reset_index()
-            shorthand = 'CONDITION:N'
-            element = 'CONDITION'
+            Time_df = Time_df[Time_df['Condition'] == condition].groupby(['Condition', 'Time point']).agg({metric_mean: 'mean', metric_median: 'median'}).reset_index()
+            shorthand = 'Condition:N'
+            element = 'Condition'
             what = f'for condition {condition}'
     elif condition != 'all' and replicate != 'all':
-        Time_df = Time_df[(Time_df['CONDITION'] == condition) & (Time_df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
-        shorthand = 'REPLICATE:N'
-        element = 'REPLICATE'
+        Time_df = Time_df[(Time_df['Condition'] == condition) & (Time_df['Replicate'] == replicate)].sort_values(by=['Condition', 'Replicate', 'Time point'])
+        shorthand = 'Replicate:N'
+        element = 'Replicate'
         what = f'for condition {condition} and replicate {replicate}' 
 
     if show_median:
@@ -1369,18 +1383,18 @@ def Line_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None, repl
     
 
     nearest = alt.selection_point(nearest=True, on="pointerover",
-                              fields=['POSITION_T'], empty=False)    
+                              fields=['Time point'], empty=False)    
     
     color_scale = alt.Scale(domain=elements, range=colors)
 
     mean_base = alt.Chart(Time_df).encode(
-        x=alt.X('POSITION_T', title='Time position'),
+        x=alt.X('Time point', title='Time position'),
         y=alt.Y(metric_mean, title=None),
         color=alt.Color(shorthand, title='Condition', scale=color_scale),
         )
     
     median_base = alt.Chart(Time_df).encode(
-        x=alt.X('POSITION_T', title='Time position'),
+        x=alt.X('Time point', title='Time position'),
         y=alt.Y(metric_median, title='Median ' + Metric),
         color=alt.Color(shorthand, title='Condition', scale=color_scale),
         )
@@ -1433,7 +1447,7 @@ def Line_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None, repl
 
     # Draw a rule at the location of the selection
     rules = alt.Chart(Time_df).mark_rule(color="gray").encode(
-        x='POSITION_T',
+        x='Time point',
         ).transform_filter(
         nearest
         )
@@ -1475,31 +1489,31 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
         except ValueError or TypeError:
             pass
 
-    Time_df.sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
+    Time_df.sort_values(by=['Condition', 'Replicate', 'Time point'])
 
     if condition == 'all':
-        Time_df = Time_df.groupby(['CONDITION','POSITION_T']).agg({metric_mean: 'mean', metric_std: 'std', metric_min: 'min', metric_max: 'max'}).reset_index()
-        shorthand = 'CONDITION:N'
-        element = 'CONDITION'
+        Time_df = Time_df.groupby(['Condition','Time point']).agg({metric_mean: 'mean', metric_std: 'std', metric_min: 'min', metric_max: 'max'}).reset_index()
+        shorthand = 'Condition:N'
+        element = 'Condition'
         element_ = 'Condition'
         what = None
     elif condition != 'all' and replicate == 'all':
         if replicates_separately:
-            Time_df = Time_df[Time_df['CONDITION'] == condition]
-            shorthand = 'REPLICATE:N'
-            element = 'REPLICATE'
+            Time_df = Time_df[Time_df['Condition'] == condition]
+            shorthand = 'Replicate:N'
+            element = 'Replicate'
             element_ = 'Replicate'
             what = f'for condition {condition}'
         else:
-            Time_df = Time_df[Time_df['CONDITION'] == condition].groupby(['CONDITION', 'POSITION_T']).agg({metric_mean: 'mean', metric_std: 'std', metric_min: 'min', metric_max: 'max'}).reset_index()
-            shorthand = 'CONDITION:N'
-            element = 'CONDITION'
+            Time_df = Time_df[Time_df['Condition'] == condition].groupby(['Condition', 'Time point']).agg({metric_mean: 'mean', metric_std: 'std', metric_min: 'min', metric_max: 'max'}).reset_index()
+            shorthand = 'Condition:N'
+            element = 'Condition'
             element_ = 'Condition'
             what = f'for condition {condition}'
     elif condition != 'all' and replicate != 'all':
-        Time_df = Time_df[(Time_df['CONDITION'] == condition) & (Time_df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'POSITION_T'])
-        shorthand = 'REPLICATE:N'
-        element = 'REPLICATE'
+        Time_df = Time_df[(Time_df['Condition'] == condition) & (Time_df['Replicate'] == replicate)].sort_values(by=['Condition', 'Replicate', 'Time point'])
+        shorthand = 'Replicate:N'
+        element = 'Replicate'
         element_ = 'Replicate'
         what = f'for condition {condition} and replicate {replicate}'
 
@@ -1529,7 +1543,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
     
     if extent == 'min-max':
         band = alt.Chart(Time_df).encode(
-            x=alt.X('POSITION_T', title='Time position'),
+            x=alt.X('Time point', title='Time position'),
             y=alt.Y(metric_min),
             y2=alt.Y2(metric_max),
             color=alt.Color(shorthand, title=element_, scale=color_scale),
@@ -1542,7 +1556,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
 
     elif extent == 'std':
         band = alt.Chart(Time_df).encode(
-            x=alt.X('POSITION_T', title='Time position'),
+            x=alt.X('Time point', title='Time position'),
             y=alt.Y('upper'),
             y2=alt.Y2('lower'),
             color=alt.Color(shorthand, title=element_, scale=color_scale),   
@@ -1556,7 +1570,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
 
     else:
         band = alt.Chart(Time_df).mark_errorband(extent=extent).encode(
-            x=alt.X('POSITION_T', title='Time position'),
+            x=alt.X('Time point', title='Time position'),
             y=alt.Y('upper'),
             y2=alt.Y2('lower'),
             color=alt.Color(shorthand, title=element_, scale=color_scale),
@@ -1569,7 +1583,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
             band = band.mark_errorband()
 
     mean_base = alt.Chart(Time_df).encode(
-        x=alt.X('POSITION_T', title='Time position'),
+        x=alt.X('Time point', title='Time position'),
         y=alt.Y(metric_mean, title=None),
         color=alt.Color(shorthand, title=element_, scale=color_scale),
         opacity=alt.value(mean_opacity),
@@ -1583,7 +1597,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
         mean_line = mean_base.mark_line()
 
     nearest = alt.selection_point(nearest=True, on="pointerover",
-                              fields=['POSITION_T'], empty=False)    
+                              fields=['Time point'], empty=False)    
     
     color_scale = alt.Scale(domain=elements, range=colors)
 
@@ -1602,7 +1616,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
 
     # Draw a rule at the location of the selection
     rules = alt.Chart(Time_df).mark_rule(color="gray", opacity=rule_opacity).encode(
-        x='POSITION_T',
+        x='Time point',
         ).transform_filter(
         nearest
         )
@@ -1610,8 +1624,8 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
 
     # Calculate separate fields for each line of the tooltip.
     tooltip_data = alt.Chart(Time_df).transform_calculate(
-        tooltip_line1=f'"{element_}: " + datum.CONDITION',
-        tooltip_line2=f'"Time point: " + datum.POSITION_T',
+        tooltip_line1=f'"{element_}: " + datum.Condition',
+        tooltip_line2=f'"Time point: " + datum.Time point',
         tooltip_line3=f'"Mean: " + datum["{metric_mean}"]',
         tooltip_line4=f'"Std: " + datum["{metric_std}"]',
         tooltip_line5=f'"Min: " + datum["{metric_min}"]',
@@ -1626,7 +1640,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
         fontSize=12,
         fontWeight='bold'
         ).encode(
-        x='POSITION_T',
+        x='Time point',
         text=alt.condition(nearest, 'tooltip_line1:N', alt.value('')),
         opacity=alt.value(text_opacity)
         ).transform_filter(nearest)
@@ -1638,7 +1652,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
         fontSize=12,
         fontWeight='bold'
         ).encode(
-        x='POSITION_T',
+        x='Time point',
         text=alt.condition(nearest, 'tooltip_line2:N', alt.value('')),
         opacity=alt.value(text_opacity)
         ).transform_filter(nearest)
@@ -1650,7 +1664,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
         fontSize=12,
         fontWeight='bold'
         ).encode(
-        x='POSITION_T',
+        x='Time point',
         text=alt.condition(nearest, 'tooltip_line3:N', alt.value('')),
         opacity=alt.value(text_opacity)
         ).transform_filter(nearest)
@@ -1662,7 +1676,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
         fontSize=12,
         fontWeight='bold'
         ).encode(
-        x='POSITION_T',
+        x='Time point',
         text=alt.condition(nearest, 'tooltip_line4:N', alt.value('')),
         opacity=alt.value(text_opacity)
         ).transform_filter(nearest)
@@ -1674,7 +1688,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
         fontSize=12,
         fontWeight='bold'
         ).encode(
-        x='POSITION_T',
+        x='Time point',
         text=alt.condition(nearest, 'tooltip_line5:N', alt.value('')),
         opacity=alt.value(text_opacity)
         ).transform_filter(nearest)
@@ -1686,7 +1700,7 @@ def Errorband_chart_altair(Time_df:pd.DataFrame, condition:None, replicate:None,
         fontSize=12,
         fontWeight='bold'
         ).encode(
-        x='POSITION_T',
+        x='Time point',
         text=alt.condition(nearest, 'tooltip_line6:N', alt.value('')),
         opacity=alt.value(text_opacity)
         ).transform_filter(nearest)
@@ -1785,14 +1799,14 @@ def Superplot_seaborn(
     plt.figure(figsize=(plot_width, plot_height))
     
 
-    df['CONDITION'] = df['CONDITION'].astype(str)
-    conditions = df['CONDITION'].unique()
+    df['Condition'] = df['Condition'].astype(str)
+    conditions = df['Condition'].unique()
 
 
-    if df['REPLICATE'].nunique() == 1:
-        hue = 'CONDITION'
+    if df['Replicate'].nunique() == 1:
+        hue = 'Condition'
     else:
-        hue = 'REPLICATE'
+        hue = 'Replicate'
     
 
     # ======================= KDE INSET =========================
@@ -1810,7 +1824,7 @@ def Superplot_seaborn(
             if i < len(conditions) - 1:
                 spaced_conditions.append(f"spacer_{i+1}")
  
-        df['CONDITION'] = pd.Categorical(df['CONDITION'], categories=spaced_conditions, ordered=True)
+        df['Condition'] = pd.Categorical(df['Condition'], categories=spaced_conditions, ordered=True)
         
         
         # ----------------------- Swarm plot --------------------------
@@ -1818,7 +1832,7 @@ def Superplot_seaborn(
         if show_swarm:
             sns.swarmplot(
                 data=df, 
-                x='CONDITION', 
+                x='Condition', 
                 y=metric,
                 hue=hue, 
                 palette=palette, 
@@ -1836,7 +1850,7 @@ def Superplot_seaborn(
         if show_violin:
             sns.violinplot(
                 data=df, 
-                x='CONDITION', 
+                x='Condition', 
                 y=metric, 
                 color=violin_fill_color, 
                 edgecolor=violin_edge_color, 
@@ -1850,11 +1864,11 @@ def Superplot_seaborn(
 
         # ------------------------ Scatterplot of replicate means ------------------------------
 
-        replicate_means = df.groupby(['CONDITION', 'REPLICATE'])[metric].mean().reset_index()
+        replicate_means = df.groupby(['Condition', 'Replicate'])[metric].mean().reset_index()
         if show_balls:
             sns.scatterplot(
                 data=replicate_means, 
-                x='CONDITION', 
+                x='Condition', 
                 y=metric, 
                 hue=hue, 
                 palette=palette, 
@@ -1869,7 +1883,7 @@ def Superplot_seaborn(
 
         # ---------------------------- Mean, Meadian and Error bars --------------------------------
  
-        condition_stats = df.groupby('CONDITION')[metric].agg(['mean', 'median', 'std']).reset_index()
+        condition_stats = df.groupby('Condition')[metric].agg(['mean', 'median', 'std']).reset_index()
 
         cond_num_list = list(range(len(conditions)*2)) 
         for cond in cond_num_list:
@@ -1919,8 +1933,8 @@ def Superplot_seaborn(
             pos_mapping = {cat: idx for idx, cat in enumerate(spaced_conditions)}
         
             for i, (cond1, cond2) in enumerate(combinations(real_conditions, 2)):
-                data1 = df[df['CONDITION'] == cond1][metric]
-                data2 = df[df['CONDITION'] == cond2][metric]
+                data1 = df[df['Condition'] == cond1][metric]
+                data2 = df[df['Condition'] == cond2][metric]
                 stat, p_value = mannwhitneyu(data1, data2)
                 x1, x2 = pos_mapping[cond1], pos_mapping[cond2]
                 y_max = df[metric].max()
@@ -1957,7 +1971,7 @@ def Superplot_seaborn(
         y_ax_min, y_ax_max = ax.get_ylim()
         
         for cond in cond_num_list[::2]:
-            group_df = df[df['CONDITION'] == conditions[cond // 2]]   # DataFrame group for a given condition
+            group_df = df[df['Condition'] == conditions[cond // 2]]   # DataFrame group for a given condition
 
             y_max = group_df[metric].max()
             inset_height = y_ax_max * (y_max/y_ax_max) + abs(y_ax_min)   # height of the inset plot
@@ -2013,7 +2027,7 @@ def Superplot_seaborn(
         if show_swarm:
             sns.swarmplot(
                 data=df, 
-                x='CONDITION', 
+                x='Condition', 
                 y=metric, 
                 hue=hue, 
                 palette=palette, 
@@ -2028,11 +2042,11 @@ def Superplot_seaborn(
 
         # ----------------------------------- Scatterplot of replicate means ------------------------------------------------------
 
-        replicate_means = df.groupby(['CONDITION', 'REPLICATE'])[metric].mean().reset_index()
+        replicate_means = df.groupby(['Condition', 'Replicate'])[metric].mean().reset_index()
         if show_balls:
             sns.scatterplot(
                 data=replicate_means,
-                x='CONDITION', 
+                x='Condition', 
                 y=metric, 
                 hue=hue, 
                 palette=palette, 
@@ -2050,7 +2064,7 @@ def Superplot_seaborn(
         if show_violin:
             sns.violinplot(
                 data=df, 
-                x='CONDITION', 
+                x='Condition', 
                 y=metric, 
                 color=violin_fill_color, 
                 edgecolor=violin_edge_color, 
@@ -2063,7 +2077,7 @@ def Superplot_seaborn(
 
         #  ------------------------------------ Mean, median and errorbar lines -------------------------------------------
 
-        condition_stats = df.groupby('CONDITION')[metric].agg(['mean', 'median', 'std']).reset_index()
+        condition_stats = df.groupby('Condition')[metric].agg(['mean', 'median', 'std']).reset_index()
         for i, row in condition_stats.iterrows():
             x_center = i   # x coordinate
             if show_mean:
@@ -2106,13 +2120,13 @@ def Superplot_seaborn(
         # ---------------------------------------- P-tests ------------------------------------------------------------
 
         if p_test:
-            conditions = df['CONDITION'].unique()
+            conditions = df['Condition'].unique()
             pairs = list(combinations(conditions, 2))
             y_max = df[metric].max()
             y_offset = (y_max * 0.1)  # Offset for p-value annotations
             for i, (cond1, cond2) in enumerate(pairs):
-                data1 = df[df['CONDITION'] == cond1][metric]
-                data2 = df[df['CONDITION'] == cond2][metric]
+                data1 = df[df['Condition'] == cond1][metric]
+                data2 = df[df['Condition'] == cond2][metric]
                 stat, p_value = mannwhitneyu(data1, data2)
                 
                 # Annotate the plot with the p-value
@@ -2199,15 +2213,15 @@ def interactive_stripplot(
     """
     Create an interactive strip plot with aggregated violin plots using Plotly.
     
-    For each CONDITION:
+    For each Condition:
       - A grey aggregated violin plot is drawn with custom hover displaying 
         min, median, mean and max values.
-      - Scatter (jitter) points are drawn per REPLICATE. By default these points 
+      - Scatter (jitter) points are drawn per Replicate. By default these points 
         are colored by replicate; however, if see_outliars is True, non‐outlying 
         points are painted grey and only outliers retain their replicate colors.
       - A solid horizontal line is added at the condition mean, along with a dashed line for the median.
       - An error bar with cap is added at the condition mean representing one standard deviation.
-      - A diamond marker is added at each (CONDITION, REPLICATE) group representing that group’s mean.
+      - A diamond marker is added at each (Condition, Replicate) group representing that group’s mean.
     
     Parameters:
         df (pd.DataFrame): Input data frame.
@@ -2226,13 +2240,13 @@ def interactive_stripplot(
         go.Figure: The resulting Plotly figure.
     """
     # Map each condition to a unique numeric x value
-    conditions = df['CONDITION'].unique()
+    conditions = df['Condition'].unique()
     condition_map = {cond: i for i, cond in enumerate(conditions)}
     
     np.random.seed(42)
 
     # Create jittered x values based on the condition mapping
-    base_x_jitter = df['CONDITION'].map(condition_map)
+    base_x_jitter = df['Condition'].map(condition_map)
     jitter = np.random.uniform(-0.275, 0.275, size=len(df))
     df['x_jitter'] = base_x_jitter + jitter
 
@@ -2243,11 +2257,11 @@ def interactive_stripplot(
                   (x > (x.quantile(highband) + 1.5*(x.quantile(highband)-x.quantile(lowband))))
         )
 
-    # Group data for scatter points by CONDITION and REPLICATE
-    grouped = df.groupby(['CONDITION', 'REPLICATE'])
+    # Group data for scatter points by Condition and Replicate
+    grouped = df.groupby(['Condition', 'Replicate'])
     
-    # Assign a distinct color to each REPLICATE using the specified palette
-    unique_replicates = df['REPLICATE'].unique()
+    # Assign a distinct color to each Replicate using the specified palette
+    unique_replicates = df['Replicate'].unique()
     replicate_colors = dict(zip(unique_replicates, sns.color_palette(palette, len(unique_replicates)).as_hex()))
     
     fig = go.Figure()
@@ -2335,7 +2349,7 @@ def interactive_stripplot(
         ))
     
     # Plot one aggregated violin for each condition (not separated by replicate)
-    grouped_conditions = df.groupby('CONDITION')
+    grouped_conditions = df.groupby('Condition')
     for cond, group_df in grouped_conditions:
         # Compute aggregate statistics for the condition
         min_val = group_df[metric].min()

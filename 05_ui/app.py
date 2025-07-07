@@ -39,7 +39,7 @@ pd.options.mode.chained_assignment = None
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Creating reactive values for the data input
 
-raw_Buttered_df = reactive.value()      # Creating a reactive value for the stem/pre-processed base dataframe
+extracted_df = reactive.value()      # Creating a reactive value for the stem/pre-processed base dataframe
 raw_Spot_stats_df = reactive.value()    # Creating a reactive value for the stem/pre-processed spot stats dataframe
 raw_Track_stats_df = reactive.value()   # Creating a reactive value for the stem/pre-processed track stats file dataframe
 raw_Time_stats_df = reactive.value()    # Creating a reactive value for the stem/pre-processed time stats file dataframe
@@ -126,7 +126,7 @@ dir = Path(__file__).resolve().parent
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Creating a reactive value for visualized tracks hover info
-see_hover = reactive.value(['CONDITION', 'REPLICATE', 'TRACK_ID'])        # Creating a reactive value for the visualized tracks hover info
+see_hover = reactive.value(['Condition', 'Replicate', 'Track ID'])        # Creating a reactive value for the visualized tracks hover info
 
 
 
@@ -337,16 +337,16 @@ with ui.nav_panel("Input"):
                 try:
                     extracted_dflt = dc.extract(
                             df = dc.load_DataFrame(file_dflt['datapath']), 
-                            id_col = input.select_id,
-                            t_col = input.select_time, 
-                            x_col = input.select_x, 
-                            y_col = input.select_y, 
+                            id_col = input.select_id(),
+                            t_col = input.select_time(), 
+                            x_col = input.select_x(), 
+                            y_col = input.select_y(), 
                             mirror_y = True
                         )
                 except Exception as e:                                                  # Extracting the data from the file
                     return pd.DataFrame()                                            # If the file cannot be read, return an empty DataFrame
 
-                label_dflt = input.label1()                                         # Assigning the condition label to a 'CONDITION' column
+                label_dflt = input.label1()                                         # Assigning the condition label to a 'Condition' column
                 if not label_dflt or label_dflt is None:                            # If no label is provided, assign a default - numeric - one
                     extracted_dflt['Condition'] = 1
                 else:                                                               # Else, assign the lable
@@ -376,16 +376,16 @@ with ui.nav_panel("Input"):
                     try:
                         extracted_adtnl = dc.extract(
                                 df = dc.load_DataFrame(file_addtnl['datapath']),
-                                id_col = input.select_id,
-                                t_col = input.select_time,
-                                x_col = input.select_x,
-                                y_col = input.select_y,
+                                id_col = input.select_id(),
+                                t_col = input.select_time(),
+                                x_col = input.select_x(),
+                                y_col = input.select_y(),
                                 mirror_y = True
                             ) 
                     except Exception as e:                                                  # Extracting the data from the file
                         return pd.DataFrame()                                            # If the file cannot be read, return an empty DataFrame
 
-                    label_addtnl = input[f"label{i}"]()                                 # Assigning the condition label to a 'CONDITION' column
+                    label_addtnl = input[f"label{i}"]()                                 # Assigning the condition label to a 'Condition' column
                     if not label_addtnl or label_addtnl is None:                        # If no label is provided, assign a default - numeric - one
                         extracted_adtnl['Condition'] = i
                     else:                                                               # Else, assign the given lable
@@ -410,10 +410,10 @@ with ui.nav_panel("Input"):
 # def file_detection():
 #     for i in range(1, count.get() + 1, 1):
 #         if input[f"file{i}"]() != None:
-#             file_detected.set(True)
+#             files_available.set(True)
 #             break
 #         else:
-#             file_detected.set(False)
+#             files_available.set(False)
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Creating a reactive effect to update column selections when files are uploaded
@@ -451,387 +451,371 @@ def update_column_selections():
             ui.update_select('select_y', choices=df_columns)
             
         except Exception as e:
-            # If there's an error reading the file, reset to default choices
-            default_choices = ["Select a column..."]
-            ui.update_select('select_id', choices=default_choices)
-            ui.update_select('select_time', choices=default_choices)
-            ui.update_select('select_x', choices=default_choices)
-            ui.update_select('select_y', choices=default_choices)
+            pass
 
     if files_available.get():
         ui.update_action_button("run", disabled=False)
 
-# # ===========================================================================================================================================================================================================================================================================
-# # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# # Data processing and showcasing panel
-# # 
-# # 1. Processing and calculating the data (spot stats, track stats, time stats)
-# # 2. Displaying the dataframes
-# # 3. Enabling the user to download the dataframes as .csv files
-
-# already_processed_file_detected = reactive.value(False)    # Creating a reactive value for the already processed file detection
-
-# with ui.nav_panel("Data frames"):  
-
-#     ui.markdown(
-#         """
-#         ***Got previously processed data?***
-#         """
-#         )
 
 
-#     ui.input_file(
-#         "already_proccesed_spot_stats", 
-#         "", 
-#         accept=[".csv"], 
-#         multiple=False, 
-#         placeholder="Give me that Spot stats CSV file!",
-#         width='32%',
-#         )
+
+# ===========================================================================================================================================================================================================================================================================
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Data processing and showcasing panel
+# 
+# 1. Processing and calculating the data (spot stats, track stats, time stats)
+# 2. Displaying the dataframes
+# 3. Enabling the user to download the dataframes as .csv files
+
+already_processed_files_available = reactive.value(False)    # Creating a reactive value for the already processed file detection
+
+with ui.nav_panel("Data frames"):  
+
+    ui.markdown(
+        """
+        ***Got previously processed data?***
+        """
+        )
+
+
+    ui.input_file(
+        "already_proccesed_spot_stats", 
+        "", 
+        accept=[".csv"], 
+        multiple=False, 
+        placeholder="Give me that Spot stats CSV file!",
+        width='32%',
+        )
     
-#     ui.markdown(
-#         """
-#         <hr style="height: 4px; background-color: black; border: none" />
-#         """
-#         )
+    ui.markdown(
+        """
+        <hr style="height: 4px; background-color: black; border: none" />
+        """
+        )
 
-#     @reactive.calc 
-#     def parsed_processed_file():                                                           
+    @reactive.calc
+    def parsed_processed_file():                                                           
              
-#         processed_spot_stats_input: list[FileInfo] | None = input.already_proccesed_spot_stats()                      # Getting the list of default input data files
+        processed_spot_stats_input: list[FileInfo] | None = input.already_proccesed_spot_stats()                      # Getting the list of default input data files
 
-#         if processed_spot_stats_input is None:
-#             return pd.DataFrame()
-#         else:
-#             return pd.DataFrame(pd.read_csv(processed_spot_stats_input[0]['datapath']))                           # Load each CSV file into a DataFrame
+        if processed_spot_stats_input is None:
+            return pd.DataFrame()
+        else:
+            return pd.DataFrame(pd.read_csv(processed_spot_stats_input[0]['datapath']))                           # Load each CSV file into a DataFrame
 
-#     @reactive.effect
-#     def already_processed_file_detection():
-#         if input.already_proccesed_spot_stats() != None:
-#             cells_in_possesion.set(True)
-#             already_processed_file_detected.set(True)
-#         else:
-#             pass
+    @reactive.effect
+    def already_processed_file_detection():
+        if input.already_proccesed_spot_stats() != None:
+            cells_in_possession.set(True)
+            already_processed_files_available.set(True)
+        else:
+            pass
 
-#     @reactive.effect
-#     def cells_in_possesion_detection():
-#         for i in range(1, count.get() + 1, 1):
-#             if input[f"file{i}"]() != None and input.already_proccesed_spot_stats() != None:
-#                 cells_in_possesion.set(True)    
-#             else:
-#                 pass
+    @reactive.effect
+    def cells_in_possession_detection():
+        for i in range(1, count.get() + 1, 1):
+            if input[f"file{i}"]() != None and input.already_proccesed_spot_stats() != None:
+                cells_in_possession.set(True)    
+            else:
+                pass
 
 
 
-#     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-#     @reactive.effect
-#     def update_buttered_df():
-#         if file_detected.get() == False:
-#             return pd.DataFrame()
+    @reactive.effect
+    @reactive.event(input.run)  # Reactive effect on "Run analysis" button
+    def update_df():
+        if files_available.get() == False:
+            return pd.DataFrame()
         
-#         df = parsed_file()
-#         raw_Buttered_df.set(df)
+        extracted_df.set(parsed_file())
 
 
-#     # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-#     _spot_data_cache = reactive.value()
+    _spot_data_cache = reactive.value()
 
-#     @reactive.effect
-#     def update_spots():
-#         _spot_data_cache.set(dc.Spots(raw_Buttered_df.get()))
+    @reactive.effect
+    def update_spots():
+        _spot_data_cache.set(dc.Spots(extracted_df.get()))
 
-#     # @reactive.calc
-#     # def process_spot_data():
-#     #     if file_detected.get() == False:
-#     #         return pd.DataFrame()
+    @reactive.effect
+    def update_Spot_stats_df():
         
-#     #     buttered = raw_Buttered_df.get()
+        if files_available.get():
+            Spot_stats = _spot_data_cache()
+            raw_Spot_stats_df.set(Spot_stats)
+            Spot_metrics.set(Spot_stats.columns)
 
-#     #     return dc.Spots(buttered)
+        elif already_processed_files_available.get():
+            Spot_stats = parsed_processed_file()
+            raw_Spot_stats_df.set(Spot_stats)
+            Spot_metrics.set(Spot_stats.columns)
 
-
-#     @reactive.effect
-#     def update_Spot_stats_df():
-        
-#         if file_detected.get():
-#             Spot_stats = _spot_data_cache()
-#             raw_Spot_stats_df.set(Spot_stats)
-#             Spot_metrics.set(Spot_stats.columns)
-
-#         elif already_processed_file_detected.get():
-#             Spot_stats = parsed_processed_file()
-#             raw_Spot_stats_df.set(Spot_stats)
-#             Spot_metrics.set(Spot_stats.columns)
-
-#         else:
-#             return pd.DataFrame()
+        else:
+            return pd.DataFrame()
         
 
 
-#     # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-#     @reactive.calc
-#     def process_track_data():
-#         if file_detected.get() == False and already_processed_file_detected.get() == False:
-#             return pd.DataFrame()
+    @reactive.calc
+    def process_track_data():
+        if files_available.get() == False and already_processed_files_available.get() == False:
+            return pd.DataFrame()
         
-#         Spot_stats = raw_Spot_stats_df.get()
+        Spot_stats = raw_Spot_stats_df.get()
 
-#         if Spot_stats.empty:
-#             return pd.DataFrame()
+        if Spot_stats.empty:
+            return pd.DataFrame()
 
-#         return dc.Tracks(Spot_stats)
+        return dc.Tracks(Spot_stats)
     
 
-#     @reactive.effect
-#     def update_Track_stats_df():
-#         if file_detected.get() == False and already_processed_file_detected.get() == False:
-#             return pd.DataFrame()
+    @reactive.effect
+    def update_Track_stats_df():
+        if files_available.get() == False and already_processed_files_available.get() == False:
+            return pd.DataFrame()
         
-#         else:
-#             Track_stats = process_track_data()
-#             raw_Track_stats_df.set(Track_stats)
-#             Track_metrics.set(Track_stats.columns)
+        else:
+            Track_stats = process_track_data()
+            raw_Track_stats_df.set(Track_stats)
+            Track_metrics.set(Track_stats.columns)
 
 
 
-#     # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-#     @reactive.calc
-#     def process_time_data():
-#         if file_detected.get() == False and already_processed_file_detected.get() == False:
-#             return pd.DataFrame()
+    @reactive.calc
+    def process_time_data():
+        if files_available.get() == False and already_processed_files_available.get() == False:
+            return pd.DataFrame()
 
-#         Spot_stats = Spot_stats_df.get()
+        Spot_stats = Spot_stats_df.get()
 
-#         if Spot_stats.empty:
-#             return pd.DataFrame()
+        if Spot_stats.empty:
+            return pd.DataFrame()
         
-#         return dc.Time(Spot_stats)
+        return dc.Time(Spot_stats)
     
 
-#     @reactive.effect
-#     def update_Time_stats_df():
-#         if file_detected.get() == False and already_processed_file_detected.get() == False:
-#             return pd.DataFrame()
+    @reactive.effect
+    def update_Time_stats_df():
+        if files_available.get() == False and already_processed_files_available.get() == False:
+            return pd.DataFrame()
         
-#         else:
-#             Time_stats = process_time_data()
-#             raw_Time_stats_df.set(Time_stats)
-#             Time_stats_df.set(Time_stats)
+        else:
+            Time_stats = process_time_data()
+            raw_Time_stats_df.set(Time_stats)
+            Time_stats_df.set(Time_stats)
 
 
 
 
 
 
-#     # =============================================================================================================================================================================================================================================================================
-#     # Separately displaying Spot, Track and Time dataframes with possibility for CSV download
+    # =============================================================================================================================================================================================================================================================================
+    # Separately displaying Spot, Track and Time dataframes with possibility for CSV download
 
 
-#     with ui.layout_columns():  
-#         with ui.card():  
-#             ui.card_header("Spot stats")
+    with ui.layout_columns():  
+        with ui.card():  
+            ui.card_header("Spot stats")
 
-#             @render.data_frame
-#             def render_spot_stats():
-#                 if file_detected.get() == False and already_processed_file_detected.get() == False:
-#                     return pd.DataFrame()
-        
-#                 else:
-#                     Spot_stats = Spot_stats_df.get()
-#                     return render.DataGrid(Spot_stats)
+            @render.data_frame
+            def render_spot_stats():
+                if files_available.get() == False and already_processed_files_available.get() == False:
+                    return pd.DataFrame()
+                else:
+                    return render.DataGrid(Spot_stats_df.get())
                 
-#             @render.download(label="Download", filename="Spot_stats.csv")
-#             def download_spot_stats():
-#                 with io.BytesIO() as buf:
-#                     Spot_stats_df.get().to_csv(buf, index=False)
-#                     yield buf.getvalue()
+            @render.download(label="Download", filename="Spot_stats.csv")
+            def download_spot_stats():
+                with io.BytesIO() as buf:
+                    Spot_stats_df.get().to_csv(buf, index=False)
+                    yield buf.getvalue()
             
         
-#         with ui.card():
-#             ui.card_header("Track stats")
+        with ui.card():
+            ui.card_header("Track stats")
             
-#             @render.data_frame
-#             def render_track_stats():
-#                 if file_detected.get() == False and already_processed_file_detected.get() == False:
-#                     return pd.DataFrame()
-#                 else:
-#                     Track_stats = Track_stats_df.get()
-#                     return render.DataGrid(Track_stats)
+            @render.data_frame
+            def render_track_stats():
+                if files_available.get() == False and already_processed_files_available.get() == False:
+                    return pd.DataFrame()
+                else:
+                    return render.DataGrid(Track_stats_df.get())
                 
-#             @render.download(label="Download", filename="Track_stats.csv")
-#             def download_track_stats():
-#                 with io.BytesIO() as buf:
-#                     Track_stats_df.get().to_csv(buf, index=False)
-#                     yield buf.getvalue()
+            @render.download(label="Download", filename="Track_stats.csv")
+            def download_track_stats():
+                with io.BytesIO() as buf:
+                    Track_stats_df.get().to_csv(buf, index=False)
+                    yield buf.getvalue()
             
             
-#         with ui.card():
-#             ui.card_header("Frame stats")
+        with ui.card():
+            ui.card_header("Frame stats")
 
-#             @render.data_frame
-#             def render_time_stats():
-#                 if file_detected.get() == False and already_processed_file_detected.get() == False:
-#                     return pd.DataFrame()
-#                 else:
-#                     Time_stats = Time_stats_df.get()
-#                     return render.DataGrid(Time_stats)
+            @render.data_frame
+            def render_time_stats():
+                if files_available.get() == False and already_processed_files_available.get() == False:
+                    return pd.DataFrame()
+                else:
+                    return render.DataGrid(Time_stats_df.get())
                 
-#             @render.download(label="Download", filename="Time stats.csv")
-#             def download_time_stats():
-#                 with io.BytesIO() as buf:
-#                     Time_stats_df.get().to_csv(buf, index=False)
-#                     yield buf.getvalue()
+            @render.download(label="Download", filename="Time_stats.csv")
+            def download_time_stats():
+                with io.BytesIO() as buf:
+                    Time_stats_df.get().to_csv(buf, index=False)
+                    yield buf.getvalue()
 
 
 
 
 
-# # ===========================================================================================================================================================================================================================================================================
-# # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# # Thresholding utilities - functions
+# ===========================================================================================================================================================================================================================================================================
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Thresholding utilities - functions
 
 
-# def _update_slider(filter_type, slider, slider_values):
-#     if filter_type == "percentile":
-#         ui.update_slider(id=slider, min=0, max=100, value=(0, 100), step=1)
-#     elif filter_type == "literal":
-#         values = slider_values.get()
-#         range = values[1] - values[0]
+def _update_slider(filter_type, slider, slider_values):
+    if filter_type == "percentile":
+        ui.update_slider(id=slider, min=0, max=100, value=(0, 100), step=1)
+    elif filter_type == "literal":
+        values = slider_values.get()
+        range = values[1] - values[0]
 
-#         if range <= 10:
-#             steps = 0.01
-#         elif range <= 100:
-#             steps = 0.1
-#         else:
-#             steps = 1
+        if range <= 10:
+            steps = 0.01
+        elif range <= 100:
+            steps = 0.1
+        else:
+            steps = 1
         
-#         if values:
-#             ui.update_slider(id=slider, min=values[0], max=values[1], value=values, step=steps)
+        if values:
+            ui.update_slider(id=slider, min=values[0], max=values[1], value=values, step=steps)
 
 
-# def _update_slider_values(metric, filter, dfA, dfB, slider_values):
-#     if metric in Track_metrics.get():
-#         try:
-#             if filter == "literal":
-#                 if dfA.empty:
-#                     slider_values.set([0, 100])
-#                 else:
-#                     values = dc.values_for_a_metric(dfA, metric)
-#                     slider_values.set(values)
-#             elif filter == "percentile":
-#                 slider_values.set([0, 100])
-#         except Exception as e:
-#             slider_values.set([0, 100])
-#     elif metric in Spot_metrics.get():
-#         try:
-#             if filter == "literal":
-#                 if dfB.empty:
-#                     slider_values.set([0, 100])
-#                 else:
-#                     values = dc.values_for_a_metric(dfB, metric)
-#                     slider_values.set(values)
-#             elif filter == "percentile":
-#                 slider_values.set([0, 100])
-#         except Exception as e:
-#             slider_values.set([0, 100])
+def _update_slider_values(metric, filter, dfA, dfB, slider_values):
+    if metric in Track_metrics.get():
+        try:
+            if filter == "literal":
+                if dfA.empty:
+                    slider_values.set([0, 100])
+                else:
+                    values = dc.values_for_a_metric(dfA, metric)
+                    slider_values.set(values)
+            elif filter == "percentile":
+                slider_values.set([0, 100])
+        except Exception as e:
+            slider_values.set([0, 100])
+    elif metric in Spot_metrics.get():
+        try:
+            if filter == "literal":
+                if dfB.empty:
+                    slider_values.set([0, 100])
+                else:
+                    values = dc.values_for_a_metric(dfB, metric)
+                    slider_values.set(values)
+            elif filter == "percentile":
+                slider_values.set([0, 100])
+        except Exception as e:
+            slider_values.set([0, 100])
     
 
-# def _thresholded_histogram(metric, filter_type, slider_range, dfA, dfB):
-#     if file_detected.get() == False and already_processed_file_detected.get() == False:
-#         return None
-#     elif dfA == None:
-#         return None
-#     elif dfB == None:
-#         return None
-#     else:
-#         if metric in Track_metrics.get():
-#             data = dfA.get()
-#         elif metric in Spot_metrics.get():
-#             data = dfB.get()
-#         elif data.empty:
-#             return plt.figure()
-#         else:
-#             return plt.figure()
+def _thresholded_histogram(metric, filter_type, slider_range, dfA, dfB):
+    if files_available.get() == False and already_processed_files_available.get() == False:
+        return None
+    elif dfA == None:
+        return None
+    elif dfB == None:
+        return None
+    else:
+        if metric in Track_metrics.get():
+            data = dfA.get()
+        elif metric in Spot_metrics.get():
+            data = dfB.get()
+        elif data.empty:
+            return plt.figure()
+        else:
+            return plt.figure()
 
-#         values = data[metric].dropna()
+        values = data[metric].dropna()
 
-#         if filter_type == "percentile":
-#             lower_percentile = np.percentile(values, slider_range[0])
-#             upper_percentile = np.percentile(values, slider_range[1])
-#             lower_bound = lower_percentile
-#             upper_bound = upper_percentile
-#         else:
-#             lower_bound = slider_range[0]
-#             upper_bound = slider_range[1]
+        if filter_type == "percentile":
+            lower_percentile = np.percentile(values, slider_range[0])
+            upper_percentile = np.percentile(values, slider_range[1])
+            lower_bound = lower_percentile
+            upper_bound = upper_percentile
+        else:
+            lower_bound = slider_range[0]
+            upper_bound = slider_range[1]
 
-#         fig, ax = plt.subplots()
-#         n, bins, patches = ax.hist(values, bins=40)
+        fig, ax = plt.subplots()
+        n, bins, patches = ax.hist(values, bins=40)
 
-#         for i in range(len(patches)):
-#             if bins[i] < lower_bound or bins[i+1] > upper_bound:
-#                 patches[i].set_facecolor('grey')
-#             else:
-#                 patches[i].set_facecolor('#337ab7')
+        for i in range(len(patches)):
+            if bins[i] < lower_bound or bins[i+1] > upper_bound:
+                patches[i].set_facecolor('grey')
+            else:
+                patches[i].set_facecolor('#337ab7')
 
-#         ax.set_xticks([])  # Remove x-axis ticks
-#         ax.set_yticks([])  # Remove y-axis ticks
-#         ax.spines[['top','left','right']].set_visible(False)
+        ax.set_xticks([])  # Remove x-axis ticks
+        ax.set_yticks([])  # Remove y-axis ticks
+        ax.spines[['top','left','right']].set_visible(False)
 
-#         return fig
-
-
-# def _data_thresholding_numbers(df):
-#     return f"Cells in total: {raw_Track_stats_df.get().shape[0]}", f"In focus: {round(df.shape[0] / raw_Track_stats_df.get().shape[0] * 100)} % ({df.shape[0]})", f"Filtered out: {round((raw_Track_stats_df.get().shape[0] - df.shape[0]) / raw_Track_stats_df.get().shape[0] * 100)} % ({raw_Track_stats_df.get().shape[0] - df.shape[0]})"
+        return fig
 
 
-# def _thresholded_data(filter_type, metric, slider_range, dfA, dfB):
-#     if filter_type == "percentile":
-#         if metric in Track_metrics.get():
-#             return dc.percentile_thresholding(dfA, metric, slider_range)
-#         elif metric in Spot_metrics.get():
-#             return dc.percentile_thresholding(dfB, metric, slider_range)
-#     elif filter_type == "literal":
-#         if metric in Track_metrics.get():
-#             return dc.literal_thresholding(dfA, metric, slider_range)
-#         elif metric in Spot_metrics.get():
-#             return dc.literal_thresholding(dfB, metric, slider_range)
+def _data_thresholding_numbers(df):
+    return f"Cells in total: {raw_Track_stats_df.get().shape[0]}", f"In focus: {round(df.shape[0] / raw_Track_stats_df.get().shape[0] * 100)} % ({df.shape[0]})", f"Filtered out: {round((raw_Track_stats_df.get().shape[0] - df.shape[0]) / raw_Track_stats_df.get().shape[0] * 100)} % ({raw_Track_stats_df.get().shape[0] - df.shape[0]})"
+
+
+def _thresholded_data(filter_type, metric, slider_range, dfA, dfB):
+    if filter_type == "percentile":
+        if metric in Track_metrics.get():
+            return dc.percentile_thresholding(dfA, metric, slider_range)
+        elif metric in Spot_metrics.get():
+            return dc.percentile_thresholding(dfB, metric, slider_range)
+    elif filter_type == "literal":
+        if metric in Track_metrics.get():
+            return dc.literal_thresholding(dfA, metric, slider_range)
+        elif metric in Spot_metrics.get():
+            return dc.literal_thresholding(dfB, metric, slider_range)
         
 
-# def _set_thresholded_data(dfA, dfB, df0A, df0B):
-#     dfA.set(df0A.get())
-#     dfB.set(df0B.get())
+def _set_thresholded_data(dfA, dfB, df0A, df0B):
+    dfA.set(df0A.get())
+    dfB.set(df0B.get())
 
 
-# def _update_thresholded_data(metric, dfA, dfB, df0A, df0B, thresholded_df):
-#     if metric in Track_metrics.get():
-#         dfA.set(thresholded_df)
-#         dfB.set(dc.dataframe_filter(df0B.get(), dfA.get()))
-#     elif metric in Spot_metrics.get():
-#         dfB.set(thresholded_df)
-#         dfA.set(dc.dataframe_filter(df0A.get(), dfB.get()))
+def _update_thresholded_data(metric, dfA, dfB, df0A, df0B, thresholded_df):
+    if metric in Track_metrics.get():
+        dfA.set(thresholded_df)
+        dfB.set(dc.dataframe_filter(df0B.get(), dfA.get()))
+    elif metric in Spot_metrics.get():
+        dfB.set(thresholded_df)
+        dfA.set(dc.dataframe_filter(df0A.get(), dfB.get()))
 
 
 
 
 
 
-# # ============================================================================================================================================================================================================================================================================
-# # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# # Sidebar
+# ============================================================================================================================================================================================================================================================================
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Sidebar
 
 
-# with ui.sidebar(open="open", position="right", bg="f8f8f8"): 
+with ui.sidebar(open="open", position="right", bg="f8f8f8"): 
 
 
-# # Make the thresholding plot have more bins (better definition), something like 100 bins so you get percentiles
-# # and plot a gaussian distribution on top of the histogram - a simple black line
-# # Make the histogram interactive, allowing users to hover over bins to see exact values (percentile, number of cells in that percentile?)
-# # Ideally be able to be able to add and remove thresholding filters
-# # Come up with better thresholding logic, so that the code doesnt have to pass an unreasonable amount of dataframes around 
+# Make the thresholding plot have more bins (better definition), something like 100 bins so you get percentiles
+# and plot a gaussian distribution on top of the histogram - a simple black line
+# Make the histogram interactive, allowing users to hover over bins to see exact values (percentile, number of cells in that percentile?)
+# Ideally be able to be able to add and remove thresholding filters
+# Come up with better thresholding logic, so that the code doesnt have to pass an unreasonable amount of dataframes around 
 
 
 
@@ -875,1161 +859,1162 @@ def update_column_selections():
 
 
 
-#     # ================================================================================================================================================================================================================================================================================
-#     # Thresholding window no. 1
-#     # 
-#     # 1. Thresholding metric selection
-#     # 2. Thresholding filter selection
-#     # 3. Thresholding slider
-#     # 4. Thresholding histogram
-#     # 5. Thresholding output - numbers (cells in total, filtered in focus, filtered out)
+    # ================================================================================================================================================================================================================================================================================
+    # Thresholding window no. 1
+    # 
+    # 1. Thresholding metric selection
+    # 2. Thresholding filter selection
+    # 3. Thresholding slider
+    # 4. Thresholding histogram
+    # 5. Thresholding output - numbers (cells in total, filtered in focus, filtered out)
 
 
-#     ui.markdown(
-#         """
-#         ###### **Thresholding no. 1**
+    ui.markdown(
+        """
+        ###### **Thresholding no. 1**
 
-#         """
-#         )
+        """
+        )
 
-#     with ui.panel_well():
+    with ui.panel_well():
 
 
-#         # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Metirc and filter selection selection
-#         # Slider rendering
+        # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Metirc and filter selection selection
+        # Slider rendering
 
-#         ui.input_select(  
-#             "metricA",  
-#             "Thresholding metric:",  
-#             select_metrics.tracks,
-#             selected="NET_DISTANCE"
-#             )  
-
-#         ui.input_select(
-#             "filterA",
-#             "Thresholding filter:",
-#             select_mode.thresholding
-#             )
-
-#         ui.input_slider(
-#             "sliderA",
-#             "Threshold",
-#             min=0,
-#             max=100,
-#             value=(0, 100)
-#             )
-
-
-#         # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Updating the slider range
+        ui.input_select(  
+            "metricA",  
+            "Thresholding metric:",  
+            select_metrics.tracks,
+            selected="Net distance"
+            )  
+
+        ui.input_select(
+            "filterA",
+            "Thresholding filter:",
+            select_mode.thresholding
+            )
+
+        ui.input_slider(
+            "sliderA",
+            "Threshold",
+            min=0,
+            max=100,
+            value=(0, 100)
+            )
+
+
+        # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Updating the slider range
         
-#         @reactive.effect
-#         def update_sliderA():
-#             return _update_slider(input.filterA(), "sliderA", slider_valuesT1)
+        @reactive.effect
+        @reactive.event(cells_in_possession)  # Reactive effect on the filter selection
+        def update_sliderA():
+            return _update_slider(input.filterA(), "sliderA", slider_valuesT1)
 
-#         @reactive.effect
-#         def update_slider_valuesA():
-#             return _update_slider_values(input.metricA(), input.filterA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get(), slider_valuesT1)
+        @reactive.effect
+        def update_slider_valuesA():
+            return _update_slider_values(input.metricA(), input.filterA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get(), slider_valuesT1)
 
 
-#         # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Data filtering itself
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Data filtering itself
         
-#         @reactive.calc
-#         def thresholded_dataA():
-#             return _thresholded_data(input.filterA(), input.metricA(), input.sliderA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get())
+        @reactive.calc
+        def thresholded_dataA():
+            return _thresholded_data(input.filterA(), input.metricA(), input.sliderA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get())
 
-#         @reactive.effect
-#         def set_thresholded_dataA():
-#             _set_thresholded_data(Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df)
+        @reactive.effect
+        def set_thresholded_dataA():
+            _set_thresholded_data(Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df)
 
-#         @reactive.effect
-#         def update_thresholded_dataA():
-#             return _update_thresholded_data(input.metricA(), Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df, thresholded_dataA())
-
-
-#         # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Thresholding histogram
-
-#         @render.plot
-#         def threshold_histogramA():
-#             return _thresholded_histogram(input.metricA(), input.filterA(), input.sliderA(), raw_Track_stats_df, raw_Spot_stats_df)
+        @reactive.effect
+        def update_thresholded_dataA():
+            return _update_thresholded_data(input.metricA(), Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df, thresholded_dataA())
 
 
-#         # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Output - numbers
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Thresholding histogram
 
-#         @render.text
-#         def data_thresholding_numbersA1():
-#             if file_detected.get() == False and already_processed_file_detected.get() == False:
-#                 return None
-#             a, b, c = _data_thresholding_numbers(raw_Track_stats_df.get())
-#             return a
+        @render.plot
+        def threshold_histogramA():
+            return _thresholded_histogram(input.metricA(), input.filterA(), input.sliderA(), raw_Track_stats_df, raw_Spot_stats_df)
 
-#         @render.text
-#         def data_thresholding_numbersA2():
-#             if file_detected.get() == False and already_processed_file_detected.get() == False:
-#                 return None
-#             a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
-#             return b
+
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Output - numbers
+
+        @render.text
+        def data_thresholding_numbersA1():
+            if files_available.get() == False and already_processed_files_available.get() == False:
+                return None
+            a, b, c = _data_thresholding_numbers(raw_Track_stats_df.get())
+            return a
+
+        @render.text
+        def data_thresholding_numbersA2():
+            if files_available.get() == False and already_processed_files_available.get() == False:
+                return None
+            a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
+            return b
             
-#         @render.text
-#         def data_thresholding_numbersA3():
-#             if file_detected.get() == False and already_processed_file_detected.get() == False:
-#                 return None
-#             a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
-#             return c
+        @render.text
+        def data_thresholding_numbersA3():
+            if files_available.get() == False and already_processed_files_available.get() == False:
+                return None
+            a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
+            return c
         
             
         
 
-#     # ================================================================================================================================================================================================================================================================================
-#     # Thresholding well no. 2
-#     # 
-#     # 1. Thresholding metric selection
-#     # 2. Thresholding filter selection
-#     # 3. Thresholding slider
-#     # 4. Thresholding histogram
-#     # 5. Thresholding output - numbers (cells in total, filtered in focus, filtered out)
+    # ================================================================================================================================================================================================================================================================================
+    # Thresholding well no. 2
+    # 
+    # 1. Thresholding metric selection
+    # 2. Thresholding filter selection
+    # 3. Thresholding slider
+    # 4. Thresholding histogram
+    # 5. Thresholding output - numbers (cells in total, filtered in focus, filtered out)
 
 
-#     ui.markdown(
-#         """
-#         ###### **Thresholding no. 1**
+    ui.markdown(
+        """
+        ###### **Thresholding no. 1**
 
-#         """
-#         )
+        """
+        )
 
-#     with ui.panel_well():
+    with ui.panel_well():
 
         
-#         # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Metirc and filter selection selection
-#         # Slider rendering
+        # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Metirc and filter selection selection
+        # Slider rendering
 
-#         ui.input_select(  
-#             id="metricB",  
-#             label="Thresholding metric:",  
-#             choices=select_metrics.spots_n_tracks ,
-#             selected="NUM_FRAMES"
-#             )   
+        ui.input_select(  
+            id="metricB",  
+            label="Thresholding metric:",  
+            choices=select_metrics.spots_n_tracks ,
+            selected="NUM_FRAMES"
+            )   
 
-#         ui.input_select(
-#             "filterB",
-#             "Thresholding filter:",
-#             select_mode.thresholding
-#             )
+        ui.input_select(
+            "filterB",
+            "Thresholding filter:",
+            select_mode.thresholding
+            )
 
-#         ui.input_slider(
-#             "sliderB",
-#             "Threshold",
-#             min=0,
-#             max=100,
-#             value=(0, 100)
-#             )
+        ui.input_slider(
+            "sliderB",
+            "Threshold",
+            min=0,
+            max=100,
+            value=(0, 100)
+            )
 
 
-#         # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Updating the slider range
+        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Updating the slider range
         
-#         @reactive.effect
-#         def update_sliderB():
-#             return _update_slider(input.filterB(), "sliderB", slider_valuesT2)
+        @reactive.effect
+        def update_sliderB():
+            return _update_slider(input.filterB(), "sliderB", slider_valuesT2)
 
-#         @reactive.effect
-#         def update_slider_valuesB():
-#             return _update_slider_values(input.metricB(), input.filterB(), Track_stats_df_T.get(), Spot_stats_df_T.get(), slider_valuesT2)
+        @reactive.effect
+        def update_slider_valuesB():
+            return _update_slider_values(input.metricB(), input.filterB(), Track_stats_df_T.get(), Spot_stats_df_T.get(), slider_valuesT2)
 
 
-#         # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Data filtering itself
+        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Data filtering itself
         
-#         @reactive.calc
-#         def thresholded_dataB():
-#             return _thresholded_data(input.filterB(), input.metricB(), input.sliderB(), Track_stats_df_T.get(), Spot_stats_df_T.get())
+        @reactive.calc
+        def thresholded_dataB():
+            return _thresholded_data(input.filterB(), input.metricB(), input.sliderB(), Track_stats_df_T.get(), Spot_stats_df_T.get())
 
-#         @reactive.effect
-#         def set_thresholded_dataB():
-#             # if delayed_detection.get() == False:
-#             _set_thresholded_data(Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T)
-#             # else:
-#             #     pass
+        @reactive.effect
+        def set_thresholded_dataB():
+            # if delayed_detection.get() == False:
+            _set_thresholded_data(Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T)
+            # else:
+            #     pass
             
-#         @reactive.effect
-#         def update_thresholded_dataB():
-#             return _update_thresholded_data(input.metricB(), Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T, thresholded_dataB())
+        @reactive.effect
+        def update_thresholded_dataB():
+            return _update_thresholded_data(input.metricB(), Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T, thresholded_dataB())
 
 
-#         # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Thresholding histogram
+        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Thresholding histogram
 
-#         @render.plot
-#         def threshold_histogramB():
-#             return _thresholded_histogram(input.metricB(), input.filterB(), input.sliderB(), Track_stats_df_T, Spot_stats_df_T)
+        @render.plot
+        def threshold_histogramB():
+            return _thresholded_histogram(input.metricB(), input.filterB(), input.sliderB(), Track_stats_df_T, Spot_stats_df_T)
 
 
-#         # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Output - numbers
+        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Output - numbers
 
-#         @render.text
-#         def data_thresholding_numbersB1():
-#             if file_detected.get() == False and already_processed_file_detected.get() == False:
-#                 return None
-#             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
-#             return a
+        @render.text
+        def data_thresholding_numbersB1():
+            if files_available.get() == False and already_processed_files_available.get() == False:
+                return None
+            a, b, c = _data_thresholding_numbers(Track_stats_df.get())
+            return a
 
-#         @render.text
-#         def data_thresholding_numbersB2():
-#             if file_detected.get() == False and already_processed_file_detected.get() == False:
-#                 return None
-#             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
-#             return b
+        @render.text
+        def data_thresholding_numbersB2():
+            if files_available.get() == False and already_processed_files_available.get() == False:
+                return None
+            a, b, c = _data_thresholding_numbers(Track_stats_df.get())
+            return b
 
-#         @render.text
-#         def data_thresholding_numbersB3():
-#             if file_detected.get() == False and already_processed_file_detected.get() == False:
-#                 return None
-#             a, b, c = _data_thresholding_numbers(Track_stats_df.get())
-#             return c
+        @render.text
+        def data_thresholding_numbersB3():
+            if files_available.get() == False and already_processed_files_available.get() == False:
+                return None
+            a, b, c = _data_thresholding_numbers(Track_stats_df.get())
+            return c
         
 
 
 
 
 
-# # ================================================================================================================================================================================================================================================================================
-# # ================================================================================================================================================================================================================================================================================
-# # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# # Visualisation panel
+# ================================================================================================================================================================================================================================================================================
+# ================================================================================================================================================================================================================================================================================
+# --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Visualisation panel
 
 
-# with ui.nav_panel("Visualisation"):
+with ui.nav_panel("Visualisation"):
 
-#     with ui.navset_pill_list(widths=(2, 9), selected="Tracks"):
-
-
-
-#         # ==========================================================================================================================================================================================================================================================================
-#         # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Track visualization pill
-
-#         with ui.nav_panel("Tracks"):
+    with ui.navset_pill_list(widths=(2, 9), selected="Tracks"):
 
 
-#             # ==================================================================================================================================================================================================================================================================================
-#             # Plotly - interactive visualization settings'
 
-#             with ui.panel_well():
+        # ==========================================================================================================================================================================================================================================================================
+        # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Track visualization pill
 
-#                 ui.markdown(
-#                     """
-#                     #### **Interactive track visualization**
-#                     *made with*  `plotly`
-#                     <hr style="height: 4px; background-color: black; border: none" />
-#                     """
-#                     )
+        with ui.nav_panel("Tracks"):
 
-#                 # 1. Hover info selection (metrics)
 
-#                 ui.input_selectize(
-#                     'let_me_look_at_these',
-#                     'Let me look at these:',
-#                     select_metrics.tracks,
-#                     multiple=True,
-#                     selected=['CONDITION', 'REPLICATE', 'TRACK_ID'],
-#                     )
+            # ==================================================================================================================================================================================================================================================================================
+            # Plotly - interactive visualization settings'
+
+            with ui.panel_well():
+
+                ui.markdown(
+                    """
+                    #### **Interactive track visualization**
+                    *made with*  `plotly`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+
+                # 1. Hover info selection (metrics)
+
+                ui.input_selectize(
+                    'let_me_look_at_these',
+                    'Let me look at these:',
+                    select_metrics.tracks,
+                    multiple=True,
+                    selected=['Condition', 'Replicate', 'Track ID'],
+                    )
                 
-#                 ui.input_action_button(
-#                     'hover_info',
-#                     'see info',
-#                     class_="btn btn-primary",
-#                     style="padding: 4px 50px"
-#                     )
+                ui.input_action_button(
+                    'hover_info',
+                    'see info',
+                    class_="btn btn-primary",
+                    style="padding: 4px 50px"
+                    )
                 
-#                 @reactive.effect
-#                 @reactive.event(input.hover_info)
-#                 def update_hover_info():
-#                     see_hover.set(input.let_me_look_at_these())
+                @reactive.effect
+                @reactive.event(input.hover_info)
+                def update_hover_info():
+                    see_hover.set(input.let_me_look_at_these())
 
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """
-#                     )
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
 
 
-#                 # 2. Marker size setting
-#                 # 3. Markers displayed at the end of the tracks
-#                 # 4. Markers selection (for the end of the tracks)
+                # 2. Marker size setting
+                # 3. Markers displayed at the end of the tracks
+                # 4. Markers selection (for the end of the tracks)
 
-#                 ui.input_numeric(
-#                     'marker_size',
-#                     'Marker size:',
-#                     5
-#                     )
+                ui.input_numeric(
+                    'marker_size',
+                    'Marker size:',
+                    5
+                    )
                 
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_marker_size():
-#                     return input.marker_size()
+                @debounce(1)
+                @reactive.calc
+                def update_marker_size():
+                    return input.marker_size()
                 
                 
-#                 ui.input_checkbox(
-#                     'end_track_markers',
-#                     'markers at the end of the tracks',
-#                     True
-#                     )
+                ui.input_checkbox(
+                    'end_track_markers',
+                    'markers at the end of the tracks',
+                    True
+                    )
                 
-#                 ui.input_select(
-#                     'markers',
-#                     'Markers:',
-#                     select_markers.classic,
-#                     selected='circle',
-#                     )
+                ui.input_select(
+                    'markers',
+                    'Markers:',
+                    select_markers.classic,
+                    selected='circle',
+                    )
 
-#                 ui.input_checkbox(
-#                     'I_just_wanna_be_normal',
-#                     'just be normal',
-#                     True
-#                     )
+                ui.input_checkbox(
+                    'I_just_wanna_be_normal',
+                    'just be normal',
+                    True
+                    )
 
-#                 @reactive.effect
-#                 @reactive.event(input.I_just_wanna_be_normal)
-#                 def update_markers():
-#                     if input.I_just_wanna_be_normal():
-#                         ui.update_select(
-#                             id='markers',
-#                             choices=select_markers.classic,
-#                             selected='circle-open',
-#                             )
-#                         ui.update_numeric(
-#                             id='marker_size',
-#                             value=5,
-#                             )
-#                         marker_size.set(5)
+                @reactive.effect
+                @reactive.event(input.I_just_wanna_be_normal)
+                def update_markers():
+                    if input.I_just_wanna_be_normal():
+                        ui.update_select(
+                            id='markers',
+                            choices=select_markers.classic,
+                            selected='circle-open',
+                            )
+                        ui.update_numeric(
+                            id='marker_size',
+                            value=5,
+                            )
+                        marker_size.set(5)
 
-#                     else:
-#                         ui.update_select(
-#                             id='markers',
-#                             choices=select_markers.not_normal,
-#                             selected='scaled',
-#                             )
-#                         ui.update_numeric(
-#                             id='marker_size',
-#                             value=14,
-#                             )
-#                         marker_size.set(14)
+                    else:
+                        ui.update_select(
+                            id='markers',
+                            choices=select_markers.not_normal,
+                            selected='scaled',
+                            )
+                        ui.update_numeric(
+                            id='marker_size',
+                            value=14,
+                            )
+                        marker_size.set(14)
                         
-#             # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#             # Plotly - interactive visualization
-#             # 
-#             # 1. Plotly figure rendering
-#             # 2. Plotly figure download button (HTML)
+            # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+            # Plotly - interactive visualization
+            # 
+            # 1. Plotly figure rendering
+            # 2. Plotly figure download button (HTML)
 
-#             with ui.card():
+            with ui.card():
 
-#                 @render_plotly
-#                 def interactive_true_track_visualization():
-#                     fig = pu.Visualize_tracks_plotly(
-#                         Spots_df=Spot_stats_df.get(),
-#                         Tracks_df=Track_stats_df.get(), 
-#                         condition=input.condition(), 
-#                         replicate=input.replicate(), 
-#                         c_mode=input.color_mode(), 
-#                         only_one_color=input.only_one_color(), 
-#                         lut_scaling_metric=input.lut_scaling(), 
-#                         let_me_look_at_these=see_hover.get(), 
-#                         background=input.background(),
-#                         smoothing_index=update_smoothing(),
-#                         lw=update_track_line_width(),
-#                         marker_size=update_marker_size(),
-#                         end_track_markers=input.end_track_markers(),
-#                         markers=input.markers(),
-#                         I_just_wanna_be_normal=input.I_just_wanna_be_normal(), 
-#                         metric_dictionary=select_metrics.tracks,
-#                         show_tracks=input.show_tracks(),
-#                         )
-#                     return fig
+                @render_plotly
+                def interactive_true_track_visualization():
+                    fig = pu.Visualize_tracks_plotly(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        lut_scaling_metric=input.lut_scaling(), 
+                        let_me_look_at_these=see_hover.get(), 
+                        background=input.background(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_track_line_width(),
+                        marker_size=update_marker_size(),
+                        end_track_markers=input.end_track_markers(),
+                        markers=input.markers(),
+                        I_just_wanna_be_normal=input.I_just_wanna_be_normal(), 
+                        metric_dictionary=select_metrics.tracks,
+                        show_tracks=input.show_tracks(),
+                        )
+                    return fig
                 
 
-#                 @render.download(label="Download interactive HTML figure", filename="Track visualization.html")
-#                 def download_true_interactive_visualization_html():
-#                     fig = pu.Visualize_tracks_plotly(
-#                         Spots_df=Spot_stats_df.get(),
-#                         Tracks_df=Track_stats_df.get(), 
-#                         condition=input.condition(), 
-#                         replicate=input.replicate(), 
-#                         c_mode=input.color_mode(), 
-#                         only_one_color=input.only_one_color(), 
-#                         lut_scaling_metric=input.lut_scaling(), 
-#                         let_me_look_at_these=see_hover.get(), 
-#                         background=input.background(),
-#                         smoothing_index=update_smoothing(),
-#                         lw=update_track_line_width(),
-#                         marker_size=update_marker_size(),
-#                         end_track_markers=input.end_track_markers(),
-#                         markers=input.markers(),
-#                         I_just_wanna_be_normal=input.I_just_wanna_be_normal(), 
-#                         metric_dictionary=select_metrics.tracks,
-#                         show_tracks=input.show_tracks(),
-#                         )
-#                     with io.BytesIO():
-#                         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-#                         fig.write_html(tmp_file.name)
-#                         tmp_file.close()
-#                         yield Path(tmp_file.name).read_bytes()
+                @render.download(label="Download interactive HTML figure", filename="Track visualization.html")
+                def download_true_interactive_visualization_html():
+                    fig = pu.Visualize_tracks_plotly(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        lut_scaling_metric=input.lut_scaling(), 
+                        let_me_look_at_these=see_hover.get(), 
+                        background=input.background(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_track_line_width(),
+                        marker_size=update_marker_size(),
+                        end_track_markers=input.end_track_markers(),
+                        markers=input.markers(),
+                        I_just_wanna_be_normal=input.I_just_wanna_be_normal(), 
+                        metric_dictionary=select_metrics.tracks,
+                        show_tracks=input.show_tracks(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+                        fig.write_html(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
             
 
-#                 @render_plotly
-#                 def interactive_normalized_track_visualization():
-#                     fig = pu.Visualize_normalized_tracks_plotly(
-#                         Spots_df=Spot_stats_df.get(),
-#                         Tracks_df=Track_stats_df.get(),
-#                         condition=input.condition(),
-#                         replicate=input.replicate(),
-#                         c_mode=input.color_mode(),
-#                         only_one_color=input.only_one_color(),
-#                         lut_scaling_metric=input.lut_scaling(),
-#                         smoothing_index=update_smoothing(),
-#                         lw=update_track_line_width(),
-#                         marker_size=update_marker_size(),
-#                         end_track_markers=input.end_track_markers(),
-#                         markers=input.markers(),
-#                         I_just_wanna_be_normal=input.I_just_wanna_be_normal(),
-#                         metric_dictionary=select_metrics.tracks,
-#                         let_me_look_at_these=see_hover.get(),
-#                         show_tracks=input.show_tracks(),
-#                         )
-#                     return fig
+                @render_plotly
+                def interactive_normalized_track_visualization():
+                    fig = pu.Visualize_normalized_tracks_plotly(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(),
+                        condition=input.condition(),
+                        replicate=input.replicate(),
+                        c_mode=input.color_mode(),
+                        only_one_color=input.only_one_color(),
+                        lut_scaling_metric=input.lut_scaling(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_track_line_width(),
+                        marker_size=update_marker_size(),
+                        end_track_markers=input.end_track_markers(),
+                        markers=input.markers(),
+                        I_just_wanna_be_normal=input.I_just_wanna_be_normal(),
+                        metric_dictionary=select_metrics.tracks,
+                        let_me_look_at_these=see_hover.get(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    return fig
                 
-#                 @render.download(label="Download interactive HTML figure", filename="Normalized track visualization.html")
-#                 def download_normalized_interactive_visualization_html():
-#                     fig = pu.Visualize_normalized_tracks_plotly(
-#                         Spots_df=Spot_stats_df.get(),
-#                         Tracks_df=Track_stats_df.get(),
-#                         condition=input.condition(),
-#                         replicate=input.replicate(),
-#                         c_mode=input.color_mode(),
-#                         only_one_color=input.only_one_color(),
-#                         lut_scaling_metric=input.lut_scaling(),
-#                         smoothing_index=update_smoothing(),
-#                         lw=update_track_line_width(),
-#                         marker_size=update_marker_size(),
-#                         end_track_markers=input.end_track_markers(),
-#                         markers=input.markers(),
-#                         I_just_wanna_be_normal=input.I_just_wanna_be_normal(),
-#                         metric_dictionary=select_metrics.tracks,
-#                         let_me_look_at_these=see_hover.get(),
-#                         show_tracks=input.show_tracks(),
-#                         )
-#                     with io.BytesIO():
-#                         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-#                         fig.write_html(tmp_file.name)
-#                         tmp_file.close()
-#                         yield Path(tmp_file.name).read_bytes()
+                @render.download(label="Download interactive HTML figure", filename="Normalized track visualization.html")
+                def download_normalized_interactive_visualization_html():
+                    fig = pu.Visualize_normalized_tracks_plotly(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(),
+                        condition=input.condition(),
+                        replicate=input.replicate(),
+                        c_mode=input.color_mode(),
+                        only_one_color=input.only_one_color(),
+                        lut_scaling_metric=input.lut_scaling(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_track_line_width(),
+                        marker_size=update_marker_size(),
+                        end_track_markers=input.end_track_markers(),
+                        markers=input.markers(),
+                        I_just_wanna_be_normal=input.I_just_wanna_be_normal(),
+                        metric_dictionary=select_metrics.tracks,
+                        let_me_look_at_these=see_hover.get(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+                        fig.write_html(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
                         
 
-#             # ==================================================================================================================================================================================================================================================================================
-#             # Matplotlib - static visualization settings
+            # ==================================================================================================================================================================================================================================================================================
+            # Matplotlib - static visualization settings
 
-#             with ui.panel_well():
+            with ui.panel_well():
 
-#                 ui.markdown(
-#                     """
-#                     #### **Static track visualization**
-#                     *made with*  `matplotlib`
-#                     <hr style="height: 4px; background-color: black; border: none" />
-#                     """
-#                     )
+                ui.markdown(
+                    """
+                    #### **Static track visualization**
+                    *made with*  `matplotlib`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
 
-#                 # 1. Arrow size setting
-#                 # 2. Arrows displayed at the end of the tracks
-#                 # 3. Grid displayment
+                # 1. Arrow size setting
+                # 2. Arrows displayed at the end of the tracks
+                # 3. Grid displayment
 
-#                 ui.input_numeric(
-#                     'arrow_size',
-#                     'Arrow size:',
-#                     6
-#                     )
+                ui.input_numeric(
+                    'arrow_size',
+                    'Arrow size:',
+                    6
+                    )
                 
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_arrow_size():
-#                     return input.arrow_size()
+                @debounce(1)
+                @reactive.calc
+                def update_arrow_size():
+                    return input.arrow_size()
                 
-#                 ui.input_checkbox(
-#                     'arrows',
-#                     'arrows at the end of tracks',
-#                     True
-#                     )
+                ui.input_checkbox(
+                    'arrows',
+                    'arrows at the end of tracks',
+                    True
+                    )
                 
-#                 ui.input_checkbox(
-#                     "grid", 
-#                     "grid", 
-#                     True
-#                     ) 
+                ui.input_checkbox(
+                    "grid", 
+                    "grid", 
+                    True
+                    ) 
 
-#             # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#             # Matplotlib - static visualization
-#             #
-#             # 1. Matplotlib figure rendering
-#             # 2. Matplotlib figure download button (SVG)
+            # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+            # Matplotlib - static visualization
+            #
+            # 1. Matplotlib figure rendering
+            # 2. Matplotlib figure download button (SVG)
 
-#             with ui.card():
+            with ui.card():
 
-#                 @render.plot
-#                 def true_track_visualization():
-#                     plot = pu.Visualize_tracks_matplotlib(
-#                         Spots_df=Spot_stats_df.get(),
-#                         Tracks_df=Track_stats_df.get(), 
-#                         condition=input.condition(), 
-#                         replicate=input.replicate(), 
-#                         c_mode=input.color_mode(), 
-#                         only_one_color=input.only_one_color(), 
-#                         lut_scaling_metric=input.lut_scaling(), 
-#                         background=input.background(),
-#                         grid=input.grid(),
-#                         smoothing_index=update_smoothing(),
-#                         lw=update_track_line_width(),
-#                         arrows=input.arrows(),
-#                         arrowsize=update_arrow_size(),
-#                         show_tracks=input.show_tracks(),
-#                         )
-#                     return plot
+                @render.plot
+                def true_track_visualization():
+                    plot = pu.Visualize_tracks_matplotlib(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        lut_scaling_metric=input.lut_scaling(), 
+                        background=input.background(),
+                        grid=input.grid(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_track_line_width(),
+                        arrows=input.arrows(),
+                        arrowsize=update_arrow_size(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    return plot
                 
-#                 @render.download(label="Download SVG figure", filename="Track visualization.svg")
-#                 def download_true_visualization_svg():
-#                     plot = pu.Visualize_tracks_matplotlib(
-#                         Spots_df=Spot_stats_df.get(),
-#                         Tracks_df=Track_stats_df.get(), 
-#                         condition=input.condition(), 
-#                         replicate=input.replicate(), 
-#                         c_mode=input.color_mode(), 
-#                         only_one_color=input.only_one_color(), 
-#                         lut_scaling_metric=input.lut_scaling(), 
-#                         background=input.background(),
-#                         grid=input.grid(),
-#                         smoothing_index=update_smoothing(),
-#                         lw=update_track_line_width(),
-#                         arrows=input.arrows(),
-#                         arrowsize=update_arrow_size(),
-#                         show_tracks=input.show_tracks(),
-#                         )
-#                     with io.BytesIO() as buf:
-#                         plot.savefig(buf, format="svg")
-#                         yield buf.getvalue()
+                @render.download(label="Download SVG figure", filename="Track visualization.svg")
+                def download_true_visualization_svg():
+                    plot = pu.Visualize_tracks_matplotlib(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        lut_scaling_metric=input.lut_scaling(), 
+                        background=input.background(),
+                        grid=input.grid(),
+                        smoothing_index=update_smoothing(),
+                        lw=update_track_line_width(),
+                        arrows=input.arrows(),
+                        arrowsize=update_arrow_size(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    with io.BytesIO() as buf:
+                        plot.savefig(buf, format="svg")
+                        yield buf.getvalue()
 
 
-#                 @render.plot
-#                 def normalized_track_visualization():
-#                     plot = pu.Visualize_normalized_tracks_matplotlib(
-#                         Spots_df=Spot_stats_df.get(),
-#                         Tracks_df=Track_stats_df.get(), 
-#                         condition=input.condition(), 
-#                         replicate=input.replicate(), 
-#                         lut_scaling_metric=input.lut_scaling(),
-#                         c_mode=input.color_mode(), 
-#                         only_one_color=input.only_one_color(), 
-#                         smoothing_index=update_smoothing(),
-#                         lw=update_track_line_width(),
-#                         grid=input.grid(),
-#                         arrows=input.arrows(),
-#                         arrowsize=update_arrow_size(),
-#                         show_tracks=input.show_tracks(),
-#                         )
-#                     return plot
+                @render.plot
+                def normalized_track_visualization():
+                    plot = pu.Visualize_normalized_tracks_matplotlib(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        lut_scaling_metric=input.lut_scaling(),
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        smoothing_index=update_smoothing(),
+                        lw=update_track_line_width(),
+                        grid=input.grid(),
+                        arrows=input.arrows(),
+                        arrowsize=update_arrow_size(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    return plot
                 
-#                 @render.download(label="Download SVG figure", filename="Normalized track visualization.svg")
-#                 def download_normalized_visualization_svg():
-#                     plot = pu.Visualize_normalized_tracks_matplotlib(
-#                         Spots_df=Spot_stats_df.get(),
-#                         Tracks_df=Track_stats_df.get(), 
-#                         condition=input.condition(), 
-#                         replicate=input.replicate(), 
-#                         lut_scaling_metric=input.lut_scaling(),
-#                         c_mode=input.color_mode(), 
-#                         only_one_color=input.only_one_color(), 
-#                         smoothing_index=update_smoothing(),
-#                         lw=update_track_line_width(),
-#                         grid=input.grid(),
-#                         arrows=input.arrows(),
-#                         arrowsize=update_arrow_size(),
-#                         show_tracks=input.show_tracks(),
-#                         )
-#                     with io.BytesIO() as buf:
-#                         plot.savefig(buf, format="svg")
-#                         yield buf.getvalue()
+                @render.download(label="Download SVG figure", filename="Normalized track visualization.svg")
+                def download_normalized_visualization_svg():
+                    plot = pu.Visualize_normalized_tracks_matplotlib(
+                        Spots_df=Spot_stats_df.get(),
+                        Tracks_df=Track_stats_df.get(), 
+                        condition=input.condition(), 
+                        replicate=input.replicate(), 
+                        lut_scaling_metric=input.lut_scaling(),
+                        c_mode=input.color_mode(), 
+                        only_one_color=input.only_one_color(), 
+                        smoothing_index=update_smoothing(),
+                        lw=update_track_line_width(),
+                        grid=input.grid(),
+                        arrows=input.arrows(),
+                        arrowsize=update_arrow_size(),
+                        show_tracks=input.show_tracks(),
+                        )
+                    with io.BytesIO() as buf:
+                        plot.savefig(buf, format="svg")
+                        yield buf.getvalue()
 
-#                 ui.markdown(
-#                     """
-#                     ___
-#                     """
-#                     )
+                ui.markdown(
+                    """
+                    ___
+                    """
+                    )
 
-#                 @render.download(label="Download LUT map as SVG", filename="LUT map.svg")
-#                 def download_lut_map_svg():
-#                     lut_map = pu.Lut_map(
-#                         Tracks_df=Track_stats_df.get(),
-#                         c_mode=input.color_mode(), 
-#                         lut_scaling_metric=input.lut_scaling(), 
-#                         metrics_dict=select_metrics.tracks,
-#                         )
-#                     with io.BytesIO() as buf:
-#                         lut_map.savefig(buf, format="svg")
-#                         yield buf.getvalue()
+                @render.download(label="Download LUT map as SVG", filename="LUT map.svg")
+                def download_lut_map_svg():
+                    lut_map = pu.Lut_map(
+                        Tracks_df=Track_stats_df.get(),
+                        c_mode=input.color_mode(), 
+                        lut_scaling_metric=input.lut_scaling(), 
+                        metrics_dict=select_metrics.tracks,
+                        )
+                    with io.BytesIO() as buf:
+                        lut_map.savefig(buf, format="svg")
+                        yield buf.getvalue()
 
 
-#             # ==================================================================================================================================================================================================================================================================================
-#             # Common track visualization settings
+            # ==================================================================================================================================================================================================================================================================================
+            # Common track visualization settings
 
-#             with ui.panel_well():
+            with ui.panel_well():
 
-#                 ui.markdown(
-#                     """
-#                     ##### **Common track visualization settings**
-#                     ___
-#                     """
-#                     )
+                ui.markdown(
+                    """
+                    ##### **Common track visualization settings**
+                    ___
+                    """
+                    )
 
-#                 # 1. Condition selections
-#                 # 2. Replicate selections
+                # 1. Condition selections
+                # 2. Replicate selections
 
-#                 ui.input_select(
-#                     "condition",
-#                     "Condition:",
-#                     []
-#                     )
+                ui.input_select(
+                    "condition",
+                    "Condition:",
+                    []
+                    )
                 
-#                 ui.input_select(
-#                     "replicate",
-#                     "Replicate:",
-#                     []
-#                     )
+                ui.input_select(
+                    "replicate",
+                    "Replicate:",
+                    []
+                    )
 
-#                 @reactive.effect
-#                 def select_cond():
-#                     dictionary = dc.get_cond_repl(Track_stats_df.get())	
+                @reactive.effect
+                def select_cond():
+                    dictionary = dc.get_cond_repl(Track_stats_df.get())	
 
-#                     # Can use [] to remove all choices
-#                     if Track_stats_df.get().empty:
-#                         conditions = []
+                    # Can use [] to remove all choices
+                    if Track_stats_df.get().empty:
+                        conditions = []
 
-#                     conditions = list(dictionary.keys())
+                    conditions = list(dictionary.keys())
 
-#                     ui.update_select(
-#                         id='condition',
-#                         choices=conditions
-#                     )
+                    ui.update_select(
+                        id='condition',
+                        choices=conditions
+                    )
 
-#                 @reactive.effect
-#                 def select_repl():
-#                     condition = input.condition()
-#                     dictionary = dc.get_cond_repl(Track_stats_df.get())
+                @reactive.effect
+                def select_repl():
+                    condition = input.condition()
+                    dictionary = dc.get_cond_repl(Track_stats_df.get())
 
-#                     if Track_stats_df.get().empty:
-#                         replicates = []
+                    if Track_stats_df.get().empty:
+                        replicates = []
 
-#                     if condition in dictionary:
-#                         replicates = dictionary[condition]
-#                     else:
-#                         replicates = []
+                    if condition in dictionary:
+                        replicates = dictionary[condition]
+                    else:
+                        replicates = []
 
-#                     ui.update_select(
-#                         id='replicate',
-#                         choices=replicates
-#                         )
+                    ui.update_select(
+                        id='replicate',
+                        choices=replicates
+                        )
                     
 
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """
-#                     )
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
                 
 
-#                 # 3. Color mode selection ()
-#                 # 4. LUT scaling metric selection (utiised in color scaling
-#                 # 5. Color selection (for single color mode)
-#                 # 6. Background selection (dark/light)
+                # 3. Color mode selection ()
+                # 4. LUT scaling metric selection (utiised in color scaling
+                # 5. Color selection (for single color mode)
+                # 6. Background selection (dark/light)
 
-#                 ui.input_select(
-#                     "color_mode",
-#                     "Color mode:",
-#                     select_mode.color_modes,
-#                     selected='random colors',
-#                     )
+                ui.input_select(
+                    "color_mode",
+                    "Color mode:",
+                    select_mode.color_modes,
+                    selected='random colors',
+                    )
                 
-#                 ui.input_select(
-#                     'lut_scaling',
-#                     'LUT scaling metric:',
-#                     select_metrics.lut,
-#                     selected='NET_DISTANCE',
-#                     )
+                ui.input_select(
+                    'lut_scaling',
+                    'LUT scaling metric:',
+                    select_metrics.lut,
+                    selected='Net distance',
+                    )
 
-#                 ui.input_select(
-#                     'only_one_color',
-#                     'Color:',
-#                     select_mode.colors,
-#                     )
+                ui.input_select(
+                    'only_one_color',
+                    'Color:',
+                    select_mode.colors,
+                    )
                 
-#                 ui.input_select(
-#                     'background',
-#                     'Background:',
-#                     select_mode.background,
-#                     selected='dark',
-#                     )
+                ui.input_select(
+                    'background',
+                    'Background:',
+                    select_mode.background,
+                    selected='dark',
+                    )
                 
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """
-#                     )
-                
-
-#                 # 7. Smoothing index selection (for smoothing the tracks)
-#                 # 8. Line (track) width setting
-                
-#                 ui.input_numeric(
-#                     "smoothing", 
-#                     "Smoothing:", 
-#                     0, 
-#                     min=1, 
-#                     max=100)
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_smoothing():
-#                     return input.smoothing()
-                
-#                 ui.input_numeric(
-#                     'track_line_width',
-#                     'Line width:',
-#                     0.85,
-#                     min=0,
-#                     step=0.05
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_track_line_width():
-#                     return input.track_line_width()
-                
-#                 ui.input_checkbox(
-#                     'show_tracks',
-#                     'show tracks',
-#                     True
-#                     )
-
-
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
                 
 
-#         # ==========================================================================================================================================================================================================================================================================
-#         # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#         # Time series panel
+                # 7. Smoothing index selection (for smoothing the tracks)
+                # 8. Line (track) width setting
+                
+                ui.input_numeric(
+                    "smoothing", 
+                    "Smoothing:", 
+                    0, 
+                    min=1, 
+                    max=100)
+                
+                @debounce(1)
+                @reactive.calc
+                def update_smoothing():
+                    return input.smoothing()
+                
+                ui.input_numeric(
+                    'track_line_width',
+                    'Line width:',
+                    0.85,
+                    min=0,
+                    step=0.05
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_track_line_width():
+                    return input.track_line_width()
+                
+                ui.input_checkbox(
+                    'show_tracks',
+                    'show tracks',
+                    True
+                    )
 
-#         with ui.nav_panel("Time series"):
+
+                
+
+        # ==========================================================================================================================================================================================================================================================================
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        # Time series panel
+
+        with ui.nav_panel("Time series"):
             
-#             with ui.panel_well():
+            with ui.panel_well():
                 
-#                 ui.markdown(
-#                     """
-#                     #### **Time series with a polynomial fit**
-#                     *made with*  `altair`
-#                     <hr style="height: 4px; background-color: black; border: none" />
-#                     """
-#                     )
+                ui.markdown(
+                    """
+                    #### **Time series with a polynomial fit**
+                    *made with*  `altair`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
                 
-#                 ui.input_radio_buttons(  
-#                     "central_tendency",  
-#                     "Measure of central tendency:",  
-#                     ["mean", "median"],  
-#                     )  
+                ui.input_radio_buttons(  
+                    "central_tendency",  
+                    "Measure of central tendency:",  
+                    ["mean", "median"],  
+                    )  
                 
-#                 ui.input_radio_buttons(
-#                     "y_axis",
-#                     "Y axis:",
-#                     ["absolute", "relative"],
-#                     selected="absolute"
-#                     )
+                ui.input_radio_buttons(
+                    "y_axis",
+                    "Y axis:",
+                    ["absolute", "relative"],
+                    selected="absolute"
+                    )
                 
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """
-#                     )
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
 
-#                 ui.input_numeric(
-#                     "ts_degree",
-#                     "Fitting degree:",
-#                     1,
-#                     min=0,
-#                     max=15
-#                     )
+                ui.input_numeric(
+                    "ts_degree",
+                    "Fitting degree:",
+                    1,
+                    min=0,
+                    max=15
+                    )
                 
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """
-#                     )
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
                 
-#                 ui.input_numeric(
-#                     "ts_scatter_size",
-#                     "Scatter size:",
-#                     60,
-#                     min=1,
-#                     )
+                ui.input_numeric(
+                    "ts_scatter_size",
+                    "Scatter size:",
+                    60,
+                    min=1,
+                    )
                 
-#                 ui.input_numeric(
-#                     "ts_outline_width",
-#                     "Outline width:",
-#                     2.5,
-#                     min=1,
-#                     step=0.25
-#                     )
+                ui.input_numeric(
+                    "ts_outline_width",
+                    "Outline width:",
+                    2.5,
+                    min=1,
+                    step=0.25
+                    )
                 
-#                 ui.input_numeric(
-#                     "ts_opacity",
-#                     "Opacity:",
-#                     0.6,
-#                     min=0,
-#                     max=1,
-#                     step=0.05
-#                     )
+                ui.input_numeric(
+                    "ts_opacity",
+                    "Opacity:",
+                    0.6,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
 
-#                 ui.input_checkbox(
-#                     "ts_fill",
-#                     "fill scatter points",
-#                     False
-#                     )
+                ui.input_checkbox(
+                    "ts_fill",
+                    "fill scatter points",
+                    False
+                    )
                 
-#                 ui.input_checkbox(
-#                     "ts_outline",
-#                     "outline scatter points (when filled)",
-#                     False
-#                     )
+                ui.input_checkbox(
+                    "ts_outline",
+                    "outline scatter points (when filled)",
+                    False
+                    )
                 
-#             with ui.card():
+            with ui.card():
 
-#                 @render_altair
-#                 def time_series_poly_fit_chart():
-#                     chart = pu.Scatter_poly_fit_chart_altair(
-#                         Time_df=Time_stats_df.get(), 
-#                         condition=input.ts_condition(), 
-#                         replicate=input.ts_replicate(), 
-#                         replicates_separately=input.ts_separate_replicates(), 
-#                         metric=input.ts_metric(), 
-#                         Metric=select_metrics.time[input.ts_metric()], 
-#                         degree=[input.ts_degree()], 
-#                         cmap=input.ts_cmap(), 
-#                         point_fill=input.ts_fill(), 
-#                         point_size=input.ts_scatter_size(), 
-#                         point_outline=input.ts_outline(), 
-#                         point_outline_width=input.ts_outline_width(), 
-#                         opacity=input.ts_opacity(),
-#                         )
-#                     return chart
+                @render_altair
+                def time_series_poly_fit_chart():
+                    chart = pu.Scatter_poly_fit_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()], 
+                        degree=[input.ts_degree()], 
+                        cmap=input.ts_cmap(), 
+                        point_fill=input.ts_fill(), 
+                        point_size=input.ts_scatter_size(), 
+                        point_outline=input.ts_outline(), 
+                        point_outline_width=input.ts_outline_width(), 
+                        opacity=input.ts_opacity(),
+                        )
+                    return chart
                 
-#                 @render.download(label="Download interactive HTML chart", filename="Time series interactive - polynomial fit chart.html")
-#                 def download_time_series_poly_fit_chart__html():
-#                     chart = pu.Scatter_poly_fit_chart_altair(
-#                         Time_df=Time_stats_df.get(), 
-#                         condition=input.ts_condition(), 
-#                         replicate=input.ts_replicate(), 
-#                         replicates_separately=input.ts_separate_replicates(), 
-#                         metric=input.ts_metric(), 
-#                         Metric=select_metrics.time[input.ts_metric()], 
-#                         degree=[input.ts_degree()], 
-#                         cmap=input.ts_cmap(), 
-#                         point_fill=input.ts_fill(), 
-#                         point_size=input.ts_scatter_size(), 
-#                         point_outline=input.ts_outline(), 
-#                         point_outline_width=input.ts_outline_width(), 
-#                         opacity=input.ts_opacity(),
-#                         )
-#                     with io.BytesIO():
-#                         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-#                         chart.save(tmp_file.name)
-#                         tmp_file.close()
-#                         yield Path(tmp_file.name).read_bytes()
+                @render.download(label="Download interactive HTML chart", filename="Time series interactive - polynomial fit chart.html")
+                def download_time_series_poly_fit_chart__html():
+                    chart = pu.Scatter_poly_fit_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()], 
+                        degree=[input.ts_degree()], 
+                        cmap=input.ts_cmap(), 
+                        point_fill=input.ts_fill(), 
+                        point_size=input.ts_scatter_size(), 
+                        point_outline=input.ts_outline(), 
+                        point_outline_width=input.ts_outline_width(), 
+                        opacity=input.ts_opacity(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
                 
-#                 @render.download(label="Download SVG figure", filename="Time series - polynomial fit figure.svg")
-#                 def download_time_series_poly_fit_chart_svg():
-#                     chart = pu.Scatter_poly_fit_chart_altair(
-#                         Time_df=Time_stats_df.get(), 
-#                         condition=input.ts_condition(), 
-#                         replicate=input.ts_replicate(), 
-#                         replicates_separately=input.ts_separate_replicates(), 
-#                         metric=input.ts_metric(), 
-#                         Metric=select_metrics.time[input.ts_metric()], 
-#                         degree=[input.ts_degree()], 
-#                         cmap=input.ts_cmap(), 
-#                         point_fill=input.ts_fill(), 
-#                         point_size=input.ts_scatter_size(), 
-#                         point_outline=input.ts_outline(), 
-#                         point_outline_width=input.ts_outline_width(), 
-#                         opacity=input.ts_opacity(),
-#                         )
-#                     with io.BytesIO():
-#                         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
-#                         chart.save(tmp_file.name)
-#                         tmp_file.close()
-#                         yield Path(tmp_file.name).read_bytes()
+                @render.download(label="Download SVG figure", filename="Time series - polynomial fit figure.svg")
+                def download_time_series_poly_fit_chart_svg():
+                    chart = pu.Scatter_poly_fit_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()], 
+                        degree=[input.ts_degree()], 
+                        cmap=input.ts_cmap(), 
+                        point_fill=input.ts_fill(), 
+                        point_size=input.ts_scatter_size(), 
+                        point_outline=input.ts_outline(), 
+                        point_outline_width=input.ts_outline_width(), 
+                        opacity=input.ts_opacity(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
                 
                 
 
-#             with ui.panel_well():
+            with ui.panel_well():
 
-#                 ui.markdown(
-#                     """
-#                     #### **Time series line chart**
-#                     *made with*  `altair`
-#                     <hr style="height: 4px; background-color: black; border: none" />
-#                     """
-#                     )
+                ui.markdown(
+                    """
+                    #### **Time series line chart**
+                    *made with*  `altair`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
 
-#                 ui.input_checkbox(
-#                     "ts_show_median",
-#                     "show median",
-#                     False
-#                     )
+                ui.input_checkbox(
+                    "ts_show_median",
+                    "show median",
+                    False
+                    )
                 
-#             with ui.card():
+            with ui.card():
                 
-#                 @render_altair
-#                 def time_series_line_chart_altair():
-#                     chart = pu.Line_chart_altair(
-#                         Time_df=Time_stats_df.get(), 
-#                         condition=input.ts_condition(), 
-#                         replicate=input.ts_replicate(), 
-#                         replicates_separately=input.ts_separate_replicates(), 
-#                         metric=input.ts_metric(), 
-#                         Metric=select_metrics.time[input.ts_metric()],
-#                         cmap=input.ts_cmap(), 
-#                         interpolation=input.ts_interpolation(), 
-#                         show_median=input.ts_show_median(),
-#                         )
-#                     return chart
+                @render_altair
+                def time_series_line_chart_altair():
+                    chart = pu.Line_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        show_median=input.ts_show_median(),
+                        )
+                    return chart
                 
-#                 @render.download(label="Download interactive HTML chart", filename="Time series interactive - line chart.html")
-#                 def download_time_series_line_chart_html():
-#                     chart = pu.Line_chart_altair(
-#                         Time_df=Time_stats_df.get(), 
-#                         condition=input.ts_condition(), 
-#                         replicate=input.ts_replicate(), 
-#                         replicates_separately=input.ts_separate_replicates(), 
-#                         metric=input.ts_metric(), 
-#                         Metric=select_metrics.time[input.ts_metric()],
-#                         cmap=input.ts_cmap(), 
-#                         interpolation=input.ts_interpolation(), 
-#                         show_median=input.ts_show_median(),
-#                         )
-#                     with io.BytesIO():
-#                         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-#                         chart.save(tmp_file.name)
-#                         tmp_file.close()
-#                         yield Path(tmp_file.name).read_bytes()
+                @render.download(label="Download interactive HTML chart", filename="Time series interactive - line chart.html")
+                def download_time_series_line_chart_html():
+                    chart = pu.Line_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        show_median=input.ts_show_median(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
 
-#                 @render.download(label="Download SVG figure", filename="Time series - line chart.svg")
-#                 def download_time_series_line_chart_svg():
-#                     chart = pu.Line_chart_altair(
-#                         Time_df=Time_stats_df.get(), 
-#                         condition=input.ts_condition(), 
-#                         replicate=input.ts_replicate(), 
-#                         replicates_separately=input.ts_separate_replicates(), 
-#                         metric=input.ts_metric(), 
-#                         Metric=select_metrics.time[input.ts_metric()],
-#                         cmap=input.ts_cmap(), 
-#                         interpolation=input.ts_interpolation(), 
-#                         show_median=input.ts_show_median(),
-#                         )
-#                     with io.BytesIO():
-#                         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
-#                         chart.save(tmp_file.name)
-#                         tmp_file.close()
-#                         yield Path(tmp_file.name).read_bytes()
-
-
-#             with ui.panel_well():
-
-#                 ui.markdown(
-#                     """
-#                     #### **Errorband chart**
-#                     *made with*  `altair`
-#                     <hr style="height: 4px; background-color: black; border: none" />
-#                     """
-#                     )
-
-#                 ui.input_select(
-#                     "ts_extent",
-#                     "Extent:",
-#                     select_mode.extent,
-#                     selected='orig_std'
-#                     )
-                
-#                 ui.input_checkbox(
-#                     "ts_show_mean",
-#                     "show mean",
-#                     True
-#                     )
-                
-#             with ui.card():
-                
-#                 @render_altair
-#                 def errorband_chart_altair():
-#                     chart = pu.Errorband_chart_altair(
-#                         Time_df=Time_stats_df.get(), 
-#                         condition=input.ts_condition(), 
-#                         replicate=input.ts_replicate(), 
-#                         replicates_separately=input.ts_separate_replicates(), 
-#                         metric=input.ts_metric(), 
-#                         Metric=select_metrics.time[input.ts_metric()],
-#                         cmap=input.ts_cmap(), 
-#                         interpolation=input.ts_interpolation(), 
-#                         extent=input.ts_extent(), 
-#                         show_mean=input.ts_show_mean(),
-#                         )
-#                     return chart
-                
-#                 @render.download(label="Download interactive HTML chart", filename="Time series interactive - error band chart.html")
-#                 def download_errorband_chart_html():
-#                     chart = pu.Errorband_chart_altair(
-#                         Time_df=Time_stats_df.get(), 
-#                         condition=input.ts_condition(), 
-#                         replicate=input.ts_replicate(), 
-#                         replicates_separately=input.ts_separate_replicates(), 
-#                         metric=input.ts_metric(), 
-#                         Metric=select_metrics.time[input.ts_metric()],
-#                         cmap=input.ts_cmap(), 
-#                         interpolation=input.ts_interpolation(), 
-#                         extent=input.ts_extent(), 
-#                         show_mean=input.ts_show_mean(),
-#                         )
-#                     with io.BytesIO():
-#                         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-#                         chart.save(tmp_file.name)
-#                         tmp_file.close()
-#                         yield Path(tmp_file.name).read_bytes()
-
-#                 @render.download(label="Download SVG figure", filename="Time series - error band chart.svg")
-#                 def download_errorband_chart_svg():
-#                     chart = pu.Errorband_chart_altair(
-#                         Time_df=Time_stats_df.get(), 
-#                         condition=input.ts_condition(), 
-#                         replicate=input.ts_replicate(), 
-#                         replicates_separately=input.ts_separate_replicates(), 
-#                         metric=input.ts_metric(), 
-#                         Metric=select_metrics.time[input.ts_metric()],
-#                         cmap=input.ts_cmap(), 
-#                         interpolation=input.ts_interpolation(), 
-#                         extent=input.ts_extent(), 
-#                         show_mean=input.ts_show_mean(),
-#                         )
-#                     with io.BytesIO():
-#                         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
-#                         chart.save(tmp_file.name)
-#                         tmp_file.close()
-#                         yield Path(tmp_file.name).read_bytes()
+                @render.download(label="Download SVG figure", filename="Time series - line chart.svg")
+                def download_time_series_line_chart_svg():
+                    chart = pu.Line_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        show_median=input.ts_show_median(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
 
 
-#             with ui.panel_well():
+            with ui.panel_well():
 
-#                 ui.markdown(
-#                     """
-#                     ##### **Common settings**
-#                     *made with*  `altair`
-#                     <hr style="height: 4px; background-color: black; border: none" />
-#                     """
-#                     )
+                ui.markdown(
+                    """
+                    #### **Errorband chart**
+                    *made with*  `altair`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+
+                ui.input_select(
+                    "ts_extent",
+                    "Extent:",
+                    select_mode.extent,
+                    selected='orig_std'
+                    )
                 
-#                 ui.input_select(
-#                     "ts_condition",
-#                     "Condition:",
-#                     []
-#                     )
+                ui.input_checkbox(
+                    "ts_show_mean",
+                    "show mean",
+                    True
+                    )
                 
-#                 ui.input_select(
-#                     "ts_replicate",
-#                     "Replicate:",
-#                     []
-#                     )
+            with ui.card():
                 
-#                 ui.input_checkbox(
-#                     "ts_separate_replicates",
-#                     "show replicates separately (if a condition is selected)",
-#                     False
-#                     )
+                @render_altair
+                def errorband_chart_altair():
+                    chart = pu.Errorband_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        extent=input.ts_extent(), 
+                        show_mean=input.ts_show_mean(),
+                        )
+                    return chart
                 
-#                 ui.input_select(
-#                     "ts_metric",
-#                     "Metric:",
-#                     select_metrics.time,
-#                     selected='MEAN_CONFINEMENT_RATIO'
-#                     )
+                @render.download(label="Download interactive HTML chart", filename="Time series interactive - error band chart.html")
+                def download_errorband_chart_html():
+                    chart = pu.Errorband_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        extent=input.ts_extent(), 
+                        show_mean=input.ts_show_mean(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
 
-#                 @reactive.effect
-#                 def select_cond():
-#                     dictionary = dc.get_cond_repl(Time_stats_df.get())	
+                @render.download(label="Download SVG figure", filename="Time series - error band chart.svg")
+                def download_errorband_chart_svg():
+                    chart = pu.Errorband_chart_altair(
+                        Time_df=Time_stats_df.get(), 
+                        condition=input.ts_condition(), 
+                        replicate=input.ts_replicate(), 
+                        replicates_separately=input.ts_separate_replicates(), 
+                        metric=input.ts_metric(), 
+                        Metric=select_metrics.time[input.ts_metric()],
+                        cmap=input.ts_cmap(), 
+                        interpolation=input.ts_interpolation(), 
+                        extent=input.ts_extent(), 
+                        show_mean=input.ts_show_mean(),
+                        )
+                    with io.BytesIO():
+                        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
+                        chart.save(tmp_file.name)
+                        tmp_file.close()
+                        yield Path(tmp_file.name).read_bytes()
 
-#                     # Can use [] to remove all choices
-#                     if Time_stats_df.get().empty:
-#                         conditions = []
 
-#                     conditions = list(dictionary.keys())
+            with ui.panel_well():
 
-#                     ui.update_select(
-#                         id='ts_condition',
-#                         choices=conditions
-#                     )
+                ui.markdown(
+                    """
+                    ##### **Common settings**
+                    *made with*  `altair`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
+                
+                ui.input_select(
+                    "ts_condition",
+                    "Condition:",
+                    []
+                    )
+                
+                ui.input_select(
+                    "ts_replicate",
+                    "Replicate:",
+                    []
+                    )
+                
+                ui.input_checkbox(
+                    "ts_separate_replicates",
+                    "show replicates separately (if a condition is selected)",
+                    False
+                    )
+                
+                ui.input_select(
+                    "ts_metric",
+                    "Metric:",
+                    select_metrics.time,
+                    selected='MEAN_Confinement ratio'
+                    )
 
-#                 @reactive.effect
-#                 def select_repl():
-#                     condition = input.ts_condition()
-#                     dictionary = dc.get_cond_repl(Time_stats_df.get())
+                @reactive.effect
+                def select_cond():
+                    dictionary = dc.get_cond_repl(Time_stats_df.get())	
 
-#                     if Time_stats_df.get().empty:
-#                         replicates = []
+                    # Can use [] to remove all choices
+                    if Time_stats_df.get().empty:
+                        conditions = []
 
-#                     if condition in dictionary:
-#                         replicates = dictionary[condition]
-#                     else:
-#                         replicates = []
-#                         for key in dictionary:
-#                             replicates = []
+                    conditions = list(dictionary.keys())
 
-#                     ui.update_select(
-#                         id='ts_replicate',
-#                         choices=replicates
-#                         )
+                    ui.update_select(
+                        id='ts_condition',
+                        choices=conditions
+                    )
+
+                @reactive.effect
+                def select_repl():
+                    condition = input.ts_condition()
+                    dictionary = dc.get_cond_repl(Time_stats_df.get())
+
+                    if Time_stats_df.get().empty:
+                        replicates = []
+
+                    if condition in dictionary:
+                        replicates = dictionary[condition]
+                    else:
+                        replicates = []
+                        for key in dictionary:
+                            replicates = []
+
+                    ui.update_select(
+                        id='ts_replicate',
+                        choices=replicates
+                        )
                     
-#                 ui.markdown(
-#                     """
-#                     ___
-#                     ###### ***Common settings for the line and errorband charts***
+                ui.markdown(
+                    """
+                    ___
+                    ###### ***Common settings for the line and errorband charts***
 
-#                     """
-#                     )
+                    """
+                    )
 
-#                 ui.input_select(
-#                     "ts_cmap",
-#                     "Color map:",
-#                     select_mode.cmaps_qualitative,
-#                     selected='tab10'
-#                     )
+                ui.input_select(
+                    "ts_cmap",
+                    "Color map:",
+                    select_mode.cmaps_qualitative,
+                    selected='tab10'
+                    )
                 
-#                 ui.input_select(
-#                     "ts_interpolation",
-#                     "Interpolation type:",
-#                     select_mode.interpolation,
-#                     selected='catmull-rom'
-#                     )
+                ui.input_select(
+                    "ts_interpolation",
+                    "Interpolation type:",
+                    select_mode.interpolation,
+                    selected='catmull-rom'
+                    )
                 
 
-#         #   Normalize the data by counting the relative values in the time series (e.g. percents - 0-100%)
-#         #   Program an exponential curve
-#         #   Program a test which will measure which curve fit is better (linear or exponential) and set that to default
-#         #   => The test may count the (90° - horizontal) distance of each scatter point from the line (for the exponential as well as the linear line), sum them up and compare. 
-#         #   => The lower sum means a better the fit.
+        #   Normalize the data by counting the relative values in the time series (e.g. percents - 0-100%)
+        #   Program an exponential curve
+        #   Program a test which will measure which curve fit is better (linear or exponential) and set that to default
+        #   => The test may count the (90° - horizontal) distance of each scatter point from the line (for the exponential as well as the linear line), sum them up and compare. 
+        #   => The lower sum means a better the fit.
 
 
 
@@ -2038,624 +2023,622 @@ def update_column_selections():
 
 
 
-
-                
 
                 
 
-#         with ui.nav_panel("Superplots"):
+                
+
+        with ui.nav_panel("Superplots"):
                     
                         
                         
-#             # ==================================================================================================================================================================================================================================================================================
-#             # Seaborn superplot settings
+            # ==================================================================================================================================================================================================================================================================================
+            # Seaborn superplot settings
 
-#             with ui.panel_well():
+            with ui.panel_well():
 
-#                 ui.markdown(
-#                     """
-#                     #### **Swarmplot**
-#                     *made with*  `seaborn`
-#                     <hr style="height: 4px; background-color: black; border: none" />
-#                     """
-#                     )
-                
-
-
-#                 # 1. Metric selection (for testing)
-#                 # 2. Color palette selection
-
-#                 ui.input_select(
-#                     "testing_metric",
-#                     "Test for metric:",
-#                     select_metrics.tracks,
-#                     selected='NET_DISTANCE'
-#                     )
-                
-                
-#                 ui.input_select(
-#                     'palette',
-#                     'Color palette:',
-#                     select_mode.sns_palletes,
-#                     selected='Set1'
-#                     )
-
-
-
-#                 # 3. KDE alpha setting
-#                 # 4. KDE outline width setting
-#                 # 5. KDE bandwidth setting
-#                 # 6. KDE fill setting
-#                 # 7. KDE legend setting
-#                 # 8. KDE displayment setting
-                
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """ 
-#                     )
-                
-                
-#                 ui.input_numeric(
-#                     'kde_alpha',
-#                     'KDE alpha:',
-#                     0.3,
-#                     min=0,
-#                     max=1,
-#                     step=0.05
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_kde_alpha():
-#                     return input.kde_alpha()
-                
-
-#                 ui.input_numeric(
-#                     'kde_outline',
-#                     'KDE outline:',
-#                     1,
-#                     min=0,
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_kde_outline():
-#                     return input.kde_outline()
-                
-                
-#                 ui.input_numeric(
-#                     'kde_inset_width',
-#                     'KDE bandwidth:',
-#                     0.25,
-#                     min=0,
-#                     step=0.01
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_kde_inset_width():
-#                     return input.kde_inset_width()
-                
-                
-#                 ui.input_checkbox(
-#                     'kde_fill',
-#                     'KDE fill',
-#                     True
-#                     )
-                
-                
-#                 ui.input_checkbox(
-#                     'kde_legend',
-#                     'KDE legend',
-#                     True
-#                     )
-                
-                
-#                 ui.input_checkbox(
-#                     'show_kde',
-#                     'Show KDE',
-#                     False
-#                     )
+                ui.markdown(
+                    """
+                    #### **Swarmplot**
+                    *made with*  `seaborn`
+                    <hr style="height: 4px; background-color: black; border: none" />
+                    """
+                    )
                 
 
 
-#                 # 9. Violin fill color setting
-#                 # 10. Violin edge color setting
-#                 # 11. Violin alpha setting
-#                 # 12. Violin displayment setting
-                
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """
-#                     )
-                
-                
-#                 ui.input_select(
-#                     'violin_color',
-#                     'Violin fill color:',
-#                     select_mode.colors,
-#                     selected='whitesmoke'
-#                     )
-                
-                
-#                 ui.input_select(
-#                     'violin_edge_color',
-#                     'Violin edge color:',
-#                     select_mode.colors,
-#                     selected='lightgrey'
-#                     )
-                
+                # 1. Metric selection (for testing)
+                # 2. Color palette selection
 
-#                 ui.input_numeric(
-#                     'violin_outline_width',
-#                     'Violin outline width:',
-#                     0.8,
-#                     min=0,
-#                     step=0.05
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_violin_outline_width():
-#                     return input.violin_outline_width()
+                ui.input_select(
+                    "testing_metric",
+                    "Test for metric:",
+                    select_metrics.tracks,
+                    selected='Net distance'
+                    )
                 
                 
-#                 ui.input_numeric(
-#                     'violin_alpha',
-#                     'Violin alpha:',
-#                     0.8,
-#                     min=0,
-#                     max=1,
-#                     step=0.05
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_violin_alpha():
-#                     return input.violin_alpha()
-                
-                
-#                 ui.input_checkbox(
-#                     'show_violin',
-#                     'Show violin',
-#                     True
-#                     )
-                
+                ui.input_select(
+                    'palette',
+                    'Color palette:',
+                    select_mode.sns_palletes,
+                    selected='Set1'
+                    )
 
 
-#                 # 13. Swarm size setting
-#                 # 14. Swarm alpha setting
-#                 # 15. Swarm displayment setting
 
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """
-#                     )
+                # 3. KDE alpha setting
+                # 4. KDE outline width setting
+                # 5. KDE bandwidth setting
+                # 6. KDE fill setting
+                # 7. KDE legend setting
+                # 8. KDE displayment setting
+                
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """ 
+                    )
                 
                 
-#                 ui.input_numeric(
-#                     'swarm_size',
-#                     'Swarm size:',
-#                     4,
-#                     min=1,
-#                     step=1
-#                     )
+                ui.input_numeric(
+                    'kde_alpha',
+                    'KDE alpha:',
+                    0.3,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
                 
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_swarm_size():
-#                     return input.swarm_size()
+                @debounce(1)
+                @reactive.calc
+                def update_kde_alpha():
+                    return input.kde_alpha()
+                
+
+                ui.input_numeric(
+                    'kde_outline',
+                    'KDE outline:',
+                    1,
+                    min=0,
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_kde_outline():
+                    return input.kde_outline()
                 
                 
-#                 ui.input_numeric(
-#                     'swarm_alpha',
-#                     'Swarm alpha:',
-#                     0.5,
-#                     min=0,
-#                     max=1,
-#                     step=0.05
-#                     )
+                ui.input_numeric(
+                    'kde_inset_width',
+                    'KDE bandwidth:',
+                    0.25,
+                    min=0,
+                    step=0.01
+                    )
                 
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_swarm_alpha():
-#                     return input.swarm_alpha()
+                @debounce(1)
+                @reactive.calc
+                def update_kde_inset_width():
+                    return input.kde_inset_width()
                 
                 
-#                 ui.input_checkbox(
-#                     'show_swarm',
-#                     'Show swarm',
-#                     True
-#                     )
+                ui.input_checkbox(
+                    'kde_fill',
+                    'KDE fill',
+                    True
+                    )
+                
+                
+                ui.input_checkbox(
+                    'kde_legend',
+                    'KDE legend',
+                    True
+                    )
+                
+                
+                ui.input_checkbox(
+                    'show_kde',
+                    'Show KDE',
+                    False
+                    )
                 
 
 
-#                 # 16. Ball size setting
-#                 # 17. Ball outline color setting
-#                 # 18. Ball outline width setting
-#                 # 19. Ball alpha setting
-#                 # 20. Ball displayment setting
-
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """
-#                     )
+                # 9. Violin fill color setting
+                # 10. Violin edge color setting
+                # 11. Violin alpha setting
+                # 12. Violin displayment setting
+                
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+                
+                ui.input_select(
+                    'violin_color',
+                    'Violin fill color:',
+                    select_mode.colors,
+                    selected='whitesmoke'
+                    )
+                
+                
+                ui.input_select(
+                    'violin_edge_color',
+                    'Violin edge color:',
+                    select_mode.colors,
+                    selected='lightgrey'
+                    )
                 
 
-#                 ui.input_numeric(
-#                     'ball_size',
-#                     'Ball size:',
-#                     175,
-#                     min=1,
-#                     step=5
-#                     )
+                ui.input_numeric(
+                    'violin_outline_width',
+                    'Violin outline width:',
+                    0.8,
+                    min=0,
+                    step=0.05
+                    )
                 
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_ball_size():
-#                     return input.ball_size()
-                
-                
-#                 ui.input_select(
-#                     'ball_outline_color',
-#                     'Ball outline color:',
-#                     select_mode.colors,
-#                     selected='black'
-#                     )
-                
-#                 ui.input_numeric(
-#                     'ball_outline_width',
-#                     'Ball outline width:',
-#                     1,
-#                     min=0,
-#                     step=0.1
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_ball_outline_width():
-#                     return input.ball_outline_width()
+                @debounce(1)
+                @reactive.calc
+                def update_violin_outline_width():
+                    return input.violin_outline_width()
                 
                 
-#                 ui.input_numeric(
-#                     'ball_alpha',
-#                     'Ball alpha:',
-#                     1,
-#                     min=0,
-#                     max=1,
-#                     step=0.05
-#                     )
+                ui.input_numeric(
+                    'violin_alpha',
+                    'Violin alpha:',
+                    0.8,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
                 
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_ball_alpha():
-#                     return input.ball_alpha()
+                @debounce(1)
+                @reactive.calc
+                def update_violin_alpha():
+                    return input.violin_alpha()
                 
                 
-#                 ui.input_checkbox(
-#                     'show_balls',
-#                     'Show balls',
-#                     True
-#                     )
+                ui.input_checkbox(
+                    'show_violin',
+                    'Show violin',
+                    True
+                    )
                 
 
 
-#                 # 21. Mean line span setting
-#                 # 22. Median line span setting
-#                 # 23. Line width setting
-#                 # 24. Mean displayment setting
-#                 # 25. Median displayment setting
+                # 13. Swarm size setting
+                # 14. Swarm alpha setting
+                # 15. Swarm displayment setting
 
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """
-#                     )
-                
-
-#                 ui.input_numeric(
-#                     'mean_span',
-#                     'Mean line span:',
-#                     0.275,
-#                     min=0,
-#                     step=0.005
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_mean_span():
-#                     return input.mean_span()
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
                 
                 
-#                 ui.input_numeric(
-#                     'median_span',
-#                     'Median line span:',
-#                     0.250,
-#                     min=0,
-#                     step=0.005
-#                     )
+                ui.input_numeric(
+                    'swarm_size',
+                    'Swarm size:',
+                    4,
+                    min=1,
+                    step=1
+                    )
                 
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_median_span():
-#                     return input.median_span()
-                
-                
-#                 ui.input_numeric(
-#                     'line_width',
-#                     'Line width:',
-#                     1.6,
-#                     min=0,
-#                     step=0.1
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_line_width():
-#                     return input.line_width()
+                @debounce(1)
+                @reactive.calc
+                def update_swarm_size():
+                    return input.swarm_size()
                 
                 
-#                 ui.input_checkbox(
-#                     'show_mean',
-#                     'Show mean',
-#                     True
-#                     )
+                ui.input_numeric(
+                    'swarm_alpha',
+                    'Swarm alpha:',
+                    0.5,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_swarm_alpha():
+                    return input.swarm_alpha()
                 
                 
-#                 ui.input_checkbox(
-#                     'show_median',
-#                     'Show median',
-#                     True
-#                     )
+                ui.input_checkbox(
+                    'show_swarm',
+                    'Show swarm',
+                    True
+                    )
                 
 
 
-#                 # 26. Error bar capsize setting
-#                 # 27. Error bar line width setting
-#                 # 28. Error bar alpha setting
-#                 # 29. Error bar displayment setting
+                # 16. Ball size setting
+                # 17. Ball outline color setting
+                # 18. Ball outline width setting
+                # 19. Ball alpha setting
+                # 20. Ball displayment setting
 
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """
-#                     )
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
                 
-                
-#                 ui.input_numeric(
-#                     'errorbar_capsize',
-#                     'Error bar capsize:',
-#                     11,
-#                     min=0,
-#                     step=1
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_errorbar_capsize():
-#                     return input.errorbar_capsize()
-                
-                
-#                 ui.input_numeric(
-#                     'errorbar_lw',
-#                     'Error bar line width:',
-#                     1,
-#                     min=0,
-#                     step=0.1
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_errorbar_lw():
-#                     return input.errorbar_lw()
-                
-                
-#                 ui.input_numeric(
-#                     'errorbar_alpha',
-#                     'Error bar alpha:',
-#                     0.8,
-#                     min=0,
-#                     max=1,
-#                     step=0.05
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_errorbar_alpha():
-#                     return input.errorbar_alpha()
-                
-                
-#                 ui.input_checkbox(
-#                     'show_error_bars',
-#                     'Show error bars',
-#                     True
-#                     )
-                
-                
-                
-#                 # 30. P-value test setting
-#                 # 31. Show grid setting
-#                 # 32. Open spine setting
-#                 # 33. Show legend setting
-                
-#                 ui.markdown(
-#                     """
-#                     <hr style="border: none; border-top: 1px dotted" />
-#                     """
-#                     )
-                
-                
-#                 ui.input_numeric(
-#                     'plot_width',
-#                     'Graph width:',
-#                     16,
-#                     min=1,
-#                     step=1
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_plot_width():
-#                     return input.plot_width()
-                
-                
-#                 ui.input_numeric(
-#                     'plot_height',
-#                     'Graph height:',
-#                     10,
-#                     min=1,
-#                     step=1
-#                     )
-                
-#                 @debounce(1)
-#                 @reactive.calc
-#                 def update_plot_height():
-#                     return input.plot_height()
-                
-                
-#                 ui.input_checkbox(
-#                     'p_test',
-#                     'P-value test',
-#                     False
-#                     )
-                
-                
-#                 ui.input_checkbox(
-#                     'show_grid',
-#                     'Show grid',
-#                     True
-#                     )
-                
-                
-#                 ui.input_checkbox(
-#                     'open_spine',
-#                     'Open spine',
-#                     True
-#                     )
-                
-                
-#                 ui.input_checkbox(
-#                     'show_legend',
-#                     'Show legend',
-#                     True
-#                     )
-                
-                
-#             with ui.card():
 
-#                 @render.plot
-#                 def seaborn_superplot():
-#                     fig = pu.Superplot_seaborn(
-#                         df=Track_stats_df.get(), 
-#                         metric=input.testing_metric(), 
-#                         Metric=select_metrics.tracks[input.testing_metric()], 
-#                         palette=input.palette(), 
-
-#                         kde_alpha=update_kde_alpha(),
-#                         kde_outline=update_kde_outline(),
-#                         kde_inset_width=update_kde_inset_width(),
-#                         kde_fill=input.kde_fill(),
-#                         kde_legend=input.kde_legend(),
-#                         show_kde=input.show_kde(),
-
-#                         violin_fill_color=input.violin_color(),
-#                         violin_edge_color=input.violin_edge_color(),
-#                         violin_outline_width=update_violin_outline_width(),
-#                         violin_alpha=update_violin_alpha(),
-#                         show_violin=input.show_violin(),
-
-#                         swarm_size=update_swarm_size(),
-#                         swarm_outline_color='black',
-#                         swarm_alpha=update_swarm_alpha(),
-#                         show_swarm=input.show_swarm(),
-
-#                         ball_size=update_ball_size(),
-#                         ball_outline_color=input.ball_outline_color(),
-#                         ball_outline_width=update_ball_outline_width(),
-#                         ball_alpha=update_ball_alpha(),
-#                         show_balls=input.show_balls(),
-
-#                         mean_span=update_mean_span(),
-#                         mean_color='black',
-#                         median_span=update_median_span(),
-#                         median_color='black',
-#                         line_width=update_line_width(),
-#                         show_mean=input.show_mean(),
-#                         show_median=input.show_median(),
-#                         set_main_line=False,
-
-#                         errorbar_capsize=update_errorbar_capsize(),
-#                         errorbar_lw=update_errorbar_lw(),
-#                         errorbar_color='black',
-#                         errorbar_alpha=update_errorbar_alpha(),
-#                         show_error_bars=input.show_error_bars(),
-
-#                         p_test=input.p_test(),
-
-#                         show_grid=input.show_grid(),
-#                         open_spine=input.open_spine(),
-#                         show_legend=input.show_legend(),
-#                         plot_width=update_plot_width(),
-#                         plot_height=update_plot_height(),
-#                         )
-#                     return fig
-
-#                 @render.download(label="Download SVG figure", filename="Seaborn superplot.svg")
-#                 def download_seaborn_superplot_svg():
-#                     fig = pu.Superplot_seaborn(
-#                         df=Track_stats_df.get(), 
-#                         metric=input.testing_metric(), 
-#                         Metric=select_metrics.tracks[input.testing_metric()], 
-#                         palette=input.palette(), 
-#                         kde_alpha=update_kde_alpha(),
-#                         kde_outline=update_kde_outline(),
-#                         kde_inset_width=update_kde_inset_width(),
-#                         kde_fill=input.kde_fill(),
-#                         kde_legend=input.kde_legend(),
-#                         show_kde=input.show_kde(),
-#                         violin_fill_color=input.violin_color(),
-#                         violin_edge_color=input.violin_edge_color(),
-#                         violin_outline_width=update_violin_outline_width(),
-#                         violin_alpha=update_violin_alpha(),
-#                         show_violin=input.show_violin(),
-#                         swarm_size=update_swarm_size(),
-#                         swarm_alpha=update_swarm_alpha(),
-#                         show_swarm=input.show_swarm(),
-#                         ball_size=update_ball_size(),
-#                         ball_outline_color=input.ball_outline_color(),
-#                         ball_outline_width=update_ball_outline_width(),
-#                         ball_alpha=update_ball_alpha(),
-#                         show_balls=input.show_balls(),
-#                         mean_span=update_mean_span(),
-#                         median_span=update_median_span(),
-#                         line_width=update_line_width(),
-#                         show_mean=input.show_mean(),
-#                         show_median=input.show_median(),
-#                         errorbar_capsize=update_errorbar_capsize(),
-#                         errorbar_lw=update_errorbar_lw(),
-#                         errorbar_alpha=update_errorbar_alpha(),
-#                         show_error_bars=input.show_error_bars(),
-#                         p_test=input.p_test(),
-#                         show_grid=input.show_grid(),
-#                         open_spine=input.open_spine(),
-#                         show_legend=input.show_legend(),
-#                         plot_width=update_plot_width(),
-#                         plot_height=update_plot_height()
-#                     )
-#                     with io.BytesIO():
-#                             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
-#                             fig.savefig(tmp_file.name)
-#                             tmp_file.close()
-#                             yield Path(tmp_file.name).read_bytes()
+                ui.input_numeric(
+                    'ball_size',
+                    'Ball size:',
+                    175,
+                    min=1,
+                    step=5
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_ball_size():
+                    return input.ball_size()
+                
+                
+                ui.input_select(
+                    'ball_outline_color',
+                    'Ball outline color:',
+                    select_mode.colors,
+                    selected='black'
+                    )
+                
+                ui.input_numeric(
+                    'ball_outline_width',
+                    'Ball outline width:',
+                    1,
+                    min=0,
+                    step=0.1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_ball_outline_width():
+                    return input.ball_outline_width()
+                
+                
+                ui.input_numeric(
+                    'ball_alpha',
+                    'Ball alpha:',
+                    1,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_ball_alpha():
+                    return input.ball_alpha()
+                
+                
+                ui.input_checkbox(
+                    'show_balls',
+                    'Show balls',
+                    True
+                    )
+                
 
 
-#             # with ui.panel_well():
+                # 21. Mean line span setting
+                # 22. Median line span setting
+                # 23. Line width setting
+                # 24. Mean displayment setting
+                # 25. Median displayment setting
+
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+
+                ui.input_numeric(
+                    'mean_span',
+                    'Mean line span:',
+                    0.275,
+                    min=0,
+                    step=0.005
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_mean_span():
+                    return input.mean_span()
+                
+                
+                ui.input_numeric(
+                    'median_span',
+                    'Median line span:',
+                    0.250,
+                    min=0,
+                    step=0.005
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_median_span():
+                    return input.median_span()
+                
+                
+                ui.input_numeric(
+                    'line_width',
+                    'Line width:',
+                    1.6,
+                    min=0,
+                    step=0.1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_line_width():
+                    return input.line_width()
+                
+                
+                ui.input_checkbox(
+                    'show_mean',
+                    'Show mean',
+                    True
+                    )
+                
+                
+                ui.input_checkbox(
+                    'show_median',
+                    'Show median',
+                    True
+                    )
+                
 
 
+                # 26. Error bar capsize setting
+                # 27. Error bar line width setting
+                # 28. Error bar alpha setting
+                # 29. Error bar displayment setting
+
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+                
+                ui.input_numeric(
+                    'errorbar_capsize',
+                    'Error bar capsize:',
+                    11,
+                    min=0,
+                    step=1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_errorbar_capsize():
+                    return input.errorbar_capsize()
+                
+                
+                ui.input_numeric(
+                    'errorbar_lw',
+                    'Error bar line width:',
+                    1,
+                    min=0,
+                    step=0.1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_errorbar_lw():
+                    return input.errorbar_lw()
+                
+                
+                ui.input_numeric(
+                    'errorbar_alpha',
+                    'Error bar alpha:',
+                    0.8,
+                    min=0,
+                    max=1,
+                    step=0.05
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_errorbar_alpha():
+                    return input.errorbar_alpha()
+                
+                
+                ui.input_checkbox(
+                    'show_error_bars',
+                    'Show error bars',
+                    True
+                    )
+                
+                
+                
+                # 30. P-value test setting
+                # 31. Show grid setting
+                # 32. Open spine setting
+                # 33. Show legend setting
+                
+                ui.markdown(
+                    """
+                    <hr style="border: none; border-top: 1px dotted" />
+                    """
+                    )
+                
+                
+                ui.input_numeric(
+                    'plot_width',
+                    'Graph width:',
+                    16,
+                    min=1,
+                    step=1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_plot_width():
+                    return input.plot_width()
+                
+                
+                ui.input_numeric(
+                    'plot_height',
+                    'Graph height:',
+                    10,
+                    min=1,
+                    step=1
+                    )
+                
+                @debounce(1)
+                @reactive.calc
+                def update_plot_height():
+                    return input.plot_height()
+                
+                
+                ui.input_checkbox(
+                    'p_test',
+                    'P-value test',
+                    False
+                    )
+                
+                
+                ui.input_checkbox(
+                    'show_grid',
+                    'Show grid',
+                    True
+                    )
+                
+                
+                ui.input_checkbox(
+                    'open_spine',
+                    'Open spine',
+                    True
+                    )
+                
+                
+                ui.input_checkbox(
+                    'show_legend',
+                    'Show legend',
+                    True
+                    )
+                
+                
+            with ui.card():
+
+                @render.plot
+                def seaborn_superplot():
+                    fig = pu.Superplot_seaborn(
+                        df=Track_stats_df.get(), 
+                        metric=input.testing_metric(), 
+                        Metric=select_metrics.tracks[input.testing_metric()], 
+                        palette=input.palette(), 
+
+                        kde_alpha=update_kde_alpha(),
+                        kde_outline=update_kde_outline(),
+                        kde_inset_width=update_kde_inset_width(),
+                        kde_fill=input.kde_fill(),
+                        kde_legend=input.kde_legend(),
+                        show_kde=input.show_kde(),
+
+                        violin_fill_color=input.violin_color(),
+                        violin_edge_color=input.violin_edge_color(),
+                        violin_outline_width=update_violin_outline_width(),
+                        violin_alpha=update_violin_alpha(),
+                        show_violin=input.show_violin(),
+
+                        swarm_size=update_swarm_size(),
+                        swarm_outline_color='black',
+                        swarm_alpha=update_swarm_alpha(),
+                        show_swarm=input.show_swarm(),
+
+                        ball_size=update_ball_size(),
+                        ball_outline_color=input.ball_outline_color(),
+                        ball_outline_width=update_ball_outline_width(),
+                        ball_alpha=update_ball_alpha(),
+                        show_balls=input.show_balls(),
+
+                        mean_span=update_mean_span(),
+                        mean_color='black',
+                        median_span=update_median_span(),
+                        median_color='black',
+                        line_width=update_line_width(),
+                        show_mean=input.show_mean(),
+                        show_median=input.show_median(),
+                        set_main_line=False,
+
+                        errorbar_capsize=update_errorbar_capsize(),
+                        errorbar_lw=update_errorbar_lw(),
+                        errorbar_color='black',
+                        errorbar_alpha=update_errorbar_alpha(),
+                        show_error_bars=input.show_error_bars(),
+
+                        p_test=input.p_test(),
+
+                        show_grid=input.show_grid(),
+                        open_spine=input.open_spine(),
+                        show_legend=input.show_legend(),
+                        plot_width=update_plot_width(),
+                        plot_height=update_plot_height(),
+                        )
+                    return fig
+
+                @render.download(label="Download SVG figure", filename="Seaborn superplot.svg")
+                def download_seaborn_superplot_svg():
+                    fig = pu.Superplot_seaborn(
+                        df=Track_stats_df.get(), 
+                        metric=input.testing_metric(), 
+                        Metric=select_metrics.tracks[input.testing_metric()], 
+                        palette=input.palette(), 
+                        kde_alpha=update_kde_alpha(),
+                        kde_outline=update_kde_outline(),
+                        kde_inset_width=update_kde_inset_width(),
+                        kde_fill=input.kde_fill(),
+                        kde_legend=input.kde_legend(),
+                        show_kde=input.show_kde(),
+                        violin_fill_color=input.violin_color(),
+                        violin_edge_color=input.violin_edge_color(),
+                        violin_outline_width=update_violin_outline_width(),
+                        violin_alpha=update_violin_alpha(),
+                        show_violin=input.show_violin(),
+                        swarm_size=update_swarm_size(),
+                        swarm_alpha=update_swarm_alpha(),
+                        show_swarm=input.show_swarm(),
+                        ball_size=update_ball_size(),
+                        ball_outline_color=input.ball_outline_color(),
+                        ball_outline_width=update_ball_outline_width(),
+                        ball_alpha=update_ball_alpha(),
+                        show_balls=input.show_balls(),
+                        mean_span=update_mean_span(),
+                        median_span=update_median_span(),
+                        line_width=update_line_width(),
+                        show_mean=input.show_mean(),
+                        show_median=input.show_median(),
+                        errorbar_capsize=update_errorbar_capsize(),
+                        errorbar_lw=update_errorbar_lw(),
+                        errorbar_alpha=update_errorbar_alpha(),
+                        show_error_bars=input.show_error_bars(),
+                        p_test=input.p_test(),
+                        show_grid=input.show_grid(),
+                        open_spine=input.open_spine(),
+                        show_legend=input.show_legend(),
+                        plot_width=update_plot_width(),
+                        plot_height=update_plot_height()
+                    )
+                    with io.BytesIO():
+                            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
+                            fig.savefig(tmp_file.name)
+                            tmp_file.close()
+                            yield Path(tmp_file.name).read_bytes()
+
+
+            # with ui.panel_well():
 
 
 
@@ -2665,69 +2648,71 @@ def update_column_selections():
 
 
 
-# with ui.nav_panel('Task list'):
 
-#     ui.markdown(
-#         """
-#         # **Task list**
 
-        
+with ui.nav_panel('Task list'):
 
-#         **Time series plots** - make the graphs more modifyeble
-
-        
-#         *Scatter with fitted line chart*
-#         Add a possibility to:
-#         - [ ] plot the median value per frame
-#         - [ ] have a relative scale (0-100%) for the y axis and rescale the data
-#         - [ ] algorithmically choose the best fit (linear or exponential) 
-#         - [ ] get the equation output for the fitted line/curve
-#         - [ ] *statistically test for the differences in the fitted lines/curves*
-
-#         *Line chart*
-#         - [ ] add a selection of the main line (between the mean and the median)
-
-#         *Error band chart*
-
-#         <hr style="border: none; border-top: 1px dotted; margin: 0" />
-
-        
-#         **Superplots**
-
-#         - [ ] Add a superviolin plot  
-#         - [ ] Make the interactive stripplot have a data density related distribution      
-
-#         <hr style="border: none; border-top: 1px dotted; margin: 0" /> 
-
-        
-#         **Sections with graph settings**
-
-#         - [ ] Annotate and label the setting sections properly
-#         - [ ] Add a button to reset the settings to default values
-
-#         <hr style="border: none; border-top: 1px dotted; margin: 0" />
+    ui.markdown(
+        """
+        # **Task list**
 
         
 
-#         **Data calcs speed efficiency**
+        **Time series plots** - make the graphs more modifyeble
 
-#         - [ ] Optimize the speed and efficiency of the data calculations
+        
+        *Scatter with fitted line chart*
+        Add a possibility to:
+        - [ ] plot the median value per frame
+        - [ ] have a relative scale (0-100%) for the y axis and rescale the data
+        - [ ] algorithmically choose the best fit (linear or exponential) 
+        - [ ] get the equation output for the fitted line/curve
+        - [ ] *statistically test for the differences in the fitted lines/curves*
 
-#         <hr style="border: none; border-top: 1px dotted; margin: 0" />
+        *Line chart*
+        - [ ] add a selection of the main line (between the mean and the median)
+
+        *Error band chart*
+
+        <hr style="border: none; border-top: 1px dotted; margin: 0" />
+
+        
+        **Superplots**
+
+        - [ ] Add a superviolin plot  
+        - [ ] Make the interactive stripplot have a data density related distribution      
+
+        <hr style="border: none; border-top: 1px dotted; margin: 0" /> 
+
+        
+        **Sections with graph settings**
+
+        - [ ] Annotate and label the setting sections properly
+        - [ ] Add a button to reset the settings to default values
+
+        <hr style="border: none; border-top: 1px dotted; margin: 0" />
+
+        
+
+        **Data calcs speed efficiency**
+
+        - [ ] Optimize the speed and efficiency of the data calculations
+
+        <hr style="border: none; border-top: 1px dotted; margin: 0" />
 
         
         
-#         **Functionality**
+        **Functionality**
 
-#         - [ ] Add a debounce to the add input field
-#         - [ ] Add a throttle/debounce to the thresholding
-#         - [ ] Add a debounce to all the heavy/plot calculations (optional)
-#         - [ ] Check the mean value differences (lineplot - scatter) in the swarmplot
-#         - [ ] možnosť stiahnuť súbor s infom o tom aké boli nastavenia pri plotovaní 
+        - [ ] Add a debounce to the add input field
+        - [ ] Add a throttle/debounce to the thresholding
+        - [ ] Add a debounce to all the heavy/plot calculations (optional)
+        - [ ] Check the mean value differences (lineplot - scatter) in the swarmplot
+        - [ ] možnosť stiahnuť súbor s infom o tom aké boli nastavenia pri plotovaní 
         
 
-#         """
-#         )
+        """
+        )
     
 
 
@@ -2768,9 +2753,9 @@ def update_column_selections():
 
 
 
-# ui.nav_spacer()  
+ui.nav_spacer()  
 
-# with ui.nav_control():  
-#     ui.input_dark_mode(mode="light")
+with ui.nav_control():  
+    ui.input_dark_mode(mode="light")
 
 
