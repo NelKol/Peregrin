@@ -2472,7 +2472,7 @@ with ui.nav_panel("Visualisation"):
                             yield Path(tmp_file.name).read_bytes()
 
 
-            with ui.panel_well():
+            # with ui.panel_well():
 
 
 
