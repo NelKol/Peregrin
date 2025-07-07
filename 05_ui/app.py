@@ -166,6 +166,18 @@ with ui.nav_panel("Input"):
         ui.input_action_button("add_input", "Add data input", class_="btn btn-primary")
         ui.input_action_button("remove_input", "Remove data input", class_="btn btn-primary")
 
+        ui.input_action_button("input_help", "Show help")
+
+        @reactive.effect
+        @reactive.event(input.input_help)
+        def show_help():
+            ui.notification_show(
+                f"This help message will disappear after 60 seconds.",
+                type="message",
+                duration=60000
+            )
+
+
         ui.markdown(
             """
             ___
@@ -175,11 +187,64 @@ with ui.nav_panel("Input"):
         # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
         # Default data input slot
 
+        supported_file_formats = [".csv", ".xls", ".xlsx", ".feather", ".parquet", ".h5", ".hdf5", ".json"]
+
         @render.ui
         def default_input():
-            default_browser = ui.input_file("file1", "Input CSV", accept=[".csv"], multiple=True, placeholder="No files selected")
-            default_label = ui.input_text("label1", "Condition", placeholder="label me :D")
+            default_browser = ui.input_file("file1", "Input files:", accept=supported_file_formats, multiple=True, placeholder="No files selected", button_label="Browse files...")
+            default_label = ui.input_text("label1", "Condition no. 1", placeholder="Label me! :D")
             return default_label, default_browser
+        
+
+        with ui.panel_absolute(  
+            width="350px",  
+            right="300px",  
+            top="150px",  
+            draggable=True,  
+        ):  
+            with ui.panel_well():
+                ui.markdown(
+                    """
+                    <h5>Select columns:</h5>
+                    <p>
+                    """
+                )
+                
+                ui.input_select(
+                    "select_id", 
+                    label="Track identifier:",
+                    choices=["e.g. TRACK_ID"],
+                    multiple=False,
+                )
+
+                ui.input_select(
+                    "select_time", 
+                    label="Time point:",
+                    choices=["e.g. POSITION_T"],
+                    multiple=False,
+                )
+
+                ui.input_select(
+                    "select_x", 
+                    label="X coordinate:",
+                    choices=["e.g. POSITION_X"],
+                    multiple=False,
+                )
+
+                ui.input_select(
+                    "select_y", 
+                    label="Y coordinate:",
+                    choices=["e.g. POSITION_Y"],
+                    multiple=False,
+                )
+
+                ui.markdown(
+                    """
+                    <span style="color:darkgrey; font-style:italic;">
+                        You can drag me around!
+                    </span>
+                    """
+                )
 
 
         # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -201,17 +266,18 @@ with ui.nav_panel("Input"):
                 # CSV file browser
                 browser = ui.input_file(                        
                     id=f"file{adding}", 
-                    label=f"Input CSV {adding}", 
-                    accept=[".csv"], 
+                    label=f"Input file (browse or drag-and-drop):", 
+                    accept=supported_file_formats, 
                     multiple=True, 
-                    placeholder="No files selected"
+                    placeholder="No files selected",
+                    button_label="Browse file..."
                     )
                 
                 # Data labeling text window (condition labeling)
                 label = ui.input_text(                          
                     id=f"label{adding}", 
-                    label=f"Condition", 
-                    placeholder="label me :D"
+                    label=f"Condition no. {adding}", 
+                    placeholder="Label me! :D"
                     )
 
                 # Container rendering the additional input slot container
@@ -692,6 +758,54 @@ def _update_thresholded_data(metric, dfA, dfB, df0A, df0B, thresholded_df):
 
 
 with ui.sidebar(open="open", position="right", bg="f8f8f8"): 
+
+
+# Make the thresholding plot have more bins (better definition), something like 100 bins so you get percentiles
+# and plot a gaussian distribution on top of the histogram - a simple black line
+# Make the histogram interactive, allowing users to hover over bins to see exact values (percentile, number of cells in that percentile?)
+# Ideally be able to be able to add and remove thresholding filters
+# Come up with better thresholding logic, so that the code doesnt have to pass an unreasonable amount of dataframes around 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     # ================================================================================================================================================================================================================================================================================
