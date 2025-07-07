@@ -357,252 +357,171 @@ def df_gaussian_donut(df, metric, subject, heatmap, weight, threshold, title_siz
 # True track visualization functions
 
 
-def Visualize_tracks_plotly(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, condition:None, replicate:None, c_mode:str, only_one_color:str, lut_scaling_metric:str, background:str, smoothing_index:float, lw:float, show_tracks:bool, let_me_look_at_these:tuple, I_just_wanna_be_normal:bool, metric_dictionary:dict, end_track_markers:bool, marker_size:float, markers:None):
+def Visualize_tracks_plotly(
+    Spots_df: pd.DataFrame,
+    Tracks_df: pd.DataFrame,
+    condition: None,
+    replicate: None,
+    c_mode: str,
+    only_one_color: str,
+    lut_scaling_metric: str,
+    background: str,
+    smoothing_index: float,
+    lw: float,
+    show_tracks: bool,
+    let_me_look_at_these: tuple,
+    I_just_wanna_be_normal: bool,
+    metric_dictionary: dict,
+    end_track_markers: bool,
+    marker_size: float,
+    markers: None
+):
+    if not show_tracks:
+        lw = 0
 
-    if show_tracks:
-        pass
-    else:
-        lw=0
-
-
-    if condition == None or replicate == None:
-        pass
-    else:
-        try:
-            condition = int(condition)
-        except ValueError or TypeError:
-            pass
-        try:
-            replicate = int(replicate)
-        except ValueError or TypeError:
-            pass
-
+    # Convert types
+    try: condition = int(condition) if condition != 'all' else condition
+    except: pass
+    try: replicate = int(replicate) if replicate != 'all' else replicate
+    except: pass
 
     let_me_look_at_these = list(let_me_look_at_these)
 
-    if 'level_0' in Tracks_df.columns:
-        Tracks_df.drop(columns=['level_0'], inplace=True)
-    
-    Tracks_df.reset_index(drop=False, inplace=True)
-
-
+    # Filter Spots_df
     if condition == 'all':
-        Spots_df = Spots_df.sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
-    elif condition != 'all' and replicate == 'all':
-        Spots_df = Spots_df[Spots_df['CONDITION'] == condition].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
-    elif condition != 'all' and replicate != 'all':
-        Spots_df = Spots_df[(Spots_df['CONDITION'] == condition) & (Spots_df['REPLICATE'] == replicate)].sort_values(by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T'])
-
-
-    if background =='light':
-        grid_color = 'gainsboro'
-        face_color = 'white'
-
+        filtered_spots = Spots_df.copy()
+    elif replicate == 'all':
+        filtered_spots = Spots_df[Spots_df['CONDITION'] == condition]
     else:
-        grid_color = 'silver'
-        face_color = 'darkgrey'
-    
+        filtered_spots = Spots_df[
+            (Spots_df['CONDITION'] == condition) &
+            (Spots_df['REPLICATE'] == replicate)
+        ]
 
-    np.random.seed(42)  # For reproducibility
-    
+    # Sort once
+    filtered_spots = filtered_spots.sort_values(
+        by=['CONDITION', 'REPLICATE', 'TRACK_ID', 'POSITION_T']
+    )
+
+    # Smoothing
+    if smoothing_index > 1:
+        def smooth(g):
+            g['POSITION_X'] = g['POSITION_X'].rolling(smoothing_index, min_periods=1).mean()
+            g['POSITION_Y'] = g['POSITION_Y'].rolling(smoothing_index, min_periods=1).mean()
+            return g
+        filtered_spots = filtered_spots.groupby(['CONDITION', 'REPLICATE', 'TRACK_ID'], group_keys=False).apply(smooth)
+
+    # Color mapping
+    np.random.seed(42)
     if c_mode in ['random colors', 'random greys', 'only-one-color']:
-        colormap = None
-
-        if c_mode in ['random colors']:
-            track_colors = [_generate_random_color() for _ in range(len(Tracks_df))]
-        elif c_mode in ['random greys']:
-            track_colors = [_generate_random_grey() for _ in range(len(Tracks_df))]
-        else:
-            track_colors = [only_one_color for _ in range(len(Tracks_df))]
-        
-        color_map_direct = dict(zip(Tracks_df['TRACK_ID'], track_colors))
-        Tracks_df['COLOR'] = Tracks_df['TRACK_ID'].map(color_map_direct)
-
+        color_vals = {
+            'random colors': [_generate_random_color() for _ in range(len(Tracks_df))],
+            'random greys': [_generate_random_grey() for _ in range(len(Tracks_df))],
+            'only-one-color': [only_one_color for _ in range(len(Tracks_df))]
+        }[c_mode]
+        Tracks_df['COLOR'] = color_vals
+        color_map = Tracks_df.set_index('TRACK_ID')['COLOR'].to_dict()
+        filtered_spots['COLOR'] = filtered_spots['TRACK_ID'].map(color_map)
     elif c_mode in ['differentiate conditions', 'differentiate replicates']:
-        if c_mode == 'differentiate conditions':
-            colormap = plt.get_cmap('Set1')  # Use qualitative colormap
-            unique_vals = Spots_df['CONDITION'].unique()
-            val_column = 'CONDITION'
-        else:
-            colormap = plt.get_cmap('Set1')
-            unique_vals = Spots_df['REPLICATE'].unique()
-            val_column = 'REPLICATE'
-
-        # Assign colors to each unique category
+        val_column = 'CONDITION' if c_mode == 'differentiate conditions' else 'REPLICATE'
+        cmap = plt.get_cmap('Set1')
+        unique_vals = filtered_spots[val_column].unique()
         val_to_color = {
-            val: colormap(i % colormap.N)  # Wrap around if more values than colors
+            val: mcolors.to_hex(cmap(i % cmap.N))
             for i, val in enumerate(sorted(unique_vals))
         }
-        # Map those colors to the tracks
-        Tracks_df['COLOR'] = Tracks_df[val_column].map(val_to_color)
-
+        filtered_spots['COLOR'] = filtered_spots[val_column].map(val_to_color)
     else:
         colormap = _get_cmap(c_mode)
-        metric_min = Spots_df[lut_scaling_metric].min()
-        metric_max = Spots_df[lut_scaling_metric].max()
+        metric_min = filtered_spots[lut_scaling_metric].min()
+        metric_max = filtered_spots[lut_scaling_metric].max()
+        norm = plt.Normalize(metric_min, metric_max)
+        filtered_spots['COLOR'] = filtered_spots[lut_scaling_metric].map(lambda v: mcolors.to_hex(colormap(norm(v))))
 
-    min_track_length = Tracks_df['TRACK_LENGTH'].min()
-    max_track_length = Tracks_df['TRACK_LENGTH'].max()
+    # Tick & layout
+    x_min, x_max = filtered_spots['POSITION_X'].min(), filtered_spots['POSITION_X'].max()
+    y_min, y_max = filtered_spots['POSITION_Y'].min(), filtered_spots['POSITION_Y'].max()
+    x_ticks = np.arange(x_min, x_max, 200)
+    y_ticks = np.arange(y_min, y_max, 200)
+    grid_color = 'gainsboro' if background == 'light' else 'silver'
+    face_color = 'white' if background == 'light' else 'darkgrey'
 
-
-    fig, ax = plt.subplots(figsize=(13, 10))
-
-    x_min = Spots_df['POSITION_X'].min()
-    x_max = Spots_df['POSITION_X'].max()
-    y_min = Spots_df['POSITION_Y'].min()
-    y_max = Spots_df['POSITION_Y'].max()
-
-    # Manually set the major tick locations and labels
-    x_ticks_major = np.arange(x_min, x_max, 200)  # Adjust the step size as needed
-    y_ticks_major = np.arange(y_min, y_max, 200)  # Adjust the step size as needed
-
-
-    Spots_grouped = Spots_df.groupby(['CONDITION', 'REPLICATE', 'TRACK_ID'])
-    Tracks_df.set_index(['CONDITION', 'REPLICATE', 'TRACK_ID'], inplace=True)
-
+    # Group and render
     fig = go.Figure()
+    for (cond, repl, track), group_df in filtered_spots.groupby(['CONDITION', 'REPLICATE', 'TRACK_ID']):
+        color = group_df['COLOR'].iloc[0]
+        hover_dict = {
+            metric_dictionary[m]: Tracks_df.loc[
+                (Tracks_df['CONDITION'] == cond) &
+                (Tracks_df['REPLICATE'] == repl) &
+                (Tracks_df['TRACK_ID'] == track)
+            ][m].values[0]
+            for m in let_me_look_at_these if m in Tracks_df.columns
+        }
+        hover_text = "<br>".join(f"{k}: {v}" for k, v in hover_dict.items())
 
-    for (cond, repl, track), group_df in Spots_grouped:
-        """
-        - group_keys is a tuple like: ('Condition_A', 'Rep1', 'Track_001')
-        - group_df is the actual dataframe for that group
-        
-        """
+        fig.add_trace(go.Scatter(
+            x=group_df['POSITION_X'],
+            y=group_df['POSITION_Y'],
+            mode='lines',
+            line=dict(color=color, width=lw),
+            hoverinfo='text',
+            hovertext=hover_text,
+            showlegend=False
+        ))
 
-        track_row = Tracks_df.loc[(cond, repl, track)]
-        track_row['CONDITION'] = cond
-        track_row['REPLICATE'] = repl
-        track_row['TRACK_ID'] = track
-
-        
-        if colormap is not None and c_mode in ['differentiate conditions', 'differentiate replicates']:
-            key = track_row[val_column]  # val_column is either 'CONDITION' or 'REPLICATE'
-            color = colormap(unique_vals.tolist().index(key) % colormap.N)  # consistent mapping
-            group_df['COLOR'] = mcolors.to_hex(color)
-            
-        elif colormap is not None:
-            # This is for metric-based color mapping (quantitative)
-            norm = plt.Normalize(metric_min, metric_max)
-            color = colormap(norm(track_row[lut_scaling_metric]))
-            group_df['COLOR'] = mcolors.to_hex(color)
-            
-        elif c_mode in ['random colors', 'random greys']:
-            group_df['COLOR'] = track_row['COLOR']
-
-        elif c_mode == 'only-one-color':
-            group_df['COLOR'] = only_one_color
-            
-
-        if (type(smoothing_index) is int or type(smoothing_index) is float) and smoothing_index > 1:
-            group_df['POSITION_X'] = group_df['POSITION_X'].rolling(window=smoothing_index, min_periods=1).mean()
-            group_df['POSITION_Y'] = group_df['POSITION_Y'].rolling(window=smoothing_index, min_periods=1).mean()
-        else:
-            group_df['POSITION_X'] = group_df['POSITION_X']
-            group_df['POSITION_Y'] = group_df['POSITION_Y']
-
-
-        hover_dict = {}
-
-        if len(let_me_look_at_these) > 0:	
-            for metric in let_me_look_at_these:
-                hover_dict[metric_dictionary[metric]] = track_row[metric]
-            
-            hover_text = "<br>".join(f"{key}: {value}" for key, value in hover_dict.items())
-            fig.add_trace(go.Scatter(
-                x=group_df['POSITION_X'],
-                y=group_df['POSITION_Y'],
-                mode='lines',
-                line=dict(color=group_df['COLOR'].iloc[0], width=0.3),
-                name=f"Track {track}",
-                hoverinfo='text',
-                hovertext=hover_text,
-            ))
-
-        
         if end_track_markers:
             if I_just_wanna_be_normal:
                 fig.add_trace(go.Scatter(
                     x=[group_df['POSITION_X'].iloc[-1]],
                     y=[group_df['POSITION_Y'].iloc[-1]],
-                    marker=dict(
-                        symbol=markers,
-                        size=marker_size,
-                        color=group_df['COLOR'].iloc[0],
-                    ),
+                    mode='markers',
+                    marker=dict(symbol=markers, size=marker_size, color=color),
                     showlegend=False,
                     hoverinfo='skip'
                 ))
-            
-            elif I_just_wanna_be_normal == False:
-            
+            else:
                 if markers == 'cell':
-                    marker = _cell
+                    symbol = _cell
                 elif markers in ['scaled', 'trains']:
-                    markers_ = _get_markers(markers)
-                    percentile_value = ((track_row['TRACK_LENGTH'] - min_track_length) / (max_track_length - min_track_length)) * 100
-                    marker = _assign_marker(percentile_value, markers_)
+                    track_len = Tracks_df.loc[
+                        (Tracks_df['CONDITION'] == cond) &
+                        (Tracks_df['REPLICATE'] == repl) &
+                        (Tracks_df['TRACK_ID'] == track)
+                    ]['TRACK_LENGTH'].values[0]
+                    min_len, max_len = Tracks_df['TRACK_LENGTH'].min(), Tracks_df['TRACK_LENGTH'].max()
+                    percentile = 100 * (track_len - min_len) / (max_len - min_len)
+                    symbol = _assign_marker(percentile, _get_markers(markers))
                 elif markers in ['random','farm','safari','insects','birds','forest','aquarium']:
-                    markers_ = _get_markers(markers)
-                    marker = np.random.choice(markers_)
+                    symbol = np.random.choice(_get_markers(markers))
                 else:
-                    marker = ''
+                    symbol = ''
 
                 fig.add_trace(go.Scatter(
                     x=[group_df['POSITION_X'].iloc[-1]],
                     y=[group_df['POSITION_Y'].iloc[-1]],
                     mode='text',
-                    text=marker,
+                    text=symbol,
                     textposition='middle center',
                     textfont=dict(size=marker_size),
                     showlegend=False,
                     hoverinfo='skip'
                 ))
 
-    Tracks_df.reset_index(drop=False, inplace=True)
-
+    # Final layout
     fig.update_layout(
-        xaxis_title='Position X [microns]',
-        yaxis_title='Position Y [microns]',
-        xaxis=dict(range=[x_min, x_max]),
-        yaxis=dict(range=[y_min, y_max]),
+        xaxis=dict(title='Position X [microns]', range=[x_min, x_max], tickvals=x_ticks, ticktext=[f"{t:.0f}" for t in x_ticks], gridcolor=grid_color),
+        yaxis=dict(title='Position Y [microns]', range=[y_min, y_max], tickvals=y_ticks, ticktext=[f"{t:.0f}" for t in y_ticks], gridcolor=grid_color),
         plot_bgcolor=face_color,
-        showlegend=False,
-        autosize=False,
-        width=1600/5*3,  # Set the width of the plot
-        height=1200/5*3,  # Set the height of the plot
-        )
-
-    fig.add_annotation(
-        text="Track Visualization",
-        xref="paper",
-        yref="paper",
-        x=0.5,
-        y=1.15,
-        showarrow=False,
-        font=dict(size=16),
+        width=960, height=720,
+        title=dict(text="Track Visualization", x=0.5, font=dict(size=16)),
+        showlegend=False
     )
-
-    fig.update_xaxes(
-        title_text="Position X [microns]",
-        title_font=dict(size=14),
-        tickvals=x_ticks_major,
-        ticktext=[f'{tick:.0f}' for tick in x_ticks_major],
-        gridcolor=grid_color,
-        zerolinecolor=grid_color,
-    )
-
-    fig.update_yaxes(
-        title_text="Position Y [microns]",
-        title_font=dict(size=14),
-        tickvals=y_ticks_major,
-        ticktext=[f'{tick:.0f}' for tick in y_ticks_major],
-        gridcolor=grid_color,
-        zerolinecolor=grid_color,
-    )
-
-    fig.update_traces(line=dict(width=lw), selector=dict(mode='lines'))
 
     return fig
+
+
+
 
 def Visualize_tracks_matplotlib(Spots_df:pd.DataFrame, Tracks_df:pd.DataFrame, condition:None, replicate:None, c_mode:str, only_one_color:str, lut_scaling_metric:str, background:str, smoothing_index:float, lw:float, show_tracks:bool, grid:bool, arrows:bool, arrowsize:int):
 
