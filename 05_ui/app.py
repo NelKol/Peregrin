@@ -703,7 +703,7 @@ def _update_slider_values(metric, filter, dfA, dfB, slider_values):
     if metric in Track_metrics.get():
         try:
             if filter == "literal":
-                if dfA.empty:
+                if dfA is None or dfA.empty or metric not in dfA.columns:
                     slider_values.set([0, 100])
                 else:
                     values = dc.values_for_a_metric(dfA, metric)
@@ -715,7 +715,7 @@ def _update_slider_values(metric, filter, dfA, dfB, slider_values):
     elif metric in Spot_metrics.get():
         try:
             if filter == "literal":
-                if dfB.empty:
+                if dfB is None or dfB.empty or metric not in dfB.columns:
                     slider_values.set([0, 100])
                 else:
                     values = dc.values_for_a_metric(dfB, metric)
@@ -884,7 +884,6 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
         # Updating the slider range
         
         @reactive.effect
-        @reactive.event(cells_in_possession)  # Reactive effect on the filter selection
         def update_sliderA():
             return _update_slider(input.filterA(), "sliderA", slider_valuesT1)
 
