@@ -2,6 +2,8 @@ from shiny import reactive
 from shiny.express import input, render, ui
 from shiny.types import FileInfo
 from shinywidgets import render_plotly, render_altair
+import plotly.graph_objs as go
+from scipy.stats import gaussian_kde
 
 import asyncio
 import io
@@ -727,16 +729,14 @@ def _update_slider_values(metric, filter, dfA, dfB, slider_values):
 def _thresholded_histogram(metric, filter_type, slider_range, dfA, dfB):
     if files_available.get() == False and already_processed_files_available.get() == False:
         return None
-    elif dfA == None:
-        return None
-    elif dfB == None:
+    elif dfA is None or dfB is None:
         return None
     else:
         if metric in Track_metrics.get():
             data = dfA.get()
         elif metric in Spot_metrics.get():
             data = dfB.get()
-        elif data.empty:
+        elif data.empty or data is None:
             return plt.figure()
         else:
             return plt.figure()
@@ -744,28 +744,36 @@ def _thresholded_histogram(metric, filter_type, slider_range, dfA, dfB):
         values = data[metric].dropna()
 
         if filter_type == "percentile":
-            lower_percentile = np.percentile(values, slider_range[0])
-            upper_percentile = np.percentile(values, slider_range[1])
-            lower_bound = lower_percentile
-            upper_bound = upper_percentile
+            lower_bound = np.percentile(values, slider_range[0])
+            upper_bound = np.percentile(values, slider_range[1])
         else:
             lower_bound = slider_range[0]
             upper_bound = slider_range[1]
 
         fig, ax = plt.subplots()
-        n, bins, patches = ax.hist(values, bins=40)
+        n, bins, patches = ax.hist(values, bins=40, density=False)
 
+        # Color threshold
         for i in range(len(patches)):
             if bins[i] < lower_bound or bins[i+1] > upper_bound:
                 patches[i].set_facecolor('grey')
             else:
                 patches[i].set_facecolor('#337ab7')
 
+        # Add KDE curve (scaled to match histogram)
+        kde = gaussian_kde(values)
+        x_kde = np.linspace(bins[0], bins[-1], 500)
+        y_kde = kde(x_kde)
+        # Scale KDE to histogram
+        y_kde_scaled = y_kde * (n.max() / y_kde.max())
+        ax.plot(x_kde, y_kde_scaled, color='black', linewidth=1)
+
         ax.set_xticks([])  # Remove x-axis ticks
         ax.set_yticks([])  # Remove y-axis ticks
-        ax.spines[['top','left','right']].set_visible(False)
+        ax.spines[['top', 'left', 'right']].set_visible(False)
 
         return fig
+
 
 
 def _data_thresholding_numbers(df):
@@ -816,39 +824,6 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 # Make the histogram interactive, allowing users to hover over bins to see exact values (percentile, number of cells in that percentile?)
 # Ideally be able to be able to add and remove thresholding filters
 # Come up with better thresholding logic, so that the code doesnt have to pass an unreasonable amount of dataframes around 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -996,8 +971,8 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
         ui.input_select(  
             id="metricB",  
             label="Thresholding metric:",  
-            choices=select_metrics.spots_n_tracks ,
-            selected="NUM_FRAMES"
+            choices=select_metrics.tracks ,
+            selected="Track points"
             )   
 
         ui.input_select(
