@@ -3,6 +3,9 @@ from shiny.express import input, render, ui
 from shiny.types import FileInfo
 from shinywidgets import render_plotly, render_altair
 
+import plotly.graph_objs as go
+from scipy.stats import gaussian_kde
+
 import asyncio
 import io
 import os.path as op
@@ -73,6 +76,8 @@ slider_values = reactive.value()        # Creating a reactive value for the slid
 
 count = reactive.value(1)               # Data input counter
 conditions = reactive.value()           # Creating a reactive value for the conditions
+
+bins = reactive.value(40)               # Creating a reactive value for the number of bins in the histogram
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -701,7 +706,7 @@ def _update_slider_values(metric, filter, dfA, dfB, slider_values):
     if metric in Track_metrics.get():
         try:
             if filter == "literal":
-                if dfA.empty:
+                if dfA is None or dfA.empty or metric not in dfA.columns:
                     slider_values.set([0, 100])
                 else:
                     values = dc.values_for_a_metric(dfA, metric)
@@ -713,7 +718,7 @@ def _update_slider_values(metric, filter, dfA, dfB, slider_values):
     elif metric in Spot_metrics.get():
         try:
             if filter == "literal":
-                if dfB.empty:
+                if dfB is None or dfB.empty or metric not in dfB.columns:
                     slider_values.set([0, 100])
                 else:
                     values = dc.values_for_a_metric(dfB, metric)
@@ -724,46 +729,114 @@ def _update_slider_values(metric, filter, dfA, dfB, slider_values):
             slider_values.set([0, 100])
     
 
-def _thresholded_histogram(metric, filter_type, slider_range, dfA, dfB):
+def _thresholded_histogram(metric, filter_type, slider_range, dfA, dfB, bin_count):
     if files_available.get() == False and already_processed_files_available.get() == False:
         return None
-    elif dfA == None:
-        return None
-    elif dfB == None:
+    elif dfA is None or dfB is None:
         return None
     else:
         if metric in Track_metrics.get():
             data = dfA.get()
         elif metric in Spot_metrics.get():
             data = dfB.get()
-        elif data.empty:
-            return plt.figure()
+        elif data.empty or data is None:
+            return None
         else:
-            return plt.figure()
+            return None
+
+        if bin_count is None:
+            bin_count = 40
 
         values = data[metric].dropna()
 
         if filter_type == "percentile":
-            lower_percentile = np.percentile(values, slider_range[0])
-            upper_percentile = np.percentile(values, slider_range[1])
-            lower_bound = lower_percentile
-            upper_bound = upper_percentile
+            lower_bound = np.percentile(values, slider_range[0])
+            upper_bound = np.percentile(values, slider_range[1])
         else:
             lower_bound = slider_range[0]
             upper_bound = slider_range[1]
 
         fig, ax = plt.subplots()
-        n, bins, patches = ax.hist(values, bins=40)
+        n, bins, patches = ax.hist(values, bins=bin_count, density=False)
 
+        # Color threshold
         for i in range(len(patches)):
             if bins[i] < lower_bound or bins[i+1] > upper_bound:
                 patches[i].set_facecolor('grey')
             else:
                 patches[i].set_facecolor('#337ab7')
 
+        # Add KDE curve (scaled to match histogram)
+        kde = gaussian_kde(values)
+        x_kde = np.linspace(bins[0], bins[-1], 500)
+        y_kde = kde(x_kde)
+        # Scale KDE to histogram
+        y_kde_scaled = y_kde * (n.max() / y_kde.max())
+        ax.plot(x_kde, y_kde_scaled, color='black', linewidth=1)
+
         ax.set_xticks([])  # Remove x-axis ticks
         ax.set_yticks([])  # Remove y-axis ticks
-        ax.spines[['top','left','right']].set_visible(False)
+        ax.spines[['top', 'left', 'right']].set_visible(False)
+
+        return fig
+
+def _thresholded_histogram_plotly(metric, filter_type, slider_range, dfA, dfB, bin_count):
+    if files_available.get() == False and already_processed_files_available.get() == False:
+        return None
+    elif dfA is None or dfB is None:
+        return None
+    else:
+        if metric in Track_metrics.get():
+            data = dfA.get()
+        elif metric in Spot_metrics.get():
+            data = dfB.get()
+        elif data.empty or data is None:
+            return plt.figure()
+        else:
+            return plt.figure()
+        
+        if bin_count is None:
+            bin_count = 40
+        
+
+        values = data[metric].dropna().values
+
+        # Calculate thresholds
+        if filter_type == "percentile":
+            lower_bound = np.percentile(values, slider_range[0])
+            upper_bound = np.percentile(values, slider_range[1])
+        else:
+            lower_bound = slider_range[0]
+            upper_bound = slider_range[1]
+
+        # Compute histogram bins
+        bins = np.histogram_bin_edges(values, bins=bin_count)
+        counts, _ = np.histogram(values, bins=bins)
+
+        # For coloring: check bin range for each bar
+        bar_colors = []
+        for i in range(len(bins) - 1):
+            if bins[i] < lower_bound or bins[i+1] > upper_bound:
+                bar_colors.append('grey')
+            else:
+                bar_colors.append('#337ab7')
+
+        # Build plotly bar (histogram)
+        fig = go.Figure(data=[
+            go.Bar(
+                x=(bins[:-1] + bins[1:]) / 2,
+                y=counts,
+                marker_color=bar_colors,
+                hovertemplate='%{y} cells<extra></extra>',
+                width=(bins[1] - bins[0]) * 0.95,
+            )
+        ])
+        fig.update_layout(
+            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, showline=False),
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, showline=False),
+            plot_bgcolor='white',
+            margin=dict(l=0, r=0, t=0, b=0)
+        )
 
         return fig
 
@@ -817,267 +890,275 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
 # Ideally be able to be able to add and remove thresholding filters
 # Come up with better thresholding logic, so that the code doesnt have to pass an unreasonable amount of dataframes around 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # ================================================================================================================================================================================================================================================================================
-    # Thresholding window no. 1
-    # 
-    # 1. Thresholding metric selection
-    # 2. Thresholding filter selection
-    # 3. Thresholding slider
-    # 4. Thresholding histogram
-    # 5. Thresholding output - numbers (cells in total, filtered in focus, filtered out)
-
+    ui.markdown(
+        """
+        <p>
+        """
+    )
 
     ui.markdown(
         """
-        ###### **Thresholding no. 1**
-
+        ##### **Data filtering**
         """
-        )
+    )
+    
+    with ui.accordion(id="acc", open=False):
 
-    with ui.panel_well():
+
+        with ui.accordion_panel("Threshold no. 1"):
+
+        # ================================================================================================================================================================================================================================================================================
+        # Thresholding window no. 1
+        # 
+        # 1. Thresholding metric selection
+        # 2. Thresholding filter selection
+        # 3. Thresholding slider
+        # 4. Thresholding histogram
+        # 5. Thresholding output - numbers (cells in total, filtered in focus, filtered out)
+    
+
+            # ui.markdown(
+            #     """
+            #     ###### **Thresholding no. 1**
+
+            #     """
+            #     )
+
+            with ui.panel_well():
 
 
-        # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Metirc and filter selection selection
-        # Slider rendering
+                # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                # Metirc and filter selection selection
+                # Slider rendering
 
-        ui.input_select(  
-            "metricA",  
-            "Thresholding metric:",  
-            select_metrics.tracks,
-            selected="Net distance"
-            )  
+                ui.input_select(  
+                    "metricA",  
+                    "Thresholding metric:",  
+                    select_metrics.tracks,
+                    selected="Net distance"
+                    )  
 
-        ui.input_select(
-            "filterA",
-            "Thresholding filter:",
-            select_mode.thresholding
+                ui.input_select(
+                    "filterA",
+                    "Thresholding filter:",
+                    select_mode.thresholding
+                    )
+
+                ui.input_slider(
+                    "sliderA",
+                    "Threshold",
+                    min=0,
+                    max=100,
+                    value=(0, 100)
+                    )
+
+
+                # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                # Updating the slider range
+                
+                @reactive.effect
+                def update_sliderA():
+                    return _update_slider(input.filterA(), "sliderA", slider_valuesT1)
+
+                @reactive.effect
+                def update_slider_valuesA():
+                    return _update_slider_values(input.metricA(), input.filterA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get(), slider_valuesT1)
+
+
+                # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                # Data filtering itself
+                
+                @reactive.calc
+                def thresholded_dataA():
+                    return _thresholded_data(input.filterA(), input.metricA(), input.sliderA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get())
+
+                @reactive.effect
+                def set_thresholded_dataA():
+                    _set_thresholded_data(Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df)
+
+                @reactive.effect
+                def update_thresholded_dataA():
+                    return _update_thresholded_data(input.metricA(), Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df, thresholded_dataA())
+
+
+                # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                # Thresholding histogram
+
+                @render_plotly
+                def threshold_histogramA_plotly():
+                    if input.plot_distribution() == "Hover info":
+                        return _thresholded_histogram_plotly(input.metricA(), input.filterA(), input.sliderA(), raw_Track_stats_df, raw_Spot_stats_df, bins.get())
+                    else:
+                        pass
+
+                @render.plot
+                def threshold_histogramA():
+                    if input.plot_distribution() == "Kernel density":
+                        return _thresholded_histogram(input.metricA(), input.filterA(), input.sliderA(), raw_Track_stats_df, raw_Spot_stats_df, bins.get())
+                    else:
+                        pass
+
+
+                # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                # Output - numbers
+
+                @render.text
+                def data_thresholding_numbersA1():
+                    if files_available.get() == False and already_processed_files_available.get() == False:
+                        return None
+                    a, b, c = _data_thresholding_numbers(raw_Track_stats_df.get())
+                    return a
+
+                @render.text
+                def data_thresholding_numbersA2():
+                    if files_available.get() == False and already_processed_files_available.get() == False:
+                        return None
+                    a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
+                    return b
+                    
+                @render.text
+                def data_thresholding_numbersA3():
+                    if files_available.get() == False and already_processed_files_available.get() == False:
+                        return None
+                    a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
+                    return c
+                
+
+
+        with ui.accordion_panel("Threshold no. 2"):     
+
+        # ================================================================================================================================================================================================================================================================================
+        # Thresholding well no. 2
+        # 
+        # 1. Thresholding metric selection
+        # 2. Thresholding filter selection
+        # 3. Thresholding slider
+        # 4. Thresholding histogram
+        # 5. Thresholding output - numbers (cells in total, filtered in focus, filtered out)
+
+            with ui.panel_well():
+
+                
+                # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                # Metirc and filter selection selection
+                # Slider rendering
+
+                ui.input_select(  
+                    id="metricB",  
+                    label="Thresholding metric:",  
+                    choices=select_metrics.tracks ,
+                    selected="Track points"
+                    )   
+
+                ui.input_select(
+                    "filterB",
+                    "Thresholding filter:",
+                    select_mode.thresholding
+                    )
+
+                ui.input_slider(
+                    "sliderB",
+                    "Threshold",
+                    min=0,
+                    max=100,
+                    value=(0, 100)
+                    )
+
+
+                # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                # Updating the slider range
+                
+                @reactive.effect
+                def update_sliderB():
+                    return _update_slider(input.filterB(), "sliderB", slider_valuesT2)
+
+                @reactive.effect
+                def update_slider_valuesB():
+                    return _update_slider_values(input.metricB(), input.filterB(), Track_stats_df_T.get(), Spot_stats_df_T.get(), slider_valuesT2)
+
+
+                # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                # Data filtering itself
+                
+                @reactive.calc
+                def thresholded_dataB():
+                    return _thresholded_data(input.filterB(), input.metricB(), input.sliderB(), Track_stats_df_T.get(), Spot_stats_df_T.get())
+
+                @reactive.effect
+                def set_thresholded_dataB():
+                    _set_thresholded_data(Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T)
+                    
+                @reactive.effect
+                def update_thresholded_dataB():
+                    return _update_thresholded_data(input.metricB(), Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T, thresholded_dataB())
+
+
+                # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                # Thresholding histogram
+
+                @render_plotly
+                def threshold_histogramB_plotly():
+                    if input.plot_distribution() == "Hover info":
+                        return _thresholded_histogram_plotly(input.metricB(), input.filterB(), input.sliderB(), Track_stats_df, Spot_stats_df, bins.get())
+                    else:
+                        pass
+
+                @render.plot
+                def threshold_histogramB():
+                    if input.plot_distribution() == "Kernel density":
+                        return _thresholded_histogram(input.metricB(), input.filterB(), input.sliderB(), Track_stats_df, Spot_stats_df, bins.get())
+                    else:
+                        pass
+
+
+                # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                # Output - numbers
+
+                @render.text
+                def data_thresholding_numbersB1():
+                    if files_available.get() == False and already_processed_files_available.get() == False:
+                        return None
+                    a, b, c = _data_thresholding_numbers(Track_stats_df.get())
+                    return a
+
+                @render.text
+                def data_thresholding_numbersB2():
+                    if files_available.get() == False and already_processed_files_available.get() == False:
+                        return None
+                    a, b, c = _data_thresholding_numbers(Track_stats_df.get())
+                    return b
+
+                @render.text
+                def data_thresholding_numbersB3():
+                    if files_available.get() == False and already_processed_files_available.get() == False:
+                        return None
+                    a, b, c = _data_thresholding_numbers(Track_stats_df.get())
+                    return c
+                
+
+
+        with ui.accordion_panel("Filter settings"):
+
+            ui.input_numeric(
+                id="bins",
+                label="Number of bins",
+                value=40,
+                min=1,
+                step=1
             )
 
-        ui.input_slider(
-            "sliderA",
-            "Threshold",
-            min=0,
-            max=100,
-            value=(0, 100)
+            @debounce(1)
+            @reactive.effect
+            def update_bins():
+                bins.set(input.bins())
+
+            ui.input_radio_buttons(
+                id="plot_distribution",
+                label="Histogram show:",
+                choices=["Kernel density", "Hover info"],
+                selected="Kernel density"
             )
 
-
-        # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Updating the slider range
-        
-        @reactive.effect
-        @reactive.event(cells_in_possession)  # Reactive effect on the filter selection
-        def update_sliderA():
-            return _update_slider(input.filterA(), "sliderA", slider_valuesT1)
-
-        @reactive.effect
-        def update_slider_valuesA():
-            return _update_slider_values(input.metricA(), input.filterA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get(), slider_valuesT1)
-
-
-        # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Data filtering itself
-        
-        @reactive.calc
-        def thresholded_dataA():
-            return _thresholded_data(input.filterA(), input.metricA(), input.sliderA(), raw_Track_stats_df.get(), raw_Spot_stats_df.get())
-
-        @reactive.effect
-        def set_thresholded_dataA():
-            _set_thresholded_data(Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df)
-
-        @reactive.effect
-        def update_thresholded_dataA():
-            return _update_thresholded_data(input.metricA(), Track_stats_df_T, Spot_stats_df_T, raw_Track_stats_df, raw_Spot_stats_df, thresholded_dataA())
-
-
-        # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Thresholding histogram
-
-        @render.plot
-        def threshold_histogramA():
-            return _thresholded_histogram(input.metricA(), input.filterA(), input.sliderA(), raw_Track_stats_df, raw_Spot_stats_df)
-
-
-        # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Output - numbers
-
-        @render.text
-        def data_thresholding_numbersA1():
-            if files_available.get() == False and already_processed_files_available.get() == False:
-                return None
-            a, b, c = _data_thresholding_numbers(raw_Track_stats_df.get())
-            return a
-
-        @render.text
-        def data_thresholding_numbersA2():
-            if files_available.get() == False and already_processed_files_available.get() == False:
-                return None
-            a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
-            return b
-            
-        @render.text
-        def data_thresholding_numbersA3():
-            if files_available.get() == False and already_processed_files_available.get() == False:
-                return None
-            a, b, c = _data_thresholding_numbers(Track_stats_df_T.get())
-            return c
-        
-            
-        
-
-    # ================================================================================================================================================================================================================================================================================
-    # Thresholding well no. 2
-    # 
-    # 1. Thresholding metric selection
-    # 2. Thresholding filter selection
-    # 3. Thresholding slider
-    # 4. Thresholding histogram
-    # 5. Thresholding output - numbers (cells in total, filtered in focus, filtered out)
-
-
-    ui.markdown(
-        """
-        ###### **Thresholding no. 1**
-
-        """
-        )
-
-    with ui.panel_well():
-
-        
-        # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Metirc and filter selection selection
-        # Slider rendering
-
-        ui.input_select(  
-            id="metricB",  
-            label="Thresholding metric:",  
-            choices=select_metrics.spots_n_tracks ,
-            selected="NUM_FRAMES"
-            )   
-
-        ui.input_select(
-            "filterB",
-            "Thresholding filter:",
-            select_mode.thresholding
-            )
-
-        ui.input_slider(
-            "sliderB",
-            "Threshold",
-            min=0,
-            max=100,
-            value=(0, 100)
-            )
-
-
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Updating the slider range
-        
-        @reactive.effect
-        def update_sliderB():
-            return _update_slider(input.filterB(), "sliderB", slider_valuesT2)
-
-        @reactive.effect
-        def update_slider_valuesB():
-            return _update_slider_values(input.metricB(), input.filterB(), Track_stats_df_T.get(), Spot_stats_df_T.get(), slider_valuesT2)
-
-
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Data filtering itself
-        
-        @reactive.calc
-        def thresholded_dataB():
-            return _thresholded_data(input.filterB(), input.metricB(), input.sliderB(), Track_stats_df_T.get(), Spot_stats_df_T.get())
-
-        @reactive.effect
-        def set_thresholded_dataB():
-            # if delayed_detection.get() == False:
-            _set_thresholded_data(Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T)
-            # else:
-            #     pass
-            
-        @reactive.effect
-        def update_thresholded_dataB():
-            return _update_thresholded_data(input.metricB(), Track_stats_df, Spot_stats_df, Track_stats_df_T, Spot_stats_df_T, thresholded_dataB())
-
-
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Thresholding histogram
-
-        @render.plot
-        def threshold_histogramB():
-            return _thresholded_histogram(input.metricB(), input.filterB(), input.sliderB(), Track_stats_df_T, Spot_stats_df_T)
-
-
-        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # Output - numbers
-
-        @render.text
-        def data_thresholding_numbersB1():
-            if files_available.get() == False and already_processed_files_available.get() == False:
-                return None
-            a, b, c = _data_thresholding_numbers(Track_stats_df.get())
-            return a
-
-        @render.text
-        def data_thresholding_numbersB2():
-            if files_available.get() == False and already_processed_files_available.get() == False:
-                return None
-            a, b, c = _data_thresholding_numbers(Track_stats_df.get())
-            return b
-
-        @render.text
-        def data_thresholding_numbersB3():
-            if files_available.get() == False and already_processed_files_available.get() == False:
-                return None
-            a, b, c = _data_thresholding_numbers(Track_stats_df.get())
-            return c
-        
 
 
 
