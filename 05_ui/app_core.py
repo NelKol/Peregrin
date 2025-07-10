@@ -1,4 +1,4 @@
-from shiny import App, ui, render, reactive
+from shiny import App, Inputs, Outputs, Session, render, reactive, req, ui
 from shinywidgets import render_plotly, render_altair
 
 import utils.data_calcs as dc
@@ -8,53 +8,33 @@ import utils.select_modes as select_mode
 import utils.select_metrics as select_metrics
 from utils.ratelimit import debounce, throttle
 
+
+type_time_chart = reactive.Value("Scatter"),
+
+
 # --- UI Layout ---
 
 app_ui = ui.page_sidebar(
     ui.sidebar(
         ui.markdown("""  <p>  """),
-        ui.markdown(""" <h5> <b>  Data filtering  </b> </h5> """),
+        ui.output_ui("sidebar_label"),
         ui.accordion(
             ui.accordion_panel(
                 "Threshold 1",
                 ui.panel_well(
-                    ui.panel_conditional(
-                        "input.dimensional_threshold == false",
-                        ui.input_select("thresholding_properties", "Thresholding property", select_metrics.spots_n_tracks),
-                        ui.input_select("thresholding_filter1D", "Thresholding values", ["literal", "percentile"]),
-                        ui.input_slider("thresholding_values", label=None, min=0, max=100, step=1, value=(0, 100)),
-                        ui.panel_conditional(
-                            "input.thresholding_filter1D == 'literal'",
-                            # TODO: implement histogram for literal values
-                            # ui.output_plot("thresholding_histogram", height="300px"),
-                            None
-                        ),
-                    ),
-                    ui.panel_conditional(
-                        "input.dimensional_threshold == true",
-                        ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
-                        ui.input_select("thresholding_metric_X", None, select_metrics.spots_n_tracks),
-                        ui.input_select("thresholding_metric_Y", None, select_metrics.spots_n_tracks),
-                        ui.input_select("thresholding_filter_2D", "Thresholding values", ["literal", "percentile"]),
-                    ),
+                    ui.output_ui("data_filtering"),
                 ),
                 ui.input_task_button("apply_thresholding", "Set threshold"),
             ),
             ui.accordion_panel(
                 "Filter settings",
-                ui.input_switch("dimensional_threshold", "2D", value=False),
-                ui.panel_conditional(
-                    "input.dimensional_threshold == false",
-                    ui.input_numeric("bins", "Number of bins", value=40, min=1, step=1),
-                    ui.input_radio_buttons("plot_distribution", "Histogram show:", choices=["Kernel density", "Hover info"], selected="Kernel density"),
-                ),
-                ui.panel_conditional(
-                    "input.dimensional_threshold == true",
-                    "working on it dawg"
-                ),
+                # ui.input_switch("threshold_dimensional", "2D", value=False),
+                ui.input_action_button("threshold_dimensional_toggle", "2D"),
+                ui.markdown(""" <p> """),
+                ui.output_ui("filtering_settings"),
             ),
         ),
-        open="open", position="right", bg="f8f8f8"
+        id="sidebar", open="open", position="right", bg="f8f8f8"
     ),
     ui.navset_bar(
         ui.nav_panel(
@@ -70,16 +50,16 @@ app_ui = ui.page_sidebar(
                 # Line break for better spacing
                 ui.markdown("""___"""),
                 # Default data input
-                ui.input_text("label1", "Condition no. 1", placeholder="label me :D"),
-                ui.input_file("file1", "Input files:", multiple=True),
+                ui.input_text("label1", "Condition no. 1", placeholder="Label me!"),
+                ui.input_file("file1", "Upload files:", placeholder="Drag and drop here!", multiple=True),
                 # ... You can add more file inputs/labels dynamically
                 ui.panel_absolute(
                     ui.panel_well(
                         ui.markdown("<h5>Select columns:</h5>"),
-                        ui.input_select("select_id", "Track identifier:", ["e.g. TRACK_ID"]),
-                        ui.input_select("select_time", "Time point:", ["e.g. POSITION_T"]),
-                        ui.input_select("select_x", "X coordinate:", ["e.g. POSITION_X"]),
-                        ui.input_select("select_y", "Y coordinate:", ["e.g. POSITION_Y"]),
+                        ui.input_selectize("select_id", "Track identifier:", ["e.g. TRACK_ID"]),
+                        ui.input_selectize("select_time", "Time point:", ["e.g. POSITION_T"]),
+                        ui.input_selectize("select_x", "X coordinate:", ["e.g. POSITION_X"]),
+                        ui.input_selectize("select_y", "Y coordinate:", ["e.g. POSITION_Y"]),
                         ui.markdown("<span style='color:darkgrey; font-style:italic;'>You can drag me around!</span>")
                     ),
                     width="350px", right="300px", top="220px", draggable=True
@@ -88,22 +68,24 @@ app_ui = ui.page_sidebar(
         ),
         ui.nav_panel(
             "Data frames",
-            ui.input_file("already_proccesed_spot_stats", "", accept=[".csv"], multiple=False),
+            ui.markdown(""" <p> """),
+            ui.input_file("already_proccesed_input", "Got previously processed data?", placeholder="Drag and drop here!", accept=[".csv"], multiple=False),
+            ui.markdown(""" ___ """),
             ui.layout_columns(
                 ui.card(
                     ui.card_header("Spot stats"),
                     ui.output_data_frame("render_spot_stats"),
-                    ui.download_button("download_spot_stats", "Download Spot Stats CSV"),
+                    ui.download_button("download_spot_stats", "Download CSV"),
                 ),
                 ui.card(
                     ui.card_header("Track stats"),
                     ui.output_data_frame("render_track_stats"),
-                    ui.download_button("download_track_stats", "Download Track Stats CSV"),
+                    ui.download_button("download_track_stats", "Download CSV"),
                 ),
                 ui.card(
                     ui.card_header("Frame stats"),
                     ui.output_data_frame("render_time_stats"),
-                    ui.download_button("download_time_stats", "Download Frame Stats CSV"),
+                    ui.download_button("download_time_stats", "Download CSV"),
                 ),
             )
         ),
@@ -114,53 +96,129 @@ app_ui = ui.page_sidebar(
                     "Tracks",
                     # Interactive settings
                     ui.panel_well(
-                        ui.input_selectize("let_me_look_at_these", "Let me look at these:", [], multiple=True),
-                        ui.input_action_button('hover_info', 'see info'),
-                        ui.input_numeric('marker_size', 'Marker size:', 5),
-                        ui.input_checkbox('end_track_markers', 'markers at the end of the tracks', True),
-                        ui.input_select('markers', 'Markers:', []),
-                        ui.input_checkbox('I_just_wanna_be_normal', 'just be normal', True),
+                        ui.markdown(
+                            """
+                            #### **Track visualization**
+                            *made with*  `plotly`
+                            <hr style="height: 4px; background-color: black; border: none" />
+                            """
+                        ),
+                        ui.accordion(
+                            ui.accordion_panel(
+                                "Dataset",
+                                ui.input_selectize("condition_tracks", "Condition:", ["all", "not all"]),
+                                ui.panel_conditional(
+                                    "input.condition_tracks != 'all'",
+                                    ui.input_selectize("replicate_tracks", "Replicate:", []),
+                                ),
+                            ),
+                            ui.accordion_panel(
+                                "Track lines",
+                                ui.input_checkbox("show_tracks", "Show tracks", True),
+                                ui.panel_conditional(
+                                    "input.show_tracks",
+                                    ui.input_numeric("smoothing", "Smoothing index:", 0),
+                                    ui.input_numeric('track_line_width', 'Line width:', 0.85),
+                                ),
+                            ),
+                            ui.accordion_panel(
+                                "Markers",
+                                ui.input_checkbox("show_markers", "Show end track markers", True),
+                                ui.panel_conditional(
+                                    "input.show_markers",
+                                    ui.input_selectize("markers", "Markers:", []),
+                                    ui.input_numeric("marker_size", "Marker size:", 5),
+                                    ui.input_switch("just_be_normal", "Just normal", True),
+                                ),
+                            ),
+                            ui.accordion_panel(
+                                "Coloring",
+                                ui.input_selectize("color_mode", "Color mode:", ["only-one-color", "not only-one-color"]),
+                                ui.panel_conditional(
+                                    "input.color_mode != 'only-one-color'",
+                                    ui.input_selectize('lut_scaling', 'LUT scaling metric:', []),
+                                ),
+                                ui.panel_conditional(
+                                    "input.color_mode == 'only-one-color'",
+                                    ui.input_selectize('only_one_color', 'Color:', []),
+                                ),
+                                ui.input_selectize('background', 'Background:', []),
+                            ),
+                            ui.accordion_panel(
+                                "Hover info",
+                                ui.input_selectize("let_me_look_at_these", "Let me look at these:", ["Condition", "Track length", "Net distance", "Speed mean"], multiple=True),
+                                ui.input_action_button("hover_info", "See info"),
+                            ),
+                        ),
                     ),
+                    ui.markdown(""" <p> """),
                     # Plotly outputs
                     ui.card(
-                        ui.output_plot("interactive_true_track_visualization"),
-                        ui.download_button("download_true_interactive_visualization_html", "Download True Interactive Visualization HTML"),
-                        ui.output_plot("interactive_normalized_track_visualization"),
-                        ui.download_button("download_normalized_interactive_visualization_html", "Download Normalized Interactive Visualization HTML"),
+                        ui.output_plot("plotly_true_visualization"),
+                        ui.download_button("download_plotly_true_visualization_html", "Download HTML"),
+                        ui.download_button("download_plotly_true_visualization_svg", "Download SVG"),
                     ),
-                    # Static matplotlib settings
-                    ui.panel_well(
-                        ui.input_numeric('arrow_size', 'Arrow size:', 6),
-                        ui.input_checkbox('arrows', 'arrows at the end of tracks', True),
-                        ui.input_checkbox("grid", "grid", True),
-                    ),
-                    # Static matplotlib outputs
                     ui.card(
-                        ui.output_plot("true_track_visualization"),
-                        ui.download_button("download_true_visualization_svg", "Download True Visualization SVG"),
-                        ui.output_plot("normalized_track_visualization"),
-                        ui.download_button("download_normalized_visualization_svg", "Download Normalized Visualization SVG"),
-                        ui.download_button("download_lut_map_svg", "Download LUT Map SVG"),
+                        ui.output_plot("plotly_spiderplot"),
+                        ui.download_button("download_plotly_spiderplot_html", "Download HTML"),
+                        ui.download_button("download_plotly_spiderplot_svg", "Download SVG"),
                     ),
-                    # Common settings
-                    ui.panel_well(
-                        ui.input_select("condition", "Condition:", []),
-                        ui.input_select("replicate", "Replicate:", []),
-                        ui.input_select("color_mode", "Color mode:", []),
-                        ui.input_select('lut_scaling', 'LUT scaling metric:', []),
-                        ui.input_select('only_one_color', 'Color:', []),
-                        ui.input_select('background', 'Background:', []),
-                        ui.input_numeric("smoothing", "Smoothing:", 0),
-                        ui.input_numeric('track_line_width', 'Line width:', 0.85),
-                        ui.input_checkbox('show_tracks', 'show tracks', True),
+                    ui.card(
+                        ui.download_button("download_lut_map_svg", "Download LUT Map SVG"),
                     ),
                 ),
                 ui.nav_panel(
-                    "Time series",
-                    # ... Add time series UI here
+                    "Time charts",
                     ui.panel_well(
-                        ui.input_radio_buttons("central_tendency", "Measure of central tendency:", ["mean", "median"]),
-                        # ... rest of your time series controls
+                        ui.markdown(
+                            """
+                            #### **Time series charts**
+                            *made with*  `altair`
+                            <hr style="height: 4px; background-color: black; border: none" />
+                            """
+                        ),
+                        ui.input_select("time_plot", "Plot:", choices=["Scatter", "Line", "Errorband"]),
+                        # type_time_chart.set(input.time_plot),
+                        ui.accordion(
+                            ui.accordion_panel(
+                                "Dataset",
+                                ui.input_selectize("condition_time", "Condition:", ["all", "not all"]),
+                                ui.panel_conditional(
+                                    "input.condition_time != 'all'",
+                                    ui.input_selectize("replicate_time", "Replicate:", ["all", "not all"]),
+                                    ui.panel_conditional(
+                                        "input.replicate_time == 'all'",
+                                        ui.input_checkbox("time_separate_replicates", "Show replicates separately", False),
+                                    ),
+                                ),
+                            ),
+                            ui.accordion_panel(
+                                "Plot metric",
+                                ui.input_selectize("time_metric", "Metric:", select_metrics.time, selected='Mean confinement ratio'),
+                                ui.input_radio_buttons("y_axis", "On Y axis with", ["absolute values", "relative values"], selected="absolute"),
+                            ),
+                            ui.accordion_panel(
+                                # type_time_chart.get(),
+                                "Plot settings",
+                                ui.panel_conditional(
+                                    "input.time_plot == 'Scatter'",
+                                    ui.input_checkbox_group("central_tendency_scatter", "Central tendency", ["mean", "median"], selected=["median"]),
+                                    ui.input_checkbox("time_polynomial_fit", "Polynomial fit", True),
+                                    ui.panel_conditional(
+                                        "input.time_polynomial_fit == true",
+                                        ui.input_switch("fit_best", "Automatic fit", True),
+                                    ),
+                                ),
+                                ui.panel_conditional(
+                                    "input.time_plot == 'Line'",
+                                    ui.input_checkbox_group("central_tendency_line", "Central tendency", ["mean", "median"], selected=["median"]),
+                                ),
+                                ui.panel_conditional(
+                                    "input.time_plot == 'Errorband'",
+                                    
+                                ),
+                            ),
+                        ),
                     ),
                     ui.card(
                         ui.output_plot("time_series_poly_fit_chart"),
@@ -173,8 +231,8 @@ app_ui = ui.page_sidebar(
                     "Superplots",
                     # ... Add superplots UI here
                     ui.panel_well(
-                        ui.input_select("testing_metric", "Test for metric:", []),
-                        ui.input_select('palette', 'Color palette:', []),
+                        ui.input_selectize("testing_metric", "Test for metric:", []),
+                        ui.input_selectize('palette', 'Color palette:', []),
                         # ... etc
                     ),
                     ui.card(
@@ -192,37 +250,107 @@ app_ui = ui.page_sidebar(
 )
 
 
+
 # --- Server logic skeleton ---
 
-def server(input, output, session):
+def server(input: Inputs, output: Outputs, session: Session):
+    # Use a reactive value to store the label state
+    threshold_dimension = reactive.Value("1D")
 
-    # Example: Render a text output
-    # @output()
-    # @render.text
-    # def my_text():
-    #     return "Hello, Peregrin!"
+    @reactive.Effect
+    @reactive.event(input.threshold_dimensional_toggle)
+    def _():
+        # Use the reactive value to toggle the threshold dimension
+        count = input.threshold_dimensional_toggle()
 
-    # Add your other outputs below...
+        # Toggle the label when button is clicked
+        threshold_dimension.set("1D" if count % 2 == 0 else "2D")
+        label = "2D" if count % 2 == 0 else "1D"
+
+        # Set the button label using the session object
+        session.send_input_message("threshold_dimensional_toggle", {"label": label})
+
+    @render.text
+    def sidebar_label():
+        return ui.markdown(
+            f""" <h5> <b>  {threshold_dimension.get()} Data filtering  </b> </h5> """
+        )
+    
+    @output()
+    @render.ui
+    def data_filtering():
+        if threshold_dimension.get() == "1D":
+            return [
+                ui.input_selectize("thresholding_properties", "Thresholding property", select_metrics.spots_n_tracks),
+                ui.input_selectize("thresholding_filter1D", "Thresholding values", ["literal", "percentile"]),
+                ui.input_slider("thresholding_values", label=None, min=0, max=100, step=1, value=(0, 100)),
+                ui.panel_conditional(
+                    "input.thresholding_filter1D == 'literal'",
+                    # TODO: implement histogram for literal values
+                # ui.output_plot("thresholding_histogram", height="300px"),
+                None
+                ),
+            ]
+        elif threshold_dimension.get() == "2D":
+            return [
+                ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
+                ui.input_selectize("thresholding_metric_X", None, select_metrics.spots_n_tracks),
+                ui.input_selectize("thresholding_metric_Y", None, select_metrics.spots_n_tracks),
+                ui.input_selectize("thresholding_filter_2D", "Thresholding values", ["literal", "percentile"]),
+            ]
+        else:
+            return None
 
     @output()
-    @render.data_frame
-    def render_spot_stats():
-        # TODO: return DataFrame to display
-        pass
+    @render.ui
+    def filtering_settings():
+        if threshold_dimension.get() == "1D":
+            return [
+                ui.input_numeric("bins", "Number of bins", value=40, min=1, step=1),
+                ui.input_radio_buttons("plot_distribution", "Histogram show:", choices=["Kernel density", "Hover info"], selected="Kernel density"),
+            ]
+        elif threshold_dimension.get() == "2D":
+            return ui.markdown("Working on it dawg")
+        else:
+            return None
 
-    @output()
-    @render.download
-    def download_spot_stats():
-        # TODO: yield data for download
-        pass
 
-    @output()
-    @render_plotly
-    def interactive_true_track_visualization():
-        # TODO: return plotly figure
-        pass
 
-    # ...and so on for each output in your app
-
-# --- Mount the app ---
 app = App(app_ui, server)
+
+
+
+
+
+# def server(input, output, session):
+
+#     # Example: Render a text output
+#     # @output()
+#     # @render.text
+#     # def my_text():
+#     #     return "Hello, Peregrin!"
+
+#     # Add your other outputs below...
+
+#     @output()
+#     @render.data_frame
+#     def render_spot_stats():
+#         # TODO: return DataFrame to display
+#         pass
+
+#     @output()
+#     @render.download
+#     def download_spot_stats():
+#         # TODO: yield data for download
+#         pass
+
+#     @output()
+#     @render_plotly
+#     def interactive_true_track_visualization():
+#         # TODO: return plotly figure
+#         pass
+
+#     # ...and so on for each output in your app
+
+# # --- Mount the app ---
+# app = App(app_ui, server)
