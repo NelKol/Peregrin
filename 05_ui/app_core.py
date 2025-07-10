@@ -8,32 +8,23 @@ import utils.select_modes as select_mode
 import utils.select_metrics as select_metrics
 from utils.ratelimit import debounce, throttle
 
+from custom.formatting import Accordion
+
 
 type_time_chart = reactive.Value("Scatter"),
+
 
 
 # --- UI Layout ---
 
 app_ui = ui.page_sidebar(
     ui.sidebar(
+        ui.tags.style(Accordion),
         ui.markdown("""  <p>  """),
         ui.output_ui("sidebar_label"),
-        ui.accordion(
-            ui.accordion_panel(
-                "Threshold 1",
-                ui.panel_well(
-                    ui.output_ui("data_filtering"),
-                ),
-                ui.input_task_button("apply_thresholding", "Set threshold"),
-            ),
-            ui.accordion_panel(
-                "Filter settings",
-                # ui.input_switch("threshold_dimensional", "2D", value=False),
-                ui.input_action_button("threshold_dimensional_toggle", "2D"),
-                ui.markdown(""" <p> """),
-                ui.output_ui("filtering_settings"),
-            ),
-        ),
+        ui.output_ui("sidebar_accordion"),
+        ui.input_action_button("add_threshold", "Add threshold", class_="btn-primary"),
+        ui.input_action_button("remove_threshold", "Remove threshold", class_="btn-primary", disabled=True),
         id="sidebar", open="open", position="right", bg="f8f8f8"
     ),
     ui.navset_bar(
@@ -43,15 +34,15 @@ app_ui = ui.page_sidebar(
                 {"id": "data-inputs"},
                 # Action buttons
                 ui.input_action_button("add_input", "Add data input", class_="btn-primary"),
-                ui.input_action_button("remove_input", "Remove data input", class_="btn-primary"),
+                ui.input_action_button("remove_input", "Remove data input", class_="btn-primary", disabled=True),
                 ui.input_action_button("run", "Run", class_="btn-secondary", disabled=True),
                 ui.input_action_button("reset", "Reset", class_="btn-danger"),
                 ui.input_action_button("input_help", "Show help"),
                 # Line break for better spacing
                 ui.markdown("""___"""),
                 # Default data input
-                ui.input_text("label1", "Condition no. 1", placeholder="Label me!"),
-                ui.input_file("file1", "Upload files:", placeholder="Drag and drop here!", multiple=True),
+                ui.input_text("condition_label1", "Condition", placeholder="Label me!"),
+                ui.input_file("input_file1", "Upload files:", placeholder="Drag and drop here!", multiple=True),
                 # ... You can add more file inputs/labels dynamically
                 ui.panel_absolute(
                     ui.panel_well(
@@ -256,6 +247,67 @@ app_ui = ui.page_sidebar(
 def server(input: Inputs, output: Outputs, session: Session):
     # Use a reactive value to store the label state
     threshold_dimension = reactive.Value("1D")
+    threshold_list = reactive.Value([0])  # Start with one threshold (ID = 0)
+
+    @reactive.effect
+    @reactive.event(input.add_threshold)
+    def add_threshold():
+        ids = threshold_list.get()
+        threshold_list.set(ids + [max(ids)+1 if ids else 0])
+        session.send_input_message("remove_threshold", {"disabled": False})
+
+    @reactive.effect
+    @reactive.event(input.remove_threshold)
+    def remove_threshold():
+        ids = threshold_list.get()
+        if len(ids) > 1:
+            threshold_list.set(ids[:-1])
+        if len(ids) <= 2:
+            session.send_input_message("remove_threshold", {"disabled": True})
+
+    @output()
+    @render.ui
+    def sidebar_accordion():
+        ids = threshold_list.get()
+        panels = []
+        for i, threshold_id in enumerate(ids, 1):
+            panels.append(
+                ui.accordion_panel(
+                    f"Threshold {i}",
+                    ui.panel_well(
+                        ui.input_selectize(f"threshold_property_{threshold_id}", "Property", ["A", "B", "C"]),
+                        ui.input_selectize(f"threshold_filter_{threshold_id}", "Filter", ["literal", "percentile"]),
+                        ui.input_slider(f"threshold_values_{threshold_id}", "Threshold", min=0, max=100, value=(0, 100)),
+                    )
+                )
+            )
+        # Example static panel at the end, optional
+        panels.append(
+            ui.accordion_panel(
+                "Settings",
+                ui.markdown("Settings panel (static)"),
+            )
+        )
+        # Set all panels open by default (can be a list of panel titles)
+        return ui.accordion(*panels, id="thresholds_accordion", open=[f"Threshold {len(ids)}"])
+
+    @output()
+    @render.text
+    def threshold_values_display():
+        # Example: Display all threshold values
+        ids = threshold_list.get()
+        vals = []
+        for threshold_id in ids:
+            prop = input.get(f"threshold_property_{threshold_id}") or ""
+            ftr = input.get(f"threshold_filter_{threshold_id}") or ""
+            rng = input.get(f"threshold_values_{threshold_id}") or (None, None)
+            vals.append(f"Panel {threshold_id}: {prop}, {ftr}, {rng}")
+        return " | ".join(vals)
+
+
+
+
+
 
     @reactive.Effect
     @reactive.event(input.threshold_dimensional_toggle)
@@ -315,42 +367,9 @@ def server(input: Inputs, output: Outputs, session: Session):
             return None
 
 
-
+# --- Mount the app ---
 app = App(app_ui, server)
 
 
 
 
-
-# def server(input, output, session):
-
-#     # Example: Render a text output
-#     # @output()
-#     # @render.text
-#     # def my_text():
-#     #     return "Hello, Peregrin!"
-
-#     # Add your other outputs below...
-
-#     @output()
-#     @render.data_frame
-#     def render_spot_stats():
-#         # TODO: return DataFrame to display
-#         pass
-
-#     @output()
-#     @render.download
-#     def download_spot_stats():
-#         # TODO: yield data for download
-#         pass
-
-#     @output()
-#     @render_plotly
-#     def interactive_true_track_visualization():
-#         # TODO: return plotly figure
-#         pass
-
-#     # ...and so on for each output in your app
-
-# # --- Mount the app ---
-# app = App(app_ui, server)
