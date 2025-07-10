@@ -1,14 +1,14 @@
-classic = [
+basic = [
     'circle-open', 
     'square-open', 
     'triangle-open', 
     'star-open', 
     'diamond-open', 
     'pentagon-open'
-    ]
+]
 
 
-not_normal = [
+not_basic = [
     'cell',
     'scaled',
     'trains',
@@ -19,4 +19,4 @@ not_normal = [
     'birds',
     'forest',
     'aquarium'
-    ]
+]

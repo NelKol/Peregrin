@@ -13,8 +13,6 @@ from custom.formatting import Accordion
 
 type_time_chart = reactive.Value("Scatter"),
 
-
-
 # --- UI Layout ---
 
 app_ui = ui.page_sidebar(
@@ -38,12 +36,9 @@ app_ui = ui.page_sidebar(
                 ui.input_action_button("run", "Run", class_="btn-secondary", disabled=True),
                 ui.input_action_button("reset", "Reset", class_="btn-danger"),
                 ui.input_action_button("input_help", "Show help"),
-                # Line break for better spacing
                 ui.markdown("""___"""),
-                # Default data input
-                ui.input_text("condition_label1", "Condition", placeholder="Label me!"),
-                ui.input_file("input_file1", "Upload files:", placeholder="Drag and drop here!", multiple=True),
-                # ... You can add more file inputs/labels dynamically
+                # Dynamic file input/label pairs
+                ui.output_ui("input_file_pairs"),
                 ui.panel_absolute(
                     ui.panel_well(
                         ui.markdown("<h5>Select columns:</h5>"),
@@ -117,16 +112,24 @@ app_ui = ui.page_sidebar(
                                 ui.input_checkbox("show_markers", "Show end track markers", True),
                                 ui.panel_conditional(
                                     "input.show_markers",
-                                    ui.input_selectize("markers", "Markers:", []),
-                                    ui.input_numeric("marker_size", "Marker size:", 5),
-                                    ui.input_switch("just_be_normal", "Just normal", True),
+                                    ui.panel_conditional(
+                                        "input.basic",
+                                        ui.input_selectize("basic_markers", "Markers:", select_markers.basic),
+                                        ui.input_numeric("basic_marker_size", "Marker size:", 5),
+                                    ),
+                                    ui.panel_conditional(
+                                        "input.basic == false",
+                                        ui.input_selectize("not_basic_markers", "Markers:", select_markers.not_basic),
+                                        ui.input_numeric("not_basic_marker_size", "Marker size:", 5),
+                                    ),
+                                    ui.input_switch("basic", "Basic", True),
                                 ),
                             ),
                             ui.accordion_panel(
                                 "Coloring",
-                                ui.input_selectize("color_mode", "Color mode:", ["only-one-color", "not only-one-color"]),
+                                ui.input_selectize("color_mode", "Color mode:", select_mode.color_modes),
                                 ui.panel_conditional(
-                                    "input.color_mode != 'only-one-color'",
+                                    "input.color_mode != 'random greys' && input.color_mode != 'random colors' && input.color_mode != 'only-one-color' && input.color_mode != 'differentiate conditions/replicates'",
                                     ui.input_selectize('lut_scaling', 'LUT scaling metric:', []),
                                 ),
                                 ui.panel_conditional(
@@ -169,7 +172,6 @@ app_ui = ui.page_sidebar(
                             """
                         ),
                         ui.input_select("time_plot", "Plot:", choices=["Scatter", "Line", "Errorband"]),
-                        # type_time_chart.set(input.time_plot),
                         ui.accordion(
                             ui.accordion_panel(
                                 "Dataset",
@@ -189,7 +191,6 @@ app_ui = ui.page_sidebar(
                                 ui.input_radio_buttons("y_axis", "On Y axis with", ["absolute values", "relative values"], selected="absolute"),
                             ),
                             ui.accordion_panel(
-                                # type_time_chart.get(),
                                 "Plot settings",
                                 ui.panel_conditional(
                                     "input.time_plot == 'Scatter'",
@@ -206,11 +207,11 @@ app_ui = ui.page_sidebar(
                                 ),
                                 ui.panel_conditional(
                                     "input.time_plot == 'Errorband'",
-                                    
                                 ),
                             ),
                         ),
                     ),
+                    ui.markdown(""" <p> """),
                     ui.card(
                         ui.output_plot("time_series_poly_fit_chart"),
                         ui.download_button("download_time_series_poly_fit_chart__html", "Download Time Series Poly Fit Chart HTML"),
@@ -220,7 +221,6 @@ app_ui = ui.page_sidebar(
                 ),
                 ui.nav_panel(
                     "Superplots",
-                    # ... Add superplots UI here
                     ui.panel_well(
                         ui.input_selectize("testing_metric", "Test for metric:", []),
                         ui.input_selectize('palette', 'Color palette:', []),
@@ -240,16 +240,13 @@ app_ui = ui.page_sidebar(
     ),
 )
 
-
-
 # --- Server logic skeleton ---
 
 def server(input: Inputs, output: Outputs, session: Session):
-    # Use a reactive value to store the label state
+    # --- Dynamic Thresholds ---
     threshold_dimension = reactive.Value("1D")
-    dimension_button_label = reactive.Value("2D")  # Reactive value for the label
-    threshold_list = reactive.Value([0])  # Start with one threshold (ID = 0)
-
+    dimension_button_label = reactive.Value("2D")
+    threshold_list = reactive.Value([0])  # Start with one threshold
 
     @reactive.effect
     @reactive.event(input.add_threshold)
@@ -264,17 +261,14 @@ def server(input: Inputs, output: Outputs, session: Session):
         ids = threshold_list.get()
         if len(ids) > 1:
             threshold_list.set(ids[:-1])
-        if len(ids) <= 2:
+        if len(threshold_list.get()) <= 1:
             session.send_input_message("remove_threshold", {"disabled": True})
 
-    
     @output()
     @render.ui
     def sidebar_accordion():
         ids = threshold_list.get()
         panels = []
-
-
         if threshold_dimension.get() == "1D":
             for i, threshold_id in enumerate(ids, 1):
                 panels.append(
@@ -287,7 +281,6 @@ def server(input: Inputs, output: Outputs, session: Session):
                         )
                     )
                 )
-            # Static panel at the end
             panels.append(
                 ui.accordion_panel(
                     "Filter settings",
@@ -297,7 +290,6 @@ def server(input: Inputs, output: Outputs, session: Session):
                     ui.input_radio_buttons("plot_distribution", "Histogram show:", choices=["Kernel density", "Hover info"], selected="Kernel density"),
                 )
             )
-
         elif threshold_dimension.get() == "2D":
             for i, threshold_id in enumerate(ids, 1):
                 panels.append(
@@ -305,13 +297,12 @@ def server(input: Inputs, output: Outputs, session: Session):
                         f"Threshold {i}" if len(ids) >= 2 else "Threshold",
                         ui.panel_well(
                             ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
-                            ui.input_selectize("thresholding_metric_X", None, select_metrics.spots_n_tracks),
-                            ui.input_selectize("thresholding_metric_Y", None, select_metrics.spots_n_tracks),
-                            ui.input_selectize("thresholding_filter_2D", "Thresholding values", ["literal", "percentile"]),
+                            ui.input_selectize(f"thresholding_metric_X_{threshold_id}", None, select_metrics.spots_n_tracks),
+                            ui.input_selectize(f"thresholding_metric_Y_{threshold_id}", None, select_metrics.spots_n_tracks),
+                            ui.input_selectize(f"thresholding_filter_2D_{threshold_id}", "Thresholding values", ["literal", "percentile"]),
                         )
                     )
                 )
-            # Static panel at the end
             panels.append(
                 ui.accordion_panel(
                     "Filter settings",
@@ -320,16 +311,8 @@ def server(input: Inputs, output: Outputs, session: Session):
                     ui.markdown("""  Working on it dawg  """),
                 )
             )
-        
-        # Set all panels open by default (can be a list of panel titles)
         return ui.accordion(*panels, id="thresholds_accordion", open=["Threshold", f"Threshold {len(ids)}", "Filter settings"])
 
-    @render.text
-    def sidebar_label():
-        return ui.markdown(
-            f""" <h5> <b>  {threshold_dimension.get()} Data filtering  </b> </h5> """
-        )
-    
     @reactive.Effect
     @reactive.event(input.threshold_dimensional_toggle)
     def threshold_dimensional_toggle():
@@ -339,66 +322,48 @@ def server(input: Inputs, output: Outputs, session: Session):
         else:
             threshold_dimension.set("1D")
             dimension_button_label.set("2D")
-    
-    
+
     @output()
     @render.text
-    def threshold_values_display():
-        # Example: Display all threshold values
-        ids = threshold_list.get()
-        vals = []
-        for threshold_id in ids:
-            prop = input.get(f"threshold_property_{threshold_id}") or ""
-            ftr = input.get(f"threshold_filter_{threshold_id}") or ""
-            rng = input.get(f"threshold_values_{threshold_id}") or (None, None)
-            vals.append(f"Panel {threshold_id}: {prop}, {ftr}, {rng}")
-        return " | ".join(vals)
+    def sidebar_label():
+        return ui.markdown(
+            f""" <h5> <b>  {threshold_dimension.get()} Data filtering  </b> </h5> """
+        )
 
+    # --- Dynamic File+Label Inputs for Input panel ---
+    input_list = reactive.Value([1])  # Always start with one
 
-    
-    
-    # @output()
-    # @render.ui
-    # def data_filtering():
-    #     if threshold_dimension.get() == "1D":
-    #         return [
-    #             ui.input_selectize("thresholding_properties", "Thresholding property", select_metrics.spots_n_tracks),
-    #             ui.input_selectize("thresholding_filter1D", "Thresholding values", ["literal", "percentile"]),
-    #             ui.input_slider("thresholding_values", label=None, min=0, max=100, step=1, value=(0, 100)),
-    #             ui.panel_conditional(
-    #                 "input.thresholding_filter1D == 'literal'",
-    #                 # TODO: implement histogram for literal values
-    #             # ui.output_plot("thresholding_histogram", height="300px"),
-    #             None
-    #             ),
-    #         ]
-    #     elif threshold_dimension.get() == "2D":
-    #         return [
-    #             ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
-    #             ui.input_selectize("thresholding_metric_X", None, select_metrics.spots_n_tracks),
-    #             ui.input_selectize("thresholding_metric_Y", None, select_metrics.spots_n_tracks),
-    #             ui.input_selectize("thresholding_filter_2D", "Thresholding values", ["literal", "percentile"]),
-    #         ]
-    #     else:
-    #         return None
+    @reactive.effect
+    @reactive.event(input.add_input)
+    def add_input():
+        ids = input_list.get()
+        new_id = max(ids) + 1 if ids else 1
+        input_list.set(ids + [new_id])
+        session.send_input_message("remove_input", {"disabled": len(ids) < 1})
 
-    # @output()
-    # @render.ui
-    # def filtering_settings():
-    #     if threshold_dimension.get() == "1D":
-    #         return [
-    #             ui.input_numeric("bins", "Number of bins", value=40, min=1, step=1),
-    #             ui.input_radio_buttons("plot_distribution", "Histogram show:", choices=["Kernel density", "Hover info"], selected="Kernel density"),
-    #         ]
-    #     elif threshold_dimension.get() == "2D":
-    #         return ui.markdown("Working on it dawg")
-    #     else:
-    #         return None
+    @reactive.effect
+    @reactive.event(input.remove_input)
+    def remove_input():
+        ids = input_list.get()
+        if len(ids) > 1:
+            input_list.set(ids[:-1])
+        if len(input_list.get()) <= 1:
+            session.send_input_message("remove_input", {"disabled": True})
 
+    @output()
+    @render.ui
+    def input_file_pairs():
+        ids = input_list.get()
+        ui_blocks = []
+        for idx in ids:
+            ui_blocks.append([
+                ui.input_text(f"condition_label{idx}", f"Condition {idx}" if len(ids) > 1 else "Condition", placeholder=f"Label me!"),
+                ui.input_file(f"input_file{idx}", "Upload files:", placeholder="Drag and drop here!", multiple=True),
+                ui.markdown(""" <hr style="border: none; border-top: 1px dotted" /> """),
+            ])
+        return ui_blocks
+
+    # (Other outputs and logic remain unchanged...)
 
 # --- Mount the app ---
 app = App(app_ui, server)
-
-
-
-

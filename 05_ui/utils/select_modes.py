@@ -109,9 +109,8 @@ sns_palletes = [
 color_modes = [
     'random colors',
     'random greys',
+    'differentiate conditions/replicates',
     'only-one-color',
-    'differentiate conditions',
-    'differentiate replicates',
     'greyscale LUT', 
     'jet LUT', 
     'brg LUT', 
