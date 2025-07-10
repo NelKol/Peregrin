@@ -22,10 +22,10 @@ app_ui = ui.page_sidebar(
         ui.tags.style(Accordion),
         ui.markdown("""  <p>  """),
         ui.output_ui("sidebar_label"),
-        ui.output_ui("sidebar_accordion"),
         ui.input_action_button("add_threshold", "Add threshold", class_="btn-primary"),
         ui.input_action_button("remove_threshold", "Remove threshold", class_="btn-primary", disabled=True),
-        id="sidebar", open="open", position="right", bg="f8f8f8"
+        ui.output_ui("sidebar_accordion"),
+        id="sidebar", open="open", position="right", bg="f8f8f8",
     ),
     ui.navset_bar(
         ui.nav_panel(
@@ -247,7 +247,9 @@ app_ui = ui.page_sidebar(
 def server(input: Inputs, output: Outputs, session: Session):
     # Use a reactive value to store the label state
     threshold_dimension = reactive.Value("1D")
+    dimension_button_label = reactive.Value("2D")  # Reactive value for the label
     threshold_list = reactive.Value([0])  # Start with one threshold (ID = 0)
+
 
     @reactive.effect
     @reactive.event(input.add_threshold)
@@ -265,32 +267,80 @@ def server(input: Inputs, output: Outputs, session: Session):
         if len(ids) <= 2:
             session.send_input_message("remove_threshold", {"disabled": True})
 
+    
     @output()
     @render.ui
     def sidebar_accordion():
         ids = threshold_list.get()
         panels = []
-        for i, threshold_id in enumerate(ids, 1):
-            panels.append(
-                ui.accordion_panel(
-                    f"Threshold {i}",
-                    ui.panel_well(
-                        ui.input_selectize(f"threshold_property_{threshold_id}", "Property", ["A", "B", "C"]),
-                        ui.input_selectize(f"threshold_filter_{threshold_id}", "Filter", ["literal", "percentile"]),
-                        ui.input_slider(f"threshold_values_{threshold_id}", "Threshold", min=0, max=100, value=(0, 100)),
+
+
+        if threshold_dimension.get() == "1D":
+            for i, threshold_id in enumerate(ids, 1):
+                panels.append(
+                    ui.accordion_panel(
+                        f"Threshold {i}" if len(ids) >= 2 else "Threshold",
+                        ui.panel_well(
+                            ui.input_selectize(f"threshold_property_{threshold_id}", "Property", select_metrics.spots_n_tracks),
+                            ui.input_selectize(f"threshold_filter_{threshold_id}", "Filter values", ["literal", "percentile"]),
+                            ui.input_slider(f"threshold_values_{threshold_id}", "Threshold", min=0, max=100, value=(0, 100)),
+                        )
                     )
                 )
+            # Static panel at the end
+            panels.append(
+                ui.accordion_panel(
+                    "Filter settings",
+                    ui.input_action_button("threshold_dimensional_toggle", dimension_button_label.get(), width="100%"),
+                    ui.markdown(""" <p> """),
+                    ui.input_numeric("bins", "Number of bins", value=40, min=1, step=1),
+                    ui.input_radio_buttons("plot_distribution", "Histogram show:", choices=["Kernel density", "Hover info"], selected="Kernel density"),
+                )
             )
-        # Example static panel at the end, optional
-        panels.append(
-            ui.accordion_panel(
-                "Settings",
-                ui.markdown("Settings panel (static)"),
-            )
-        )
-        # Set all panels open by default (can be a list of panel titles)
-        return ui.accordion(*panels, id="thresholds_accordion", open=[f"Threshold {len(ids)}"])
 
+        elif threshold_dimension.get() == "2D":
+            for i, threshold_id in enumerate(ids, 1):
+                panels.append(
+                    ui.accordion_panel(
+                        f"Threshold {i}" if len(ids) >= 2 else "Threshold",
+                        ui.panel_well(
+                            ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
+                            ui.input_selectize("thresholding_metric_X", None, select_metrics.spots_n_tracks),
+                            ui.input_selectize("thresholding_metric_Y", None, select_metrics.spots_n_tracks),
+                            ui.input_selectize("thresholding_filter_2D", "Thresholding values", ["literal", "percentile"]),
+                        )
+                    )
+                )
+            # Static panel at the end
+            panels.append(
+                ui.accordion_panel(
+                    "Filter settings",
+                    ui.input_action_button("threshold_dimensional_toggle", dimension_button_label.get(), width="100%"),
+                    ui.markdown(""" <p> """),
+                    ui.markdown("""  Working on it dawg  """),
+                )
+            )
+        
+        # Set all panels open by default (can be a list of panel titles)
+        return ui.accordion(*panels, id="thresholds_accordion", open=["Threshold", f"Threshold {len(ids)}", "Filter settings"])
+
+    @render.text
+    def sidebar_label():
+        return ui.markdown(
+            f""" <h5> <b>  {threshold_dimension.get()} Data filtering  </b> </h5> """
+        )
+    
+    @reactive.Effect
+    @reactive.event(input.threshold_dimensional_toggle)
+    def threshold_dimensional_toggle():
+        if threshold_dimension.get() == "1D":
+            threshold_dimension.set("2D")
+            dimension_button_label.set("1D")
+        else:
+            threshold_dimension.set("1D")
+            dimension_button_label.set("2D")
+    
+    
     @output()
     @render.text
     def threshold_values_display():
@@ -305,66 +355,45 @@ def server(input: Inputs, output: Outputs, session: Session):
         return " | ".join(vals)
 
 
-
-
-
-
-    @reactive.Effect
-    @reactive.event(input.threshold_dimensional_toggle)
-    def _():
-        # Use the reactive value to toggle the threshold dimension
-        count = input.threshold_dimensional_toggle()
-
-        # Toggle the label when button is clicked
-        threshold_dimension.set("1D" if count % 2 == 0 else "2D")
-        label = "2D" if count % 2 == 0 else "1D"
-
-        # Set the button label using the session object
-        session.send_input_message("threshold_dimensional_toggle", {"label": label})
-
-    @render.text
-    def sidebar_label():
-        return ui.markdown(
-            f""" <h5> <b>  {threshold_dimension.get()} Data filtering  </b> </h5> """
-        )
     
-    @output()
-    @render.ui
-    def data_filtering():
-        if threshold_dimension.get() == "1D":
-            return [
-                ui.input_selectize("thresholding_properties", "Thresholding property", select_metrics.spots_n_tracks),
-                ui.input_selectize("thresholding_filter1D", "Thresholding values", ["literal", "percentile"]),
-                ui.input_slider("thresholding_values", label=None, min=0, max=100, step=1, value=(0, 100)),
-                ui.panel_conditional(
-                    "input.thresholding_filter1D == 'literal'",
-                    # TODO: implement histogram for literal values
-                # ui.output_plot("thresholding_histogram", height="300px"),
-                None
-                ),
-            ]
-        elif threshold_dimension.get() == "2D":
-            return [
-                ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
-                ui.input_selectize("thresholding_metric_X", None, select_metrics.spots_n_tracks),
-                ui.input_selectize("thresholding_metric_Y", None, select_metrics.spots_n_tracks),
-                ui.input_selectize("thresholding_filter_2D", "Thresholding values", ["literal", "percentile"]),
-            ]
-        else:
-            return None
+    
+    # @output()
+    # @render.ui
+    # def data_filtering():
+    #     if threshold_dimension.get() == "1D":
+    #         return [
+    #             ui.input_selectize("thresholding_properties", "Thresholding property", select_metrics.spots_n_tracks),
+    #             ui.input_selectize("thresholding_filter1D", "Thresholding values", ["literal", "percentile"]),
+    #             ui.input_slider("thresholding_values", label=None, min=0, max=100, step=1, value=(0, 100)),
+    #             ui.panel_conditional(
+    #                 "input.thresholding_filter1D == 'literal'",
+    #                 # TODO: implement histogram for literal values
+    #             # ui.output_plot("thresholding_histogram", height="300px"),
+    #             None
+    #             ),
+    #         ]
+    #     elif threshold_dimension.get() == "2D":
+    #         return [
+    #             ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
+    #             ui.input_selectize("thresholding_metric_X", None, select_metrics.spots_n_tracks),
+    #             ui.input_selectize("thresholding_metric_Y", None, select_metrics.spots_n_tracks),
+    #             ui.input_selectize("thresholding_filter_2D", "Thresholding values", ["literal", "percentile"]),
+    #         ]
+    #     else:
+    #         return None
 
-    @output()
-    @render.ui
-    def filtering_settings():
-        if threshold_dimension.get() == "1D":
-            return [
-                ui.input_numeric("bins", "Number of bins", value=40, min=1, step=1),
-                ui.input_radio_buttons("plot_distribution", "Histogram show:", choices=["Kernel density", "Hover info"], selected="Kernel density"),
-            ]
-        elif threshold_dimension.get() == "2D":
-            return ui.markdown("Working on it dawg")
-        else:
-            return None
+    # @output()
+    # @render.ui
+    # def filtering_settings():
+    #     if threshold_dimension.get() == "1D":
+    #         return [
+    #             ui.input_numeric("bins", "Number of bins", value=40, min=1, step=1),
+    #             ui.input_radio_buttons("plot_distribution", "Histogram show:", choices=["Kernel density", "Hover info"], selected="Kernel density"),
+    #         ]
+    #     elif threshold_dimension.get() == "2D":
+    #         return ui.markdown("Working on it dawg")
+    #     else:
+    #         return None
 
 
 # --- Mount the app ---
