@@ -178,3 +178,15 @@ background = [
     'dark'
     ]
 
+
+models = {
+        "(AA) Linear":         "(lambda x, a, b: a * x + b, [1, 0])",
+        "(A) Quadratic":       "(lambda x, a, b, c: a * x**2 + b * x + c, [1, 1, 0])",
+        "(B) Cubic":           "(lambda x, a, b, c, d: a * x**3 + b * x**2 + c * x + d, [1, 1, 1, 0])",
+        "(C) Logarithmic":     "(lambda x, a, b: a * np.log(x + 1e-9) + b, [1, 0])",
+        "(D) Exponential":     "(lambda x, a, b, c: a * np.exp(b * x) + c, [1, 0.1, 0])",
+        "(E) Logistic Growth": "(lambda x, L, k, x0: L / (1 + np.exp(-k * (x - x0))), [max(y), 1, np.median(x)]),",
+        "(F) Sine Wave":       "(lambda x, A, w, p, c: A * np.sin(w * x + p) + c, [np.std(y), 1, 0, np.mean(y)]),",
+        "(G) Gompertz":        "(lambda x, a, b, c: a * np.exp(-b * np.exp(-c * x)), [max(y), 1, 0.1]),",
+        "(H) Power Law":       "(lambda x, a, b: a * np.power(x + 1e-9, b), [1, 1])"
+    }
