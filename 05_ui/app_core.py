@@ -1,26 +1,27 @@
 from shiny import App, Inputs, Outputs, Session, render, reactive, req, ui
+from shiny.types import FileInfo
 from shinywidgets import render_plotly, render_altair
 
-import utils.data_calcs as dc
-import utils.funcs_plot as pu
 from utils.Select import Metrics, Styles, Markers, Modes
-import utils.select_modes as select_mode
-import utils.select_metrics as select_metrics
+from utils.Function import DataLoader, Process, Calc
 from utils.ratelimit import debounce, throttle
+from utils.Customize import Format
 
-from custom.formatting import Accordion
+import asyncio
+import pandas as pd
 
 # --- UI definition ---
 app_ui = ui.page_sidebar(
 
     # ========== SIDEBAR - DATA FILTERING ==========
     ui.sidebar(
-        ui.tags.style(Accordion),
+        ui.tags.style(Format.Accordion),
         ui.markdown("""  <p>  """),
         ui.output_ui("sidebar_label"),
         ui.input_action_button("add_threshold", "Add threshold", class_="btn-primary"),
         ui.input_action_button("remove_threshold", "Remove threshold", class_="btn-primary", disabled=True),
         ui.output_ui("sidebar_accordion"),
+        ui.input_task_button("apply_threshold", label="Apply thresholding", label_busy="Applying...", type="secondary", disabled=True),
         id="sidebar", open="open", position="right", bg="f8f8f8",
     ),
 
@@ -34,9 +35,10 @@ app_ui = ui.page_sidebar(
                 # Action buttons
                 ui.input_action_button("add_input", "Add data input", class_="btn-primary"),
                 ui.input_action_button("remove_input", "Remove data input", class_="btn-primary", disabled=True),
-                ui.input_action_button("run", "Run", class_="btn-secondary", disabled=True),
+                ui.input_action_button("run", label="Run", class_="btn-secondary", disabled=True),
                 ui.input_action_button("reset", "Reset", class_="btn-danger"),
                 ui.input_action_button("input_help", "Show help"),
+                ui.output_ui("initialize"),
                 ui.markdown("""___"""),
                 # File inputs
                 ui.row(
@@ -432,6 +434,8 @@ app_ui = ui.page_sidebar(
     ),
 )
 
+
+
 # --- Server logic skeleton ---
 
 def server(input: Inputs, output: Outputs, session: Session):
@@ -455,6 +459,181 @@ def server(input: Inputs, output: Outputs, session: Session):
         - UI components are rendered using the `ui` and `render` modules.
         - Assumes existence of Metrics.SpotAndTrack and Modes.Thresholding for selectize choices.
     """
+
+
+    # - - - - Reactive values and holders - - - -
+
+    running_calculation = reactive.Value(False)     # Flag to indicate if a calculation is running
+    input_list = reactive.Value([1])                # List of input IDs for file inputs
+    RAWDATA = reactive.Value(pd.DataFrame())        # Placeholder for raw data
+    SPOTSTATS = reactive.Value(pd.DataFrame())          # Placeholder for spot statistics
+    TRACKSTATS = reactive.Value(pd.DataFrame())        # Placeholder for track statistics
+    TIMESTATS = reactive.Value(pd.DataFrame())         # Placeholder for time statistics
+
+    # - - - - - - - - - - - - - - - - - - - -
+
+
+
+
+    # - - - - File input management - - - -
+
+    @reactive.effect
+    @reactive.event(input.add_input)
+    def add_input():
+        ids = input_list.get()
+        new_id = max(ids) + 1 if ids else 1
+        input_list.set(ids + [new_id])
+        session.send_input_message("remove_input", {"disabled": len(ids) < 1})
+
+    @reactive.effect
+    @reactive.event(input.remove_input)
+    def remove_input():
+        ids = input_list.get()
+        if len(ids) > 1:
+            input_list.set(ids[:-1])
+        if len(input_list.get()) <= 1:
+
+            session.send_input_message("remove_input", {"disabled": True})
+
+    @output()
+    @render.ui
+    def input_file_pairs():
+        ids = input_list.get()
+        ui_blocks = []
+        for idx in ids:
+            ui_blocks.append([
+                ui.input_text(f"condition_label{idx}", f"Condition {idx}" if len(ids) > 1 else "Condition", placeholder=f"Label me!"),
+                ui.input_file(f"input_file{idx}", "Upload files:", placeholder="Drag and drop here!", multiple=True),
+                ui.markdown(""" <hr style="border: none; border-top: 1px dotted" /> """),
+            ])
+        return ui_blocks
+    
+    # - - - - - - - - - - - - - - - - - - - -
+
+
+
+
+    # - - - - Defined column specification - - - -
+
+    @reactive.effect
+    def column_selection():
+        ids = input_list.get()
+        for idx in ids:
+            files = input[f"input_file{idx}"]()
+            if files and isinstance(files, list) and len(files) > 0:
+                try:
+                    columns = DataLoader.GetColumns(files[0]["datapath"])
+                    for sel in ["select_id", "select_time", "select_x", "select_y"]:
+                        ui.update_selectize(sel, choices=columns)
+                    break  # Use the first available slot
+                except Exception as e:
+                    continue
+
+    # - - - - - - - - - - - - - - - - - - - -
+
+
+
+
+    # - - - - Running the analysis - - - -
+
+    @reactive.effect
+    def enable_run_button():
+        files_uploaded = [input[f"input_file{idx}"]() for idx in input_list.get()]
+        def is_busy(val):
+            return isinstance(val, list) and len(val) > 0
+        all_busy = all(is_busy(f) for f in files_uploaded)
+        session.send_input_message("run", {"disabled": not all_busy})
+
+    @reactive.effect
+    @reactive.event(input.run)
+    def parsed_files():
+        running_calculation.set(True)  # Start spinner
+        try:
+            ids = input_list.get()
+            all_data = []
+
+            for idx in ids:
+                files = input[f"input_file{idx}"]()
+                label = input[f"condition_label{idx}"]()
+
+                if not files:
+                    continue
+
+                for rep_idx, fileinfo in enumerate(files, start=1):
+                    try:
+                        df = DataLoader.GetDataFrame(fileinfo["datapath"])
+                        extracted = DataLoader.Extract(
+                            df,
+                            id_col=input.select_id(),
+                            t_col=input.select_time(),
+                            x_col=input.select_x(),
+                            y_col=input.select_y(),
+                            mirror_y=True,
+                        )
+                    except Exception as e:
+                        # Optionally log the error
+                        continue
+
+                    # Assign condition label and replicate number
+                    extracted["Condition"] = label if label else str(idx)
+                    extracted["Replicate"] = rep_idx
+
+                    all_data.append(extracted)
+
+            if all_data:
+                RAWDATA.set(pd.concat(all_data, axis=0, ignore_index=True))
+                spot_stats = Calc.Spots(RAWDATA.get())
+                SPOTSTATS.set(spot_stats)
+                TRACKSTATS.set(Calc.Tracks(spot_stats))
+                TIMESTATS.set(Calc.Time(spot_stats))
+            else:
+                pass
+        finally:
+            running_calculation.set(False)  # <-- End spinner
+
+
+
+    @render.text
+    @reactive.event(input.run)
+    async def initialize():
+        with ui.Progress(min=0, max=30) as p:
+            p.set(message="Initialization in progress")
+
+            for i in range(1, 12):
+                p.set(i, message="Initializing Peregrin...")
+                await asyncio.sleep(0.1)
+        pass
+    
+
+    
+    @render.data_frame
+    def render_spot_stats():
+        spot_stats = SPOTSTATS.get()
+        if spot_stats is not None or not spot_stats:
+            return spot_stats
+        else:
+            pass
+
+    @render.data_frame
+    def render_track_stats():
+        track_stats = TRACKSTATS.get()
+        if track_stats is not None or not track_stats:
+            return track_stats
+        else:
+            pass
+
+    @render.data_frame
+    def render_time_stats():
+        time_stats = TIMESTATS.get()
+        if time_stats is not None or not time_stats:
+            return time_stats
+        else:
+            pass
+    
+
+    # - - - - - - - - - - - - - - - - - - - -
+        
+
 
     
     # --- Dynamic Thresholds ---
@@ -552,39 +731,6 @@ def server(input: Inputs, output: Outputs, session: Session):
         return ui.markdown(
             f""" <h5> <b>  {threshold_dimension.get()} Data filtering  </b> </h5> """
         )
-
-    # --- Dynamic File+Label Inputs for Input panel ---
-    input_list = reactive.Value([1])  # Always start with one
-
-    @reactive.effect
-    @reactive.event(input.add_input)
-    def add_input():
-        ids = input_list.get()
-        new_id = max(ids) + 1 if ids else 1
-        input_list.set(ids + [new_id])
-        session.send_input_message("remove_input", {"disabled": len(ids) < 1})
-
-    @reactive.effect
-    @reactive.event(input.remove_input)
-    def remove_input():
-        ids = input_list.get()
-        if len(ids) > 1:
-            input_list.set(ids[:-1])
-        if len(input_list.get()) <= 1:
-            session.send_input_message("remove_input", {"disabled": True})
-
-    @output()
-    @render.ui
-    def input_file_pairs():
-        ids = input_list.get()
-        ui_blocks = []
-        for idx in ids:
-            ui_blocks.append([
-                ui.input_text(f"condition_label{idx}", f"Condition {idx}" if len(ids) > 1 else "Condition", placeholder=f"Label me!"),
-                ui.input_file(f"input_file{idx}", "Upload files:", placeholder="Drag and drop here!", multiple=True),
-                ui.markdown(""" <hr style="border: none; border-top: 1px dotted" /> """),
-            ])
-        return ui_blocks
 
     # (Other outputs and logic remain unchanged...)
 
