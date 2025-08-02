@@ -461,17 +461,22 @@ def server(input: Inputs, output: Outputs, session: Session):
     """
 
 
-    # - - - - Reactive values and holders - - - -
-
-    running_calculation = reactive.Value(False)     # Flag to indicate if a calculation is running
+    # - - - - LInput IDs for file inputs - - - -
     input_list = reactive.Value([1])                # List of input IDs for file inputs
-    RAWDATA = reactive.Value(pd.DataFrame())        # Placeholder for raw data
-    SPOTSTATS = reactive.Value(pd.DataFrame())          # Placeholder for spot statistics
-    TRACKSTATS = reactive.Value(pd.DataFrame())        # Placeholder for track statistics
-    TIMESTATS = reactive.Value(pd.DataFrame())         # Placeholder for time statistics
 
-    # - - - - - - - - - - - - - - - - - - - -
+    # - - - - Dynamic Thresholds - - - -
+    threshold_dimension = reactive.Value("1D")
+    dimension_button_label = reactive.Value("2D")
+    threshold_list = reactive.Value([0])  # Start with one threshold
 
+    # - - - - Data frame placeholders - - - -
+    RAWDATA = reactive.Value(pd.DataFrame())         # Placeholder for raw data
+    RAWSPOTSTATS = reactive.Value(pd.DataFrame())    # Placeholder for spot statistics
+    RAWTRACKSTATS = reactive.Value(pd.DataFrame())   # Placeholder for track statistics
+    RAWTIMESTATS = reactive.Value(pd.DataFrame())    # Placeholder for time statistics
+    SPOTSTATS = reactive.Value(pd.DataFrame())       # Placeholder for processed spot statistics
+    TRACKSTATS = reactive.Value(pd.DataFrame())      # Placeholder for processed track statistics
+    TIMESTATS = reactive.Value(pd.DataFrame())       # Placeholder for processed time statistics
 
 
 
@@ -547,51 +552,45 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.effect
     @reactive.event(input.run)
     def parsed_files():
-        running_calculation.set(True)  # Start spinner
-        try:
-            ids = input_list.get()
-            all_data = []
+        ids = input_list.get()
+        all_data = []
 
-            for idx in ids:
-                files = input[f"input_file{idx}"]()
-                label = input[f"condition_label{idx}"]()
+        for idx in ids:
+            files = input[f"input_file{idx}"]()
+            label = input[f"condition_label{idx}"]()
 
-                if not files:
+            if not files:
+                continue
+
+            for rep_idx, fileinfo in enumerate(files, start=1):
+                try:
+                    df = DataLoader.GetDataFrame(fileinfo["datapath"])
+                    extracted = DataLoader.Extract(
+                        df,
+                        id_col=input.select_id(),
+                        t_col=input.select_time(),
+                        x_col=input.select_x(),
+                        y_col=input.select_y(),
+                        mirror_y=True,
+                    )
+                except Exception as e:
+                    # Optionally log the error
                     continue
 
-                for rep_idx, fileinfo in enumerate(files, start=1):
-                    try:
-                        df = DataLoader.GetDataFrame(fileinfo["datapath"])
-                        extracted = DataLoader.Extract(
-                            df,
-                            id_col=input.select_id(),
-                            t_col=input.select_time(),
-                            x_col=input.select_x(),
-                            y_col=input.select_y(),
-                            mirror_y=True,
-                        )
-                    except Exception as e:
-                        # Optionally log the error
-                        continue
+                # Assign condition label and replicate number
+                extracted["Condition"] = label if label else str(idx)
+                extracted["Replicate"] = rep_idx
 
-                    # Assign condition label and replicate number
-                    extracted["Condition"] = label if label else str(idx)
-                    extracted["Replicate"] = rep_idx
+                all_data.append(extracted)
 
-                    all_data.append(extracted)
-
-            if all_data:
-                RAWDATA.set(pd.concat(all_data, axis=0, ignore_index=True))
-                spot_stats = Calc.Spots(RAWDATA.get())
-                SPOTSTATS.set(spot_stats)
-                TRACKSTATS.set(Calc.Tracks(spot_stats))
-                TIMESTATS.set(Calc.Time(spot_stats))
-            else:
-                pass
-        finally:
-            running_calculation.set(False)  # <-- End spinner
-
-
+        if all_data:
+            RAWDATA.set(pd.concat(all_data, axis=0, ignore_index=True))
+            spot_stats = Calc.Spots(RAWDATA.get())
+            RAWSPOTSTATS.set(spot_stats)
+            RAWTRACKSTATS.set(Calc.Tracks(spot_stats))
+            RAWTIMESTATS.set(Calc.Time(spot_stats))
+        else:
+            pass
 
     @render.text
     @reactive.event(input.run)
@@ -603,12 +602,17 @@ def server(input: Inputs, output: Outputs, session: Session):
                 p.set(i, message="Initializing Peregrin...")
                 await asyncio.sleep(0.1)
         pass
+
+    # - - - - - - - - - - - - - - - - - - - -
     
 
+
+
+    # - - - - Rendering Data Frames - - - -
     
     @render.data_frame
     def render_spot_stats():
-        spot_stats = SPOTSTATS.get()
+        spot_stats = RAWSPOTSTATS.get()
         if spot_stats is not None or not spot_stats:
             return spot_stats
         else:
@@ -616,7 +620,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     @render.data_frame
     def render_track_stats():
-        track_stats = TRACKSTATS.get()
+        track_stats = RAWTRACKSTATS.get()
         if track_stats is not None or not track_stats:
             return track_stats
         else:
@@ -624,22 +628,18 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     @render.data_frame
     def render_time_stats():
-        time_stats = TIMESTATS.get()
+        time_stats = RAWTIMESTATS.get()
         if time_stats is not None or not time_stats:
             return time_stats
         else:
             pass
     
-
     # - - - - - - - - - - - - - - - - - - - -
-        
 
 
-    
-    # --- Dynamic Thresholds ---
-    threshold_dimension = reactive.Value("1D")
-    dimension_button_label = reactive.Value("2D")
-    threshold_list = reactive.Value([0])  # Start with one threshold
+
+
+    # - - - - Data filtering - - - -
 
     @reactive.effect
     @reactive.event(input.add_threshold)
@@ -731,6 +731,10 @@ def server(input: Inputs, output: Outputs, session: Session):
         return ui.markdown(
             f""" <h5> <b>  {threshold_dimension.get()} Data filtering  </b> </h5> """
         )
+    
+    # - - - - - - - - - - - - - - - - - - - -
+
+
 
     # (Other outputs and logic remain unchanged...)
 
