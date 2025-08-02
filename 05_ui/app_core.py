@@ -9,6 +9,7 @@ from utils.Customize import Format
 
 import asyncio
 import pandas as pd
+import math
 
 # --- UI definition ---
 app_ui = ui.page_sidebar(
@@ -471,9 +472,9 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     # - - - - Data frame placeholders - - - -
     RAWDATA = reactive.Value(pd.DataFrame())         # Placeholder for raw data
-    RAWSPOTSTATS = reactive.Value(pd.DataFrame())    # Placeholder for spot statistics
-    RAWTRACKSTATS = reactive.Value(pd.DataFrame())   # Placeholder for track statistics
-    RAWTIMESTATS = reactive.Value(pd.DataFrame())    # Placeholder for time statistics
+    UNFILTERED_SPOTSTATS = reactive.Value(pd.DataFrame())    # Placeholder for spot statistics
+    UNFILTERED_TRACKSTATS = reactive.Value(pd.DataFrame())   # Placeholder for track statistics
+    UNFILTERED_TIMESTATS = reactive.Value(pd.DataFrame())    # Placeholder for time statistics
     SPOTSTATS = reactive.Value(pd.DataFrame())       # Placeholder for processed spot statistics
     TRACKSTATS = reactive.Value(pd.DataFrame())      # Placeholder for processed track statistics
     TIMESTATS = reactive.Value(pd.DataFrame())       # Placeholder for processed time statistics
@@ -523,13 +524,19 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.effect
     def column_selection():
         ids = input_list.get()
+
         for idx in ids:
             files = input[f"input_file{idx}"]()
             if files and isinstance(files, list) and len(files) > 0:
                 try:
                     columns = DataLoader.GetColumns(files[0]["datapath"])
-                    for sel in ["select_id", "select_time", "select_x", "select_y"]:
-                        ui.update_selectize(sel, choices=columns)
+
+                    for sel in Metrics.LookFor.keys():
+                        choice = DataLoader.FindMatchingColumn(columns, Metrics.LookFor[sel])
+                        if choice is not None:
+                            ui.update_selectize(sel, choices=columns, selected=choice)
+                        else:
+                            ui.update_selectize(sel, choices=columns, selected=columns[0] if columns else None)
                     break  # Use the first available slot
                 except Exception as e:
                     continue
@@ -586,9 +593,9 @@ def server(input: Inputs, output: Outputs, session: Session):
         if all_data:
             RAWDATA.set(pd.concat(all_data, axis=0, ignore_index=True))
             spot_stats = Calc.Spots(RAWDATA.get())
-            RAWSPOTSTATS.set(spot_stats)
-            RAWTRACKSTATS.set(Calc.Tracks(spot_stats))
-            RAWTIMESTATS.set(Calc.Time(spot_stats))
+            UNFILTERED_SPOTSTATS.set(spot_stats)
+            UNFILTERED_TRACKSTATS.set(Calc.Tracks(spot_stats))
+            UNFILTERED_TIMESTATS.set(Calc.Time(spot_stats))
         else:
             pass
 
@@ -603,37 +610,6 @@ def server(input: Inputs, output: Outputs, session: Session):
                 await asyncio.sleep(0.1)
         pass
 
-    # - - - - - - - - - - - - - - - - - - - -
-    
-
-
-
-    # - - - - Rendering Data Frames - - - -
-    
-    @render.data_frame
-    def render_spot_stats():
-        spot_stats = RAWSPOTSTATS.get()
-        if spot_stats is not None or not spot_stats:
-            return spot_stats
-        else:
-            pass
-
-    @render.data_frame
-    def render_track_stats():
-        track_stats = RAWTRACKSTATS.get()
-        if track_stats is not None or not track_stats:
-            return track_stats
-        else:
-            pass
-
-    @render.data_frame
-    def render_time_stats():
-        time_stats = RAWTIMESTATS.get()
-        if time_stats is not None or not time_stats:
-            return time_stats
-        else:
-            pass
-    
     # - - - - - - - - - - - - - - - - - - - -
 
 
@@ -678,11 +654,10 @@ def server(input: Inputs, output: Outputs, session: Session):
                                     ui.input_numeric(f"my_own_value_{threshold_id}", "My own value", value=0, step=1)
                                 ),
                             ),
-
-                            ui.input_slider(f"threshold_values_{threshold_id}", "Threshold", min=0, max=100, value=(0, 100)),
+                            ui.output_ui(f"threshold_slider_{threshold_id}"),
                         ),
                     ),
-                ),
+                )
             panels.append(
                 ui.accordion_panel(
                     "Filter settings",
@@ -732,8 +707,133 @@ def server(input: Inputs, output: Outputs, session: Session):
             f""" <h5> <b>  {threshold_dimension.get()} Data filtering  </b> </h5> """
         )
     
+    
+    # Dynamically render threshold sliders for each threshold in the list
+    def make_threshold_slider(threshold_id):
+        @output(id=f"threshold_slider_{threshold_id}")
+        @render.ui
+        def threshold_slider():
+            data = UNFILTERED_SPOTSTATS.get()
+            if data is None or data.empty:
+                return
+            property_name = input[f"threshold_property_{threshold_id}"]()
+            filter_type = input[f"threshold_filter_{threshold_id}"]()
+            if not property_name or not filter_type:
+                return
+            if filter_type == "Literal":
+                lowest = data[property_name].min()
+                highest = data[property_name].max()
+                return ui.input_slider(
+                    f"threshold_slider_values_{threshold_id}",
+                    "Threshold values",
+                    min=lowest,
+                    max=highest,
+                    value=(lowest, highest)
+                )
+        return threshold_slider
+
+    # Register a slider output for each threshold in the list
+    @reactive.effect
+    def _register_threshold_sliders():
+        for threshold_id in threshold_list.get():
+            make_threshold_slider(threshold_id)
+
+
+
+    # def thresholding_values():
+    #     data = UNFILTERED_SPOTSTATS.get()
+    #     if data is None or data.empty:
+    #         return
+    #     if threshold_dimension.get() == "1D":
+    #         for threshold_id in threshold_list.get():
+    #             slider = input[f"threshold_slider_values_{threshold_id}"]()
+    #             filter_type = input[f"threshold_filter_{threshold_id}"]()
+    #             property_name = input[f"threshold_property_{threshold_id}"]()
+                
+    #             if filter_type == "Literal":
+    #                 lowest = data[property_name].min()
+    #                 highest = data[property_name].max()
+    #                 range = (highest - lowest) / 1000
+
+    #             ui.update_slider(
+    #                 f"threshold_slider_values_{threshold_id}",
+    #                 min=lowest,
+    #                 max=highest,
+    #                 value=(lowest, highest),
+    #                 step = range
+    #             )
+                    
+
+    # @reactive.Effect
+    # @reactive.event(input.apply_threshold)
+    # def chained_1d_thresholding():
+    #     spot_stats = UNFILTERED_SPOTSTATS.get()
+
+    #     if threshold_dimension.get() == "1D":
+    #         if spot_stats is None or spot_stats.empty:
+    #             SPOTSTATS.set(pd.DataFrame())
+    #             return
+
+    #         ids = threshold_list.get()
+    #         data = spot_stats.copy()
+    #         for threshold_id in ids:
+    #             filter_type = input[f"threshold_filter_{threshold_id}"]()
+    #             property_name = input[f"threshold_property_{threshold_id}"]()
+    #             slider = input[f"threshold_slider_values_{threshold_id}"]()
+
+    #             if filter_type == "Literal":
+    #                 lowest = data[property_name].min()
+    #                 highest = data[property_name].max()
+    #                 ui.update_slider(
+    #                     slider,
+    #                     min=lowest,
+    #                     max=highest,
+    #                 )
+                
+                
+    #             # Slider can be tuple or list (min, max)
+    #             low, high = slider
+    #             data = data[(data[property_name] >= low) & (data[property_name] <= high)]
+
+    #         SPOTSTATS.set(data)
+
+
+    #     elif threshold_dimension.get() == "2D":
+    #         pass
+
     # - - - - - - - - - - - - - - - - - - - -
 
+
+
+
+
+    # - - - - Rendering Data Frames - - - -
+    
+    @render.data_frame
+    def render_spot_stats():
+        spot_stats = SPOTSTATS.get()
+        if spot_stats is not None or not spot_stats:
+            return spot_stats
+        else:
+            pass
+
+    @render.data_frame
+    def render_track_stats():
+        track_stats = TRACKSTATS.get()
+        if track_stats is not None or not track_stats:
+            return track_stats
+        else:
+            pass
+
+    @render.data_frame
+    def render_time_stats():
+        time_stats = TIMESTATS.get()
+        if time_stats is not None or not time_stats:
+            return time_stats
+        else:
+            pass
+    
+    # - - - - - - - - - - - - - - - - - - - -
 
 
     # (Other outputs and logic remain unchanged...)

@@ -32,16 +32,8 @@ class DataLoader:
                 raise ValueError(f"{ext} is not a supported file format.")
         except Exception as e:
             raise RuntimeError(f"Failed to load file '{filepath}': {e}")
-        
-
-    @staticmethod
-    def GetColumns(path: str) -> List[str]:
-        """
-        Returns a list of column names from the DataFrame.
-        """
-        df = pd.read_csv(path)  # or pd.read_excel(path), depending on file type
-        return df.columns.tolist()
     
+
     @staticmethod
     def Extract(df: pd.DataFrame, id_col: str, t_col: str, x_col: str, y_col: str, mirror_y: bool = True) -> pd.DataFrame:
         # Keep only relevant columns and convert to numeric
@@ -60,6 +52,45 @@ class DataLoader:
         # Standardize column names
         return df.rename(columns={id_col: 'Track ID', t_col: 'Time point', x_col: 'X coordinate', y_col: 'Y coordinate'})
 
+
+    @staticmethod
+    def GetColumns(path: str) -> List[str]:
+        """
+        Returns a list of column names from the DataFrame.
+        """
+        df = pd.read_csv(path)  # or pd.read_excel(path), depending on file type
+        return df.columns.tolist()
+    
+    @staticmethod
+    def FindMatchingColumn(columns: List[str], lookfor: List[str]) -> str:
+        """
+        Looks for matches with any of the provided strings.
+        - First tries exact matches.
+        - Then checks if the column starts with any of given terms.
+        - Finally checks if any term is a substring of the column name.
+        If no match is found, returns None.
+        """
+
+        # Normalize columns for matching
+        normalized_columns = [
+            (col, str(col).replace('_', ' ').strip().lower() if col is not None else '') for col in columns
+        ]
+        # Try exact matches first
+        for col, norm_col in normalized_columns:
+            for look in lookfor:
+                if norm_col == look.lower():
+                    return col
+        # Then try startswith
+        for col, norm_col in normalized_columns:
+            for look in lookfor:
+                if norm_col.startswith(look.lower()):
+                    return col
+        # Then try substring
+        for col, norm_col in normalized_columns:
+            for look in lookfor:
+                if look.lower() in norm_col:
+                    return col
+        return None
 
 
 

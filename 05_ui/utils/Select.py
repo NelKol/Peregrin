@@ -4,15 +4,15 @@ class Metrics:
     """
 
     Spot = {
-        "Time point": "Position T",
-        "X coordinate": "Position X",
-        "Y coordinate": "Position Y",
+        "Time point": "Position t",
+        "X coordinate": "Position x",
+        "Y coordinate": "Position y",
         "Condition": "Condition",
         "Replicate": "Replicate",
-        "DISTANCE": "Distance",
-        "Track length": "Track Length",
-        "Net distance": "Net Distance",
-        "Confinement ratio": "Confinement Ratio",
+        "Distance": "Total distance",
+        "Track length": "Track length",
+        "Net distance": "Net distance",
+        "Confinement ratio": "Confinement ratio",
     }
 
     Track = {
@@ -67,7 +67,14 @@ class Metrics:
         "Speed min": "Min speed",
         "Direction mean (deg)": "Mean direction (degrees)",
         "Direction mean (rad)": "Mean direction (radians)",
-        }
+    }
+    
+    LookFor = {
+        "select_id": ["track id", "track identifier", "track"],
+        "select_time": ["position t", "t position", "time", "time position", "frame", "t"],
+        "select_x": ["position x", "x position", "x coordinate", "coordinate x", "x",],
+        "select_y": ["position y", "y position", "y coordinate", "coordinate y", "y"],
+    }
 
     
 

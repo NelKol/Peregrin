@@ -11,7 +11,7 @@ import utils.select_modes as select_mode
 import utils.select_metrics as select_metrics
 from utils.ratelimit import debounce, throttle
 
-from custom.formatting import Accordion
+from utils.Customize import Format
 
 # -----------------------------------------------------------------------------
 # UI DEFINITION
@@ -20,7 +20,7 @@ from custom.formatting import Accordion
 app_ui = ui.page_sidebar(
     # Sidebar for data filtering options and threshold management
     ui.sidebar(
-        ui.tags.style(Accordion),
+        ui.tags.style(Format.Accordion),
         ui.markdown("""  <p>  """),
         ui.output_ui("sidebar_label"),
         ui.input_action_button("add_threshold", "Add threshold", class_="btn-primary"),
