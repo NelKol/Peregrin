@@ -1,9 +1,8 @@
 import numpy as np
 import pandas as pd
-from math import floor, ceil
+from math import log10, floor, ceil
 import os.path as op
 from typing import List, Any
-from math import log10, floor
 
 
 class DataLoader:
@@ -149,12 +148,20 @@ class Process:
         # Use the static method for numeric conversion
         merged_df = merged_df.applymap(Process.TryConvertNumeric)
         return merged_df
-    
-    from math import log10, floor
 
-    def Round(number: int, digits: int = 2) -> float:
-        return 0 if number == 0 else round(number, digits - int(floor(log10(abs(number)))) - 1)
 
+    def Round(value, step, round_method="nearest"):
+        """
+        Rounds value to the nearest multiple of step.
+        """
+        if round_method == "nearest":
+            return round(value / step) * step
+        elif round_method == "floor":
+            return floor(value / step) * step
+        elif round_method == "ceil":
+            return ceil(value / step) * step
+        else:
+            raise ValueError(f"Unknown round method: {round_method}")
 
 
 

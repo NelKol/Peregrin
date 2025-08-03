@@ -9,6 +9,10 @@ from utils.Customize import Format
 
 import asyncio
 import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import gaussian_kde
+import plotly.graph_objs as go
 
 # --- UI definition ---
 app_ui = ui.page_sidebar(
@@ -472,6 +476,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     property_selections = reactive.Value({})
     filter_type_selections = reactive.Value({})
     threshold_slider_outputs = {}
+    thresholding_histogram_outputs = {}
 
     thresholding_memory = reactive.Value({})  # initialize empty first
 
@@ -621,10 +626,9 @@ def server(input: Inputs, output: Outputs, session: Session):
 
         if all_data:
             RAWDATA.set(pd.concat(all_data, axis=0, ignore_index=True))
-            spot_stats = Calc.Spots(RAWDATA.get())
-            UNFILTERED_SPOTSTATS.set(spot_stats)
-            UNFILTERED_TRACKSTATS.set(Calc.Tracks(spot_stats))
-            UNFILTERED_TIMESTATS.set(Calc.Time(spot_stats))
+            UNFILTERED_SPOTSTATS.set(Calc.Spots(RAWDATA.get()))
+            UNFILTERED_TRACKSTATS.set(Calc.Tracks(RAWDATA.get()))
+            UNFILTERED_TIMESTATS.set(Calc.Time(RAWDATA.get()))
         else:
             pass
 
@@ -691,6 +695,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                                 ),
                             ),
                             ui.output_ui(f"threshold_slider_placeholder_{threshold_id}"),
+                            ui.output_plot(f"thresholding_histogram_placeholder_{threshold_id}"),
                         ),
                     ),
                 )
@@ -703,7 +708,6 @@ def server(input: Inputs, output: Outputs, session: Session):
                         " || ".join([f"input.threshold_filter_{tid} != 'Quantile'" for tid in ids]),
                         ui.input_numeric("bins", "Number of bins", value=40, min=1, step=1),
                     ),
-                    ui.input_radio_buttons("plot_distribution", "Histogram show:", choices=["Kernel density", "Hover info"], selected="Kernel density"),
                 ),
             )
         elif threshold_dimension.get() == "2D":
@@ -752,7 +756,7 @@ def server(input: Inputs, output: Outputs, session: Session):
    
     # - - - - Storing thresholding values - - - -
 
-    def _get_threshold_memory(dict_memory, threshold_id, property_name, filter_type, default, quantile=None, reference=None):
+    def _get_threshold_memory(dict_memory, threshold_id, property_name, filter_type, default_values, default_quantile=None, default_reference=None):
         """
         Returns the stored tuple for the slider or the default if not yet set or invalid.
         """
@@ -767,45 +771,53 @@ def server(input: Inputs, output: Outputs, session: Session):
                 ):
                     return val
                 else:
-                    return default
+                    return default_values
             except Exception:
-                return default
+                return default_values
             
         elif filter_type == "Quantile":
             try:
-                val = dict_memory[threshold_id][property_name][filter_type]["values"]
-                quantile = dict_memory[threshold_id][property_name][filter_type]["quantile"]
+                stored_values = dict_memory[threshold_id][property_name][filter_type]["values"]
+                stored_quantile = dict_memory[threshold_id][property_name][filter_type]["quantile"]
                 if (
                     isinstance(val, (tuple, list))
                     and len(val) == 2
                     and all(isinstance(x, (int, float)) for x in val)
-                ) and (
-                    isinstance(quantile, (int, float))
-                    and quantile is not None
                 ):
-                    return val, quantile
+                    values = stored_values
                 else:
-                    return default, quantile
+                    values = default_values
+                if (
+                    isinstance(stored_quantile, (int, float))
+                    and stored_quantile is not None
+                ):
+                    return values, stored_quantile
+                else:
+                    return values, 100
             except Exception:
-                return default, quantile
-            
+                return default_values, 100
+
         elif filter_type == "Relative to...":
             try:
-                val = dict_memory[threshold_id][property_name][filter_type]["values"]
-                reference = dict_memory[threshold_id][property_name][filter_type]["reference"]
+                stored_values = dict_memory[threshold_id][property_name][filter_type]["values"]
+                stored_reference = dict_memory[threshold_id][property_name][filter_type]["reference"]
                 if (
                     isinstance(val, (tuple, list))
                     and len(val) == 2
                     and all(isinstance(x, (int, float)) for x in val)
-                ) and (
-                    isinstance(reference, (int, float))
-                    and reference is not None
                 ):
-                    return val, reference
+                    values = stored_values
                 else:
-                    return default, 0
+                    values = default_values
+                if (
+                    isinstance(stored_reference, (int, float))
+                    and stored_reference is not None
+                ):
+                    return values, stored_reference
+                else:
+                    return values, 0
             except Exception:
-                return default, 0
+                return default_values, 0
 
 
     def _set_threshold_memory(dict_memory, threshold_id, property_name, filter_type, values, quantile=None, reference=None):
@@ -829,7 +841,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 dict_memory[threshold_id][property_name] = {}
             if filter_type not in dict_memory[threshold_id][property_name]:
                 dict_memory[threshold_id][property_name][filter_type] = {}
-            dict_memory[threshold_id][property_name][filter_type]["quantile"] = float(quantile)
+            dict_memory[threshold_id][property_name][filter_type]["quantile"] = int(quantile)
             dict_memory[threshold_id][property_name][filter_type]["values"] = tuple(values)
             
         elif filter_type == "Relative to...":
@@ -851,27 +863,27 @@ def server(input: Inputs, output: Outputs, session: Session):
         """
         Returns the step size for the slider based on the range.
         """
-        if highest - lowest < 0.01:
+        if (highest - lowest) < 0.01:
+            steps = 0.00001
+        elif 0.01 < (highest - lowest) < 0.1:
             steps = 0.0001
-        elif highest - lowest < 0.1:
+        elif 0.1 < (highest - lowest) < 1:
             steps = 0.001
-        elif highest - lowest < 1:
+        elif 1 < (highest - lowest) < 10:
             steps = 0.01
-        elif highest - lowest < 10:
+        elif 10 < (highest - lowest) < 100:
             steps = 0.1
-        elif highest - lowest < 100:
+        elif 100 < (highest - lowest) < 1000:
             steps = 1
-        elif highest - lowest < 1000:
+        elif 1000 < (highest - lowest) < 10000:
             steps = 10
-        elif highest - lowest < 10000:
-            steps = 100
         else:
             steps = 1
 
         return steps
 
     # Make threshold sliders dynamically based on the threshold ID
-    def make_threshold_slider(threshold_id):
+    def render_threshold_slider(threshold_id):
         @output(id=f"threshold_slider_placeholder_{threshold_id}")
         @render.ui
         def threshold_slider():
@@ -907,8 +919,8 @@ def server(input: Inputs, output: Outputs, session: Session):
                 slider = ui.input_slider(
                     f"threshold_slider_{threshold_id}",
                     None,
-                    min=Process.Round(lowest, 3),
-                    max=Process.Round(highest, 3),
+                    min=Process.Round(lowest, steps, "floor"),
+                    max=Process.Round(highest, steps, "ceil"),
                     value=values,
                     step=steps
                 )
@@ -939,7 +951,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
                 # Use memory if valid, otherwise use defaults
                 # memory = thresholding_memory.get()
-                values, quantile = _get_threshold_memory(memory, threshold_id, property_name, filter_type, default, quantile=quantile)
+                values, quantile = _get_threshold_memory(memory, threshold_id, property_name, filter_type, default, default_quantile=quantile)
 
                 slider = ui.input_slider(
                     f"threshold_slider_{threshold_id}",
@@ -947,7 +959,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                     min=0,
                     max=100,
                     value=values,
-                    step=100/float(quantile),
+                    step=100/float(quantile)
                 )
 
             elif filter_type == "Relative to...":
@@ -1007,21 +1019,141 @@ def server(input: Inputs, output: Outputs, session: Session):
 
                 steps = _get_steps(lowest, highest)
 
-                values, reference = _get_threshold_memory(memory, threshold_id, property_name, filter_type, default, reference=reference)
+                values, reference = _get_threshold_memory(memory, threshold_id, property_name, filter_type, default, default_reference=reference)
 
                 slider = ui.input_slider(
                     f"threshold_slider_{threshold_id}",
                     None,
-                    min=Process.Round(lowest, 3),
-                    max=Process.Round(highest, 3),
+                    min=Process.Round(lowest, steps, "floor"),
+                    max=Process.Round(highest, steps, "ceil"),
                     value=values,
                     step=steps
                 )
                 
-
-            
             return slider
         
+
+    # - - - - Threshold histogram generator - - - -
+
+    def render_threshold_histogram(threshold_id):
+        @output(id=f"thresholding_histogram_placeholder_{threshold_id}")
+        @render.plot
+        def threshold_histogram():
+            if input[f"threshold_property_{threshold_id}"]() in Metrics.Thresholding.SpotProperties:
+                data = UNFILTERED_SPOTSTATS.get()
+            if input[f"threshold_property_{threshold_id}"]() in Metrics.Thresholding.TrackProperties:
+                data = UNFILTERED_TRACKSTATS.get()
+            if data is None or data.empty:
+                return
+            
+            property = input[f"threshold_property_{threshold_id}"]()
+            filter_type = input[f"threshold_filter_{threshold_id}"]()
+
+            if filter_type == "Literal":
+
+                bins = input.bins() if input.bins() is not None else 25
+                values = data[property].dropna()
+
+                fig, ax = plt.subplots()
+                n, bins, patches = ax.hist(values, bins=bins, density=False)
+
+                # Color threshold
+                for i in range(len(patches)):
+                    if bins[i] < input[f"threshold_slider_{threshold_id}"]()[0] or bins[i+1] > input[f"threshold_slider_{threshold_id}"]()[1]:
+                        patches[i].set_facecolor('grey')
+                    else:
+                        patches[i].set_facecolor('#337ab7')
+
+                # Add KDE curve (scaled to match histogram)
+                kde = gaussian_kde(values)
+                x_kde = np.linspace(bins[0], bins[-1], 500)
+                y_kde = kde(x_kde)
+                # Scale KDE to histogram
+                y_kde_scaled = y_kde * (n.max() / y_kde.max())
+                ax.plot(x_kde, y_kde_scaled, color='black', linewidth=1.5)
+
+                ax.set_xticks([])  # Remove x-axis ticks
+                ax.set_yticks([])  # Remove y-axis ticks
+                ax.spines[['top', 'left', 'right']].set_visible(False)
+
+                return fig
+            
+            if filter_type == "Normalized 0-1":
+
+                values = data[property].dropna()
+                try:
+                    normalized = (values - values.min()) / (values.max() - values.min())
+                except ZeroDivisionError:
+                    normalized = 0
+                bins = input.bins() if input.bins() is not None else 25
+
+                fig, ax = plt.subplots()
+                n, bins, patches = ax.hist(normalized, bins=bins, density=False)
+
+                # Color threshold
+                for i in range(len(patches)):
+                    if bins[i] < input[f"threshold_slider_{threshold_id}"]()[0] or bins[i+1] > input[f"threshold_slider_{threshold_id}"]()[1]:
+                        patches[i].set_facecolor('grey')
+                    else:
+                        patches[i].set_facecolor('#337ab7')
+
+                # Add KDE curve (scaled to match histogram)
+                kde = gaussian_kde(normalized)
+                x_kde = np.linspace(bins[0], bins[-1], 500)
+                y_kde = kde(x_kde)
+                # Scale KDE to histogram
+                y_kde_scaled = y_kde * (n.max() / y_kde.max())
+                ax.plot(x_kde, y_kde_scaled, color='black', linewidth=1.5)
+
+                ax.set_xticks([])  # Remove x-axis ticks
+                ax.set_yticks([])  # Remove y-axis ticks
+                ax.spines[['top', 'left', 'right']].set_visible(False)
+
+                return fig
+
+            if filter_type == "Quantile":
+                num_quantiles = input[f"threshold_quantile_{threshold_id}"]() if input[f"threshold_quantile_{threshold_id}"]() is not None else 100
+                try:
+                    num_quantiles = int(num_quantiles)
+                except Exception:
+                    num_quantiles = 100
+
+                values = data[property].dropna()
+                
+                fig, ax = plt.subplots()
+                n, bins, patches = ax.hist(values, bins=num_quantiles, density=False)
+
+                # Get slider quantile values, 0-100 scale
+                slider_low_pct, slider_high_pct = input[f"threshold_slider_{threshold_id}"]()
+                slider_low, slider_high = slider_low_pct / 100, slider_high_pct / 100
+
+                if not 0 <= slider_low <= 1 or not 0 <= slider_high <= 1:
+                    slider_low, slider_high = 0, 1
+
+                # Convert slider percentiles to actual values
+                lower_bound = np.quantile(values, slider_low)
+                upper_bound = np.quantile(values, slider_high)
+
+                # Color histogram based on slider quantile bounds
+                for i in range(len(patches)):
+                    bin_start, bin_end = bins[i], bins[i + 1]
+                    if bin_end < lower_bound or bin_start > upper_bound:
+                        patches[i].set_facecolor('grey')
+                    else:
+                        patches[i].set_facecolor('#337ab7')
+
+                # KDE curve
+                kde = gaussian_kde(values)
+                x_kde = np.linspace(values.min(), values.max(), 500)
+                y_kde = kde(x_kde)
+                y_kde_scaled = y_kde * (n.max() / y_kde.max()) if y_kde.max() != 0 else y_kde
+                ax.plot(x_kde, y_kde_scaled, color='black', linewidth=1.5)
+
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.spines[['top', 'left', 'right']].set_visible(False)
+                return fig
+
 
     # - - - - Threshold modules management - - - -
 
@@ -1046,9 +1178,9 @@ def server(input: Inputs, output: Outputs, session: Session):
                     if new_memory != memory:
                         memory = new_memory
                         changed = True
-                if changed:
-                    thresholding_memory.set(memory)
-                    return
+                # if changed:
+                #     thresholding_memory.set(memory)
+                #     return
                 
             elif filter_type == "Quantile":
                 quantile = input[f"threshold_quantile_{threshold_id}"]()
@@ -1066,9 +1198,9 @@ def server(input: Inputs, output: Outputs, session: Session):
                     if new_memory != memory:
                         memory = new_memory
                         changed = True
-                if changed:
-                    thresholding_memory.set(memory)
-                    return
+                # if changed:
+                #     thresholding_memory.set(memory)
+                #     return
                 
             elif filter_type == "Relative to...":
                 if input[f"threshold_property_{threshold_id}"]() in Metrics.Thresholding.SpotProperties:
@@ -1101,11 +1233,10 @@ def server(input: Inputs, output: Outputs, session: Session):
                     if new_memory != memory:
                         memory = new_memory
                         changed = True
-                if changed:
-                    thresholding_memory.set(memory)
-                    return
-            
-            
+            if changed:
+                thresholding_memory.set(memory)
+                return
+        
                 
             # if filter_type == "Quantile":
 
@@ -1119,7 +1250,9 @@ def server(input: Inputs, output: Outputs, session: Session):
         # Add outputs for new thresholds
         for threshold_id in threshold_list.get():
             if threshold_id not in threshold_slider_outputs:
-                threshold_slider_outputs[threshold_id] = make_threshold_slider(threshold_id) 
+                threshold_slider_outputs[threshold_id] = render_threshold_slider(threshold_id)
+                thresholding_histogram_outputs[threshold_id] = render_threshold_histogram(threshold_id)
+
 
     @reactive.Effect
     def set_threshold_modules():
