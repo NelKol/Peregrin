@@ -3,6 +3,7 @@ import pandas as pd
 from math import floor, ceil
 import os.path as op
 from typing import List, Any
+from math import log10, floor
 
 
 class DataLoader:
@@ -91,6 +92,7 @@ class DataLoader:
                 if look.lower() in norm_col:
                     return col
         return None
+        
 
 
 
@@ -147,8 +149,11 @@ class Process:
         # Use the static method for numeric conversion
         merged_df = merged_df.applymap(Process.TryConvertNumeric)
         return merged_df
+    
+    from math import log10, floor
 
-
+    def Round(number: int, digits: int = 2) -> float:
+        return 0 if number == 0 else round(number, digits - int(floor(log10(abs(number)))) - 1)
 
 
 
@@ -235,11 +240,8 @@ class Calc:
         agg = grp.agg(
             **{
                 'Track length': ('Distance', 'sum'),
-                'Speed min':   ('Distance', 'min'),
-                'Speed max':   ('Distance', 'max'),
                 'Speed mean':  ('Distance', 'mean'),
                 'Speed std':   ('Distance', 'std'),
-                'Speed median':('Distance', 'median'),
                 'start_x':     ('X coordinate', 'first'),
                 'end_x':       ('X coordinate', 'last'),
                 'start_y':     ('Y coordinate', 'first'),

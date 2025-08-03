@@ -3,72 +3,54 @@ class Metrics:
     Class holding metrics options for the UI.
     """
 
-    Spot = {
-        "Time point": "Position t",
-        "X coordinate": "Position x",
-        "Y coordinate": "Position y",
-        "Condition": "Condition",
-        "Replicate": "Replicate",
-        "Distance": "Total distance",
-        "Track length": "Track length",
-        "Net distance": "Net distance",
-        "Confinement ratio": "Confinement ratio",
-    }
+    Spot = [
+        "Time point",
+        "X coordinate",
+        "Y coordinate",
+        "Condition",
+        "Replicate",
+        "Distance",
+        "Track length",
+        "Net distance",
+        "Confinement ratio",
+    ]
 
-    Track = {
-        "Track ID": "Track ID",
-        "Condition": "Condition",
-        "Replicate": "Replicate",
-        "Track length": "Track length", 
-        "Net distance": "Net distance", 
-        "Confinement ratio": "Confinement ratio",
-        "Track points": "Number of points in track",
-        "Speed mean": "Mean speed",
-        "Speed median": "Median speed",
-        "Speed max": "Max speed",
-        "Speed min": "Min speed",
-        "Speed std": "Speed standard deviation",
-        "Direction mean (deg)": "Mean direction (degrees)",
-        "Direction mean (rad)": "Mean direction (radians)",
-        "Direction std (deg)": "Standard deviation (degrees)",
-        "Direction std (rad)": "Standard deviation (radians)",
-    }
+    Track = [
+        "Track ID",
+        "Condition",
+        "Replicate",
+        "Track length",
+        "Net distance",
+        "Confinement ratio",
+        "Track points",
+        "Speed mean",
+        "Speed std",
+        "Direction mean (deg)",
+        "Direction mean (rad)",
+        "Direction std (deg)",
+        "Direction std (rad)",
+    ]
 
-    SpotAndTrack = Spot | Track
+    Time = [
+        "Track length mean",
+        "Net distance mean",
+        "Confinement ratio mean",
+        "Track length median",
+        "Net distance median",
+        "Confinement ratio median",
+        "Distance min",
+        "Direction std (deg)",
+        "Direction median (deg)",
+        "Direction mean (rad)",
+        "Direction std (rad)",
+        "Direction median (rad)",
+        "Speed min",
+        "Speed max",
+        "Speed mean",
+        "Speed std",
+        "Speed median"
+    ]
 
-    Time = {
-        "Track length mean": "Mean track length",
-        "Net distance mean": "Mean net distance",
-        "Confinement ratio mean": "Mean confinement ratio",
-        "Track length median": "Median track length",
-        "Net distance median": "Median net distance",
-        "Confinement ratio median": "Median confinement ratio",
-        "Distance min": "Minimum distance",
-        "Direction std (deg)": "Standard deviation (degrees)",
-        "Direction median (deg)": "Median direction (degrees)",
-        "Direction mean (rad)": "Mean direction (radians)",
-        "Direction std (rad)": "Standard deviation (radians)",
-        "Direction median (rad)": "Median direction (radians)",
-        "Speed min": "Minimum speed",
-        "Speed max": "Maximum speed",
-        "Speed mean": "Mean speed",
-        "Speed std": "Speed standard deviation",
-        "Speed median": "Median speed",
-    }
-
-    Lut = {
-        "Track length": "Track length", 
-        "Net distance": "Net distance", 
-        "Confinement ratio": "Confinement ratio",
-        "Track points": "Number of points in track",
-        "Speed mean": "Mean speed",
-        "Speed median": "Median speed",
-        "Speed max": "Max speed",
-        "Speed min": "Min speed",
-        "Direction mean (deg)": "Mean direction (degrees)",
-        "Direction mean (rad)": "Mean direction (radians)",
-    }
-    
     LookFor = {
         "select_id": ["track id", "track identifier", "track"],
         "select_time": ["position t", "t position", "time", "time position", "frame", "t"],
@@ -76,7 +58,40 @@ class Metrics:
         "select_y": ["position y", "y position", "y coordinate", "coordinate y", "y"],
     }
 
+    Lut = [
+        "Track length", 
+        "Net distance", 
+        "Confinement ratio",
+        "Track points",
+        "Speed mean",
+        "Speed median",
+        "Speed max",
+        "Speed min",
+        "Direction mean (deg)",
+        "Direction mean (rad)",
+    ]
     
+
+    class Thresholding:
+
+        SpotProperties = [
+            "Time point",
+            "X coordinate",
+            "Y coordinate",
+        ]
+
+        TrackProperties = [
+            "Track length",
+            "Net distance",
+            "Confinement ratio",
+            "Track points",
+            "Speed mean",
+            "Speed std",
+            "Direction mean (deg)",
+            "Direction mean (rad)",
+        ]
+
+        Properties = TrackProperties + SpotProperties
 
 
 
@@ -282,8 +297,7 @@ class Modes:
         "Literal",
         "Normalized 0-1",
         "Quantile",
-        "Relative to...",
-        "Logarithmic",
+        "Relative to..."
     ]
 
     FitModel = {
