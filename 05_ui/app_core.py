@@ -26,7 +26,7 @@ app_ui = ui.page_sidebar(
         ui.input_action_button("remove_threshold", "Remove threshold", class_="btn-primary", disabled=True),
         ui.output_ui("sidebar_accordion"),
         ui.input_task_button("apply_threshold", label="Apply thresholding", label_busy="Applying...", type="secondary", disabled=True),
-        id="sidebar", open="open", position="right", bg="f8f8f8",
+        id="sidebar", open="closed", position="right", bg="f8f8f8",
     ),
 
     # ========== MAIN NAVIGATION BAR ==========
@@ -634,6 +634,7 @@ def server(input: Inputs, output: Outputs, session: Session):
             UNFILTERED_SPOTSTATS.set(Calc.Spots(RAWDATA.get()))
             UNFILTERED_TRACKSTATS.set(Calc.Tracks(RAWDATA.get()))
             UNFILTERED_TIMESTATS.set(Calc.Time(RAWDATA.get()))
+            ui.update_sidebar(id="sidebar", show=True)
         else:
             pass
 
@@ -699,6 +700,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                                     ui.input_numeric(f"my_own_value_{threshold_id}", "My own value", value=None, step=1)
                                 ),
                             ),
+                            ui.output_ui(f"manual_threshold_value_setting_{threshold_id}"),
                             ui.output_ui(f"threshold_slider_placeholder_{threshold_id}"),
                             ui.output_plot(f"thresholding_histogram_placeholder_{threshold_id}"),
                         ),
@@ -762,8 +764,6 @@ def server(input: Inputs, output: Outputs, session: Session):
         """
         Returns the stored tuple for the slider or the default if not yet set or invalid.
         """
-        # values = default_values  # Default to the provided default values
-
         def _are_valid(values):
             return (
                 isinstance(values, (tuple, list))
@@ -800,13 +800,13 @@ def server(input: Inputs, output: Outputs, session: Session):
         """
         Sets the values in the nested dict.
         """
-
         if threshold_id not in dict_memory:
             dict_memory[threshold_id] = {}
         if property_name not in dict_memory[threshold_id]:
             dict_memory[threshold_id][property_name] = {}
         if filter_type not in dict_memory[threshold_id][property_name]:
             dict_memory[threshold_id][property_name][filter_type] = {}
+
         if quantile is None and reference is None:
             dict_memory[threshold_id][property_name][filter_type]["values"] = tuple(values)
         elif quantile is not None:
@@ -844,7 +844,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         else:
             steps = 1
         return steps
-    
+
 
     # Make threshold sliders dynamically based on the threshold ID
     def render_threshold_slider(threshold_id):
@@ -874,14 +874,12 @@ def server(input: Inputs, output: Outputs, session: Session):
                 else:
                     lowest, highest = 0, 100
                 default = (lowest, highest)
-
-                steps = _get_steps(lowest, highest)
                 
                 # Use memory if valid, otherwise use defaults
+                steps = _get_steps(lowest, highest)
                 values = _get_threshold_memory(memory, threshold_id, property_name, filter_type, default)
                 minimal = Process.Round(lowest, steps, "floor")
                 maximal = Process.Round(highest, steps, "ceil")
-
 
             elif filter_type == "Normalized 0-1":
                 lowest, highest = 0, 1
@@ -892,7 +890,6 @@ def server(input: Inputs, output: Outputs, session: Session):
                 steps = 0.01
                 minimal = 0
                 maximal = 1
-
 
             elif filter_type == "Quantile":
                 quantile = input[f"threshold_quantile_{threshold_id}"]()
@@ -962,7 +959,117 @@ def server(input: Inputs, output: Outputs, session: Session):
                 value=values,
                 step=steps
             )
-        
+
+
+    def render_manual_threshold_values_setting(threshold_id):
+        @output(id=f"manual_threshold_value_setting_{threshold_id}")
+        @render.ui
+        def manual_threshold_value_setting():
+
+            spot_data = UNFILTERED_SPOTSTATS.get()
+            track_data = UNFILTERED_TRACKSTATS.get()
+            if spot_data is None or spot_data.empty or track_data is None or track_data.empty:
+                return
+
+            property_name = input[f"threshold_property_{threshold_id}"]()
+            filter_type = input[f"threshold_filter_{threshold_id}"]()
+            if not property_name or not filter_type:
+                return
+            
+            memory = thresholding_memory.get()
+
+            if filter_type == "Literal":
+                if property_name in Metrics.Thresholding.SpotProperties:
+                    lowest = spot_data[property_name].min()
+                    highest = spot_data[property_name].max()
+                elif property_name in Metrics.Thresholding.TrackProperties:
+                    lowest = track_data[property_name].min()
+                    highest = track_data[property_name].max()
+                else:
+                    lowest, highest = 0, 100
+                default = (lowest, highest)
+
+                # Use memory if valid, otherwise use defaults
+                steps = _get_steps(lowest, highest)
+                values = _get_threshold_memory(memory, threshold_id, property_name, filter_type, default)
+                minimal = Process.Round(lowest, steps, "floor")
+                maximal = Process.Round(highest, steps, "ceil")
+
+            elif filter_type == "Normalized 0-1":
+                lowest, highest = 0, 1
+                default = (lowest, highest)
+
+                # Use memory if valid, otherwise use defaults
+                values = _get_threshold_memory(memory, threshold_id, property_name, filter_type, default)
+                steps = 0.01
+                minimal = 0
+                maximal = 1
+
+            elif filter_type == "Quantile":
+                quantile = input[f"threshold_quantile_{threshold_id}"]()
+                lowest, highest = 0, 100
+                default = (lowest, highest)
+
+                # Use memory if valid, otherwise use defaults
+                values = _get_threshold_memory(memory, threshold_id, property_name, filter_type, default, quantile=quantile)
+                steps = 100/float(quantile)
+                minimal = 0
+                maximal = 100
+
+            elif filter_type == "Relative to...":
+                reference = input[f"reference_value_{threshold_id}"]()
+                if property_name in Metrics.Thresholding.SpotProperties:
+                    min = spot_data[property_name].min()
+                    max = spot_data[property_name].max()
+                elif property_name in Metrics.Thresholding.TrackProperties:
+                    min = track_data[property_name].min()
+                    max = track_data[property_name].max()
+
+                if reference == "Mean":
+                    lowest = spot_data[property_name].mean()
+                    if abs(lowest - min) < abs(max - lowest):
+                        highest = (max - lowest)
+                    else:
+                        highest = lowest + (lowest - min)
+                    default = (lowest, highest)
+
+                elif reference == "Median":
+                    lowest = spot_data[property_name].median()
+                    if abs(lowest - min) < abs(max - lowest):
+                        highest = (max - lowest)
+                    else:
+                        highest = lowest + (lowest - min)
+                    default = (lowest, highest)
+
+                elif reference == "My own value":
+                    try:
+                        reference_value = input[f"my_own_value_{threshold_id}"]()
+                        if reference_value is None or not isinstance(reference_value, (int, float)):
+                            reference_value = None
+                    except Exception:
+                        reference_value = None
+
+                    if reference_value is None or reference_value < min or reference_value > max:
+                        highest = max - min
+                    else:
+                        if abs(reference_value - min) < abs(max - reference_value):
+                            highest = (max - reference_value)
+                        elif abs(reference_value - min) > abs(max - reference_value):
+                            highest = (reference_value - min)
+
+                    lowest = 0
+                    default = (lowest, highest)
+
+                steps = _get_steps(lowest, highest)
+                values = _get_threshold_memory(memory, threshold_id, property_name, filter_type, default, reference=reference)
+                minimal = Process.Round(lowest, steps, "floor")
+                maximal = Process.Round(highest, steps, "ceil")
+
+            return ui.row(
+                ui.column(6, ui.input_numeric(f"bottom_threshold_value_{threshold_id}", label="min", value=values[0], min=minimal, max=maximal)),
+                ui.column(6, ui.input_numeric(f"top_threshold_value_{threshold_id}", label="max", value=values[1], min=minimal, max=maximal)),
+            )
+
 
     # - - - - Threshold histogram generator - - - -
 
@@ -1110,7 +1217,6 @@ def server(input: Inputs, output: Outputs, session: Session):
                     else:
                         patches[i].set_facecolor('#337ab7')
 
-
                 # Add KDE curve (scaled to match histogram)
                 kde = gaussian_kde(values)
                 x_kde = np.linspace(bins[0], bins[-1], 500)
@@ -1125,106 +1231,148 @@ def server(input: Inputs, output: Outputs, session: Session):
 
                 return fig
 
+
+    # - - - - Sync helpers & per-threshold synchronization - - - -
+
+    def _current_context(threshold_id):
+        """Return (property_name, filter_type, quantile, reference_value) from UI inputs."""
+        property_name = input[f"threshold_property_{threshold_id}"]()
+        filter_type   = input[f"threshold_filter_{threshold_id}"]()
+        quantile = None
+        reference = None
+
+        if filter_type == "Quantile":
+            quantile = input[f"threshold_quantile_{threshold_id}"]()
+        elif filter_type == "Relative to...":
+            ref = input[f"reference_value_{threshold_id}"]()
+            if ref == "My own value":
+                try:
+                    ref_val = input[f"my_own_value_{threshold_id}"]()
+                except Exception:
+                    ref_val = None
+                reference = ref_val
+            else:
+                reference = ref
+        return property_name, filter_type, quantile, reference
+
+
+    def _nearly_equal_pair(a, b, eps=1e-12):
+        try:
+            return abs(float(a[0]) - float(b[0])) <= eps and abs(float(a[1]) - float(b[1])) <= eps
+        except Exception:
+            return False
+
+
+    def _read_stored_pair(mem, threshold_id, prop, ftype, q, ref):
+        try:
+            if q is None and ref is None:
+                val = mem[threshold_id][prop][ftype]["values"]
+            elif q is not None:
+                val = mem[threshold_id][prop][ftype][q]["values"]
+            else:
+                val = mem[threshold_id][prop][ftype][ref]["values"]
+            if isinstance(val, (tuple, list)) and len(val) == 2 and all(isinstance(x, (int, float)) for x in val):
+                return tuple(val)
+        except Exception:
+            pass
+        return None
+
+
+    def register_threshold_sync(threshold_id):
+        # A) slider -> memory
+        @reactive.effect
+        @reactive.event(input[f"threshold_slider_{threshold_id}"])
+        def _slider_to_memory():
+            vals = input[f"threshold_slider_{threshold_id}"]()
+            if not (isinstance(vals, (tuple, list)) and len(vals) == 2 and all(v is not None for v in vals)):
+                return
+
+            prop, ftype, q, ref = _current_context(threshold_id)
+            if not (prop and ftype):
+                return
+
+            mem = thresholding_memory.get()
+            cur = _read_stored_pair(mem, threshold_id, prop, ftype, q, ref)
+
+            vals = (float(vals[0]), float(vals[1]))
+            if cur is None or not _nearly_equal_pair(vals, cur):
+                thresholding_memory.set(
+                    _set_threshold_memory(mem.copy(), threshold_id, prop, ftype, vals, quantile=q, reference=ref)
+                )
+
+        # B) manual numerics -> memory
+        @reactive.effect
+        @reactive.event(
+            input[f"bottom_threshold_value_{threshold_id}"],
+            input[f"top_threshold_value_{threshold_id}"],
+        )
+        def _manual_to_memory():
+            lo = input[f"bottom_threshold_value_{threshold_id}"]()
+            hi = input[f"top_threshold_value_{threshold_id}"]()
+            if not all(isinstance(v, (int, float)) for v in (lo, hi)):
+                return
+
+            # Ensure order
+            lo, hi = (float(lo), float(hi))
+            if lo > hi:
+                lo, hi = hi, lo
+
+            prop, ftype, q, ref = _current_context(threshold_id)
+            if not (prop and ftype):
+                return
+
+            mem = thresholding_memory.get()
+            cur = _read_stored_pair(mem, threshold_id, prop, ftype, q, ref)
+            new_pair = (lo, hi)
+
+            if cur is None or not _nearly_equal_pair(new_pair, cur):
+                thresholding_memory.set(
+                    _set_threshold_memory(mem.copy(), threshold_id, prop, ftype, new_pair, quantile=q, reference=ref)
+                )
+
+        # C) memory -> UI (push only when different)
+        @reactive.effect
+        def _memory_to_ui():
+            prop, ftype, q, ref = _current_context(threshold_id)
+            if not (prop and ftype):
+                return
+
+            mem = thresholding_memory.get()
+
+            # Avoid establishing reactive deps on inputs here
+            with reactive.isolate():
+                current_slider = input[f"threshold_slider_{threshold_id}"]()
+                try:
+                    cur_lo = input[f"bottom_threshold_value_{threshold_id}"]()
+                except Exception:
+                    cur_lo = None
+                try:
+                    cur_hi = input[f"top_threshold_value_{threshold_id}"]()
+                except Exception:
+                    cur_hi = None
+
+            default_vals = current_slider if (isinstance(current_slider, (tuple, list)) and len(current_slider) == 2) else (None, None)
+            vals = _get_threshold_memory(mem, threshold_id, prop, ftype, default_vals, quantile=q, reference=ref)
+
+            if not (isinstance(vals, (tuple, list)) and len(vals) == 2 and all(v is not None for v in vals)):
+                return
+
+            # Push to slider if needed
+            if not _nearly_equal_pair(vals, current_slider if isinstance(current_slider, (tuple, list)) and len(current_slider) == 2 else (None, None)):
+                ui.update_slider(f"threshold_slider_{threshold_id}", value=tuple(vals))
+
+            # Push to numerics if needed
+            if not (isinstance(cur_lo, (int, float)) and abs(float(cur_lo) - float(vals[0])) <= 1e-12):
+                ui.update_numeric(f"bottom_threshold_value_{threshold_id}", value=float(vals[0]))
+            if not (isinstance(cur_hi, (int, float)) and abs(float(cur_hi) - float(vals[1])) <= 1e-12):
+                ui.update_numeric(f"top_threshold_value_{threshold_id}", value=float(vals[1]))
+
+
     # - - - - Threshold modules management - - - -
 
-    @reactive.Effect
-    def set_threshold_modules():
-        memory = thresholding_memory.get()
-        changed = False
-        for threshold_id in threshold_list.get():
-            property_name = input[f"threshold_property_{threshold_id}"]()
-            slider_vals = input[f"threshold_slider_{threshold_id}"]()
-            filter_type = input[f"threshold_filter_{threshold_id}"]()
-            
-            
-
-            if filter_type not in ["Quantile", "Relative to..."]:
-                quantile, reference = False, False
-            elif filter_type == "Quantile":
-                quantile = input[f"threshold_quantile_{threshold_id}"]()
-                reference = False
-            elif filter_type == "Relative to...":
-                reference = input[f"reference_value_{threshold_id}"]()
-                quantile = False
-                if reference == "My own value":
-                    reference = input[f"my_own_value_{threshold_id}"]()
-            
-            if (
-                isinstance(slider_vals, (tuple, list))
-                and len(slider_vals) == 2
-                and all(x is not None for x in slider_vals)
-                and property_name
-                and filter_type
-            ):
-                if not quantile and not reference:
-                    new_memory = _set_threshold_memory(memory, threshold_id, property_name, filter_type, slider_vals)
-                    if new_memory != memory:
-                        memory = new_memory
-                        changed = True
-                    if changed:
-                        thresholding_memory.set(memory)
-                        return
-
-                if quantile and not reference:
-                    new_memory = _set_threshold_memory(memory, threshold_id, property_name, filter_type, slider_vals, quantile=quantile)
-                    if new_memory != memory:
-                        memory = new_memory
-                        changed = True
-                    if changed:
-                        thresholding_memory.set(memory)
-                        return
-                
-                if reference and not quantile:
-                    new_memory = _set_threshold_memory(memory, threshold_id, property_name, filter_type, slider_vals, reference=reference)
-                    if new_memory != memory:
-                        memory = new_memory
-                        changed = True
-                    if changed:
-                        thresholding_memory.set(memory)
-                        return
-
-
-
-                
-            
-
-
-
-
-                # if input[f"threshold_property_{threshold_id}"]() in Metrics.Thresholding.SpotProperties:
-                #     data = UNFILTERED_SPOTSTATS.get()
-                # else :
-                #     data = UNFILTERED_TRACKSTATS.get()
-                
-                # reference = input[f"reference_value_{threshold_id}"]()
-                # if reference == "Mean":
-                #     reference = data[property_name].mean()
-                # elif reference == "Median":
-                #     reference = data[property_name].median()
-                # elif reference == "My own value":
-                #     reference = input[f"my_own_value_{threshold_id}"]()
-
-                # if reference is None or not isinstance(reference, (int, float)):
-                #     reference = 0
-
-                # if (
-                #     isinstance(slider_vals, (tuple, list))
-                #     and len(slider_vals) == 2
-                #     and all(x is not None for x in slider_vals)
-                #     and isinstance(reference, (int, float))
-                # ) and (
-                #     reference is not None
-                #     and property_name
-                #     and filter_type
-                # ):
-                #     new_memory = _set_threshold_memory(memory, threshold_id, property_name, filter_type, slider_vals, reference=reference)
-                #     if new_memory != memory:
-                #         memory = new_memory
-                #         changed = True
-                # if changed:
-                #     thresholding_memory.set(memory)
-                #     return
-        
+    # REMOVED the original first set_threshold_modules() that read a non-existent
+    # manual input and caused feedback loops. Its behavior is replaced by the
+    # per-threshold sync registered below.
 
     @reactive.effect
     @reactive.event(threshold_list)
@@ -1238,15 +1386,17 @@ def server(input: Inputs, output: Outputs, session: Session):
             if threshold_id not in threshold_slider_outputs:
                 threshold_slider_outputs[threshold_id] = render_threshold_slider(threshold_id)
                 thresholding_histogram_outputs[threshold_id] = render_threshold_histogram(threshold_id)
+                render_manual_threshold_values_setting(threshold_id)
+                # NEW: keep slider, numerics, and memory in sync (no loops)
+                register_threshold_sync(threshold_id)
 
 
     @reactive.Effect
-    def set_threshold_modules():
+    def cache_threshold_selections():
         _property_selections = {}
         _filter_type_selections = {}
         _quantile_selections = {}
         _reference_selections = {}
-
 
         for threshold_id in threshold_list.get():
             property_name = input[f"threshold_property_{threshold_id}"]()
@@ -1269,7 +1419,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 and filter_type in Modes.Thresholding
             ):
                 _filter_type_selections[threshold_id] = filter_type
- 
+
             if quantile is not None:
                 _quantile_selections[threshold_id] = quantile
                 
@@ -1279,7 +1429,6 @@ def server(input: Inputs, output: Outputs, session: Session):
             #     my_own_value = input[f"my_own_value_{threshold_id}"]()
             #     if isinstance(my_own_value, (int, float)) and my_own_value is not None:
             #         _reference_selections[threshold_id] = float(my_own_value)
-
 
         _property_selections = {tid: val for tid, val in _property_selections.items() if tid in threshold_list.get()}
         property_selections.set(_property_selections)
@@ -1292,6 +1441,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
         _reference_selections = {tid: val for tid, val in _reference_selections.items() if tid in threshold_list.get()}
         reference_selections.set(_reference_selections)
+
 
 
 
@@ -1434,8 +1584,6 @@ def server(input: Inputs, output: Outputs, session: Session):
     # - - - - - - - - - - - - - - - - - - - -
 
 
-    # TODO Time point definition
-
 
     # (Other outputs and logic remain unchanged...)
 
@@ -1446,5 +1594,6 @@ app = App(app_ui, server)
 # TODO Time point definition
 # TODO Make it possible for the user to title their charts 
 # TODO Make it possible for the user to manually set threshold values
+# TODO Mean directional change rate
 # TODO Select which p-tests should be shown in the superplot chart
 # TODO P-test 

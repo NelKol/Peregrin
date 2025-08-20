@@ -1,3 +1,5 @@
+import encodings
+from os import path
 import numpy as np
 import pandas as pd
 from math import log10, floor, ceil
@@ -5,7 +7,16 @@ import os.path as op
 from typing import List, Any
 
 
+def _pick_encoding(path, encodings=("utf-8", "cp1252", "latin1", "iso8859_15")):
+        for enc in encodings:
+            try:
+                return pd.read_csv(path, encoding=enc, low_memory=False if enc != "utf-8" else True)
+            except UnicodeDecodeError:
+                continue
+
+
 class DataLoader:
+    
 
     @staticmethod
     def GetDataFrame(filepath: str) -> pd.DataFrame:
@@ -17,7 +28,7 @@ class DataLoader:
 
         try:
             if ext == '.csv':
-                return pd.read_csv(filepath)
+                return _pick_encoding(filepath)
             elif ext in ['.xls', '.xlsx']:
                 return pd.read_excel(filepath)
             elif ext == '.feather':
@@ -28,10 +39,10 @@ class DataLoader:
                 return pd.read_hdf(filepath)
             elif ext == '.json':
                 return pd.read_json(filepath)
-            else:
-                raise ValueError(f"{ext} is not a supported file format.")
+        except ValueError as e:
+            raise e(f"{ext} is not a supported file format.")
         except Exception as e:
-            raise RuntimeError(f"Failed to load file '{filepath}': {e}")
+            raise e(f"Failed to load file '{filepath}': {e}")
     
 
     @staticmethod
@@ -58,7 +69,7 @@ class DataLoader:
         """
         Returns a list of column names from the DataFrame.
         """
-        df = pd.read_csv(path)  # or pd.read_excel(path), depending on file type
+        df = DataLoader.GetDataFrame(path)  # or pd.read_excel(path), depending on file type
         return df.columns.tolist()
     
     @staticmethod
