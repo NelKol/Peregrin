@@ -92,3 +92,7 @@ def load_csv_multiheader(path, keep_multiindex=False):
 print(pd.read_csv(r"C:\Users\modri\Desktop\python\Peregrin\Peregrin\test data\2025_03_31 NEU_Hoechst_FaDu_spots_6F-01.csv", encoding="cp1252", low_memory=False))
 
 print(_pick_encoding(r"C:\Users\modri\Desktop\python\Peregrin\Peregrin\test data\2025_03_31 NEU_Hoechst_FaDu_spots_6F-01.csv"))
+
+
+value = None
+print(type(value))
