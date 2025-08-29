@@ -1,6 +1,7 @@
 from shiny import App, Inputs, Outputs, Session, render, reactive, req, ui
 from shiny.types import FileInfo
-from shinywidgets import render_plotly, render_altair, output_widget, render_widget
+from shinywidgets import render_plotly, render_altair, output_widget, render_widget, register_widget
+from shiny.plotutils import brushed_points, near_points
 
 from utils.Select import Metrics, Styles, Markers, Modes
 from utils.Function import DataLoader, Process, Calc
@@ -13,6 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import gaussian_kde
 import plotly.graph_objs as go
+from plotnine import ggplot, aes, geom_point, theme_minimal, theme, element_blank, element_line, scale_x_continuous, scale_y_continuous, coord_equal
 
 # --- UI definition ---
 app_ui = ui.page_sidebar(
@@ -480,40 +482,50 @@ def server(input: Inputs, output: Outputs, session: Session):
     metric_y_selections = reactive.Value({})
     threshold_slider_outputs = {}
     thresholding_histogram_outputs = {}
-    thresholding_memory_2d_selection = reactive.Value({})
-    # Keep one Shiny output registration per threshold id (prevents wiping the plot).
-    threshold2d_outputs: dict[int, object] = {}
-    # Optional: track the FigureWidget live handles to support visual clear
-    threshold2d_widgets: dict[int, go.FigureWidget] = {}
+    
+    threshold2d_outputs_registered: set[int] = set()       # guards plotly widget outputs
+    threshold2d_placeholders_registered: set[int] = set()  # guards UI placeholders
+    threshold2d_store = reactive.Value({})
 
-    thresholding_memory = reactive.Value({})  # initialize empty first
+
+
+    thresholding_2D_memory = reactive.Value({})
+    thresholding_1D_memory = reactive.Value({})  # initialize empty first
+
+    thresholding_memory_2d_selection = reactive.Value({})
 
     @reactive.effect
     @reactive.event(threshold_list)
     def initialize_thresholding_memory():
-        memory = thresholding_memory.get()
-        ids = threshold_list.get()
 
-        for _id in ids:
-            if _id not in memory:
-                memory[_id] = {
-                    _property: {
-                        "Literal": {"values": None},
-                        "Normalized 0-1": {"values": None},
-                        "Quantile": {
-                            _quantile: {"values": None} for _quantile in [200, 100, 50, 25, 20, 10, 5, 4, 2]
-                        },
-                        "Relative to...": {
-                            _reference: {"values": None} for _reference in ["Mean", "Median", "My own value"]
-                        },
-                        "My own value": {"my_value": None},
+        if threshold_dimension.get() == "1D":
+
+            memory = thresholding_1D_memory.get()
+            ids = threshold_list.get()
+
+            for _id in ids:
+                if _id not in memory:
+                    memory[_id] = {
+                        _property: {
+                            "Literal": {"values": None},
+                            "Normalized 0-1": {"values": None},
+                            "Quantile": {
+                                _quantile: {"values": None} for _quantile in [200, 100, 50, 25, 20, 10, 5, 4, 2]
+                            },
+                            "Relative to...": {
+                                _reference: {"values": None} for _reference in ["Mean", "Median", "My own value"]
+                            },
+                            "My own value": {"my_value": None},
+                        }
+                        for _property in Metrics.Thresholding.Properties
                     }
-                    for _property in Metrics.Thresholding.Properties
-                }
 
-        # Remove deleted threshold entries from memory
-        memory = {k: v for k, v in memory.items() if k in ids}
-        thresholding_memory.set(memory)
+            # Remove deleted threshold entries from memory
+            memory = {k: v for k, v in memory.items() if k in ids}
+            thresholding_1D_memory.set(memory)
+
+        else:
+            pass
 
 
 
@@ -680,6 +692,11 @@ def server(input: Inputs, output: Outputs, session: Session):
         if len(threshold_list.get()) <= 1:
             session.send_input_message("remove_threshold", {"disabled": True})
 
+    @reactive.effect
+    @reactive.event(input.threshold_dimensional_toggle)
+    def reset_threshold_list():
+        threshold_list.set([0])
+
 
     # - - - - Sidebar accordion layout for thresholds - - - -
 
@@ -717,9 +734,9 @@ def server(input: Inputs, output: Outputs, session: Session):
             panels.append(
                 ui.accordion_panel(
                     "Filter settings",
-                    ui.input_action_button("threshold_dimensional_toggle", dimension_button_label.get(), width="100%"),
-                    ui.markdown(""" <p> """),
                     ui.input_numeric("bins", "Number of bins", value=25, min=1, step=1),
+                    ui.markdown(""" <p> """),
+                    ui.input_action_button("threshold_dimensional_toggle", dimension_button_label.get(), width="100%"),
                 ),
             )
         elif threshold_dimension.get() == "2D":
@@ -731,32 +748,38 @@ def server(input: Inputs, output: Outputs, session: Session):
                             ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
                             ui.input_selectize(f"thresholding_metric_X_{threshold_id}", None, Metrics.Thresholding.Properties, selected="Track points"),
                             ui.input_selectize(f"thresholding_metric_Y_{threshold_id}", None, Metrics.Thresholding.Properties, selected="Confinement ratio"),
-                            # Plotly output (FigureWidget) and a clear-selection button
-                            ui.div(
-                                {"style": f"position:relative; width:100%; padding-top:calc(100% + 100px);"},
-                                ui.div(
-                                    {"style": "position:absolute; inset:0;"},
-                                    output_widget(f"threshold2d_plot_{threshold_id}"),
+                            ui.output_plot(
+                                f"threshold2d_widget_placeholder_{threshold_id}",
+                                hover=ui.hover_opts(delay=60, delay_type="throttle"),
+                                brush=ui.brush_opts(
+                                    stroke="#06519c",
+                                    opacity=0.175,
+                                    direction="xy",
+                                    delay=60,
+                                    delay_type="throttle"
                                 ),
+                                height="150px"
                             ),
-                            ui.input_action_button(f"threshold2d_clear_{threshold_id}", "Clear selection", class_="btn-secondary"),
+                            # ui.input_action_button(f"threshold2d_clear_{threshold_id}", "Clear selection", class_="btn-secondary"),
                         ),
                     ),
                 ),
             panels.append(
                 ui.accordion_panel(
                     "Filter settings",
-                    ui.input_action_button("threshold_dimensional_toggle", dimension_button_label.get(), width="100%"),
+                    ui.input_numeric("threshold2d_dot_size", "Dot size", value=0.75, min=0, step=0.05),
+                    ui.input_numeric("threshold2d_dot_opacity", "Dot opacity", value=0.9, min=0, max=1, step=0.05),
                     ui.markdown(""" <p> """),
-                    ui.markdown("""  Working on it dawg  """),
+                    ui.input_action_button("threshold_dimensional_toggle", dimension_button_label.get(), width="100%"),
                 ),
             ),
-        return ui.accordion(*panels, id="thresholds_accordion", open=["Threshold", f"Threshold {len(ids)}", "Filter settings"])
+        # return ui.accordion(*panels, id="thresholds_accordion", open=["Threshold", f"Threshold {len(ids)}", "Filter settings"])
+        return ui.accordion(*panels, id="thresholds_accordion", open=True)
     
     
     # - - - - Threshold dimension toggle - - - -
 
-    @reactive.Effect
+    @reactive.effect
     @reactive.event(input.threshold_dimensional_toggle)
     def threshold_dimensional_toggle():
         if threshold_dimension.get() == "1D":
@@ -1072,7 +1095,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 track_data=track_data,
                 property_name=property_name,
                 filter_type=filter_type,
-                memory=thresholding_memory.get(),
+                memory=thresholding_1D_memory.get(),
                 quantile=input[f"threshold_quantile_{threshold_id}"](),
                 reference=input[f"reference_value_{threshold_id}"](),
                 reference_value=input[f"my_own_value_{threshold_id}"]()
@@ -1109,7 +1132,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 track_data=track_data,
                 property_name=property_name,
                 filter_type=filter_type,
-                memory=thresholding_memory.get(),
+                memory=thresholding_1D_memory.get(),
                 quantile=input[f"threshold_quantile_{threshold_id}"](),
                 reference=input[f"reference_value_{threshold_id}"](),
                 reference_value=input[f"my_own_value_{threshold_id}"]()
@@ -1317,23 +1340,27 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     # - - - - Sync helpers & per-threshold synchronization - - - -
 
-    @reactive.Effect
-    def cache_2d_metric_selections():
-        _x = {}
-        _y = {}
-        for threshold_id in threshold_list.get():
-            xv = input[f"thresholding_metric_X_{threshold_id}"]()
-            yv = input[f"thresholding_metric_Y_{threshold_id}"]()
-            if isinstance(xv, str) and xv in Metrics.Thresholding.Properties:
-                _x[threshold_id] = xv
-            if isinstance(yv, str) and yv in Metrics.Thresholding.Properties:
-                _y[threshold_id] = yv
-        # keep only still-existing thresholds
-        ids = set(threshold_list.get())
-        metric_x_selections.set({tid: v for tid, v in _x.items() if tid in ids})
-        metric_y_selections.set({tid: v for tid, v in _y.items() if tid in ids})
+    @reactive.effect
+    def cache_2d_metric_selections() -> None:
+        if threshold_dimension.get() == "2D":
+            _x = {}
+            _y = {}
+            for threshold_id in threshold_list.get():
+                xv = input[f"thresholding_metric_X_{threshold_id}"]()
+                yv = input[f"thresholding_metric_Y_{threshold_id}"]()
+                if isinstance(xv, str) and xv in Metrics.Thresholding.Properties:
+                    _x[threshold_id] = xv
+                if isinstance(yv, str) and yv in Metrics.Thresholding.Properties:
+                    _y[threshold_id] = yv
+            # keep only still-existing thresholds
+            ids = set(threshold_list.get())
+            metric_x_selections.set({tid: v for tid, v in _x.items() if tid in ids})
+            metric_y_selections.set({tid: v for tid, v in _y.items() if tid in ids})
 
-    @reactive.Effect
+        else:
+            pass
+
+    @reactive.effect
     def metric_x_selectize():
         saved = metric_x_selections.get()
         choices = Metrics.Thresholding.Properties
@@ -1348,7 +1375,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 selected=selected
             )
 
-    @reactive.Effect
+    @reactive.effect
     def metric_y_selectize():
         saved = metric_y_selections.get()
         choices = Metrics.Thresholding.Properties
@@ -1362,17 +1389,6 @@ def server(input: Inputs, output: Outputs, session: Session):
                 choices=choices,
                 selected=selected
             )
-
-    # @reactive.effect
-    # @reactive.event(threshold_list)
-    # def normalize_2d_selection_memory():
-    #     mem = thresholding_memory_2d_selection.get()
-    #     keep_ids = set(threshold_list.get())
-    #     # drop removed thresholds only; keep all (propX,propY) pairs for survivors
-    #     new_mem = {tid: pairs for tid, pairs in mem.items() if tid in keep_ids}
-    #     if new_mem != mem:
-    #         thresholding_memory_2d_selection.set(new_mem)
-
 
 
     def _last_or_default_metric(saved: dict):
@@ -1394,7 +1410,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         ui.update_selectize(f"thresholding_metric_X_{tid}", choices=Metrics.Thresholding.Properties, selected=default_x)
         ui.update_selectize(f"thresholding_metric_Y_{tid}", choices=Metrics.Thresholding.Properties, selected=default_y)
 
-
+    
 
 
 
@@ -1461,7 +1477,7 @@ def server(input: Inputs, output: Outputs, session: Session):
             if not (prop and ftype):
                 return
 
-            mem = thresholding_memory.get()
+            mem = thresholding_1D_memory.get()
             cur_vals, cur_ref_val = _read_stored_pair(mem, threshold_id, prop, ftype, q, ref)
 
             vals = (float(vals[0]), float(vals[1]))
@@ -1477,7 +1493,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
             if need_vals or need_ref:
                 new_mem = _set_threshold_memory(mem.copy(), threshold_id, prop, ftype, vals, quantile=q, reference=ref, ref_val=ref_val)
-                thresholding_memory.set(new_mem)
+                thresholding_1D_memory.set(new_mem)
 
 
         # B) manual numerics -> memory
@@ -1501,13 +1517,13 @@ def server(input: Inputs, output: Outputs, session: Session):
             if not (prop and ftype):
                 return
 
-            mem = thresholding_memory.get()
+            mem = thresholding_1D_memory.get()
             cur_vals, cur_ref_val = _read_stored_pair(mem, threshold_id, prop, ftype, q, ref)
 
             new_pair = (lo, hi)
 
             if cur_vals is None or not _nearly_equal_pair(new_pair, cur_vals):
-                thresholding_memory.set(
+                thresholding_1D_memory.set(
                     _set_threshold_memory(mem.copy(), threshold_id, prop, ftype, new_pair, quantile=q, reference=ref, ref_val=ref_val)
                 )
 
@@ -1518,7 +1534,7 @@ def server(input: Inputs, output: Outputs, session: Session):
             if not (prop and ftype):
                 return
 
-            mem = thresholding_memory.get()
+            mem = thresholding_1D_memory.get()
 
             # Avoid establishing reactive deps on inputs here
             with reactive.isolate():
@@ -1575,7 +1591,7 @@ def server(input: Inputs, output: Outputs, session: Session):
             if not isinstance(ref_val, (int, float)):
                 return
 
-            mem = thresholding_memory.get()
+            mem = thresholding_1D_memory.get()
 
             # Use current slider pair as the values to keep them in sync; if missing, default to (0,0)
             current_slider = input[f"threshold_slider_{threshold_id}"]()
@@ -1588,7 +1604,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 mem.copy(), threshold_id, prop, ftype, pair,
                 quantile=q, reference=ref, ref_val=float(ref_val)
             )
-            thresholding_memory.set(new_mem)
+            thresholding_1D_memory.set(new_mem)
 
 
 
@@ -1612,182 +1628,144 @@ def server(input: Inputs, output: Outputs, session: Session):
             return track_df[prop]
         return pd.Series(dtype=float)
 
-    # Memory: selected original-row indices for each 2D threshold and metric pair
-    # Shape: { tid: { (propX, propY): set([original row indices]) } }
-    # thresholding_memory_2d_selection = reactive.Value({})
-
-    def _get_2d_selected_set(mem: dict, tid: int, propX: str, propY: str) -> set:
-        try:
-            return set(mem[tid][(propX, propY)])
-        except Exception:
-            return set()
-
-    def _set_2d_selected_set(mem: dict, tid: int, propX: str, propY: str, idx_set: set) -> dict:
-        mem = mem.copy()
-        mem.setdefault(tid, {})
-        mem[tid][(propX, propY)] = set(idx_set)
-        return mem
 
 
-    def _mask_2d_from_selection(spot_df: pd.DataFrame, track_df: pd.DataFrame,
-                                propX: str, propY: str, selected_idx: set) -> tuple[pd.Index, pd.Series]:
-        # Build a joint table to align indices that have both metrics
-        X_raw = _get_metric_series(propX, spot_df, track_df)
-        Y_raw = _get_metric_series(propY, spot_df, track_df)
-        tbl = pd.DataFrame({"_x": X_raw, "_y": Y_raw}).dropna()
-        if tbl.empty:
-            return tbl.index, pd.Series([], dtype=bool, index=tbl.index)
-        # Selection is expressed in terms of ORIGINAL indices of tbl
-        mask = tbl.index.to_series().isin(selected_idx)
-        return tbl.index, mask
+    # --- helpers already present ---
+    # _normalize_0_1(series), _get_metric_series(prop, spot_df, track_df)
 
- 
-    def render_threshold2d_plot(threshold_id: int):
-        @output(id=f"threshold2d_plot_{threshold_id}")
-        @render_widget
-        def threshold2d_plot():  # id must match output_widget id
-
+    def render_threshold2d_widget(threshold_id):
+        # A) Plot
+        @output(id=f"threshold2d_widget_placeholder_{threshold_id}")
+        @render.plot
+        def threshold2d_chart():
             spot_df = UNFILTERED_SPOTSTATS.get()
             track_df = UNFILTERED_TRACKSTATS.get()
-            # keep previous plot if data briefly unset
-            req(not ((spot_df is None or (hasattr(spot_df, "empty") and spot_df.empty)) 
-                and (track_df is None or (hasattr(track_df, "empty") and track_df.empty))))
+            req(not ((spot_df is None or (hasattr(spot_df, "empty") and spot_df.empty))
+                    and (track_df is None or (hasattr(track_df, "empty") and track_df.empty))))
 
             propX = input[f"thresholding_metric_X_{threshold_id}"]()
             propY = input[f"thresholding_metric_Y_{threshold_id}"]()
-            # keep previous plot if inputs briefly unset
             req(propX and propY)
 
-            # Build aligned table and normalize both axes to 0..1
             X_raw = _get_metric_series(propX, spot_df, track_df)
             Y_raw = _get_metric_series(propY, spot_df, track_df)
 
-            # ...
             tbl = pd.DataFrame({"_x": X_raw, "_y": Y_raw}).dropna()
-            # keep previous plot if the table is briefly empty
             req(not tbl.empty)
 
-
+            # Keep original indices so we can persist selections
             X = _normalize_0_1(tbl["_x"])
             Y = _normalize_0_1(tbl["_y"])
+            df = pd.DataFrame({"X": X, "Y": Y})
+            df.index.name = "orig_idx"
 
-            # Recover previously selected points for this (propX, propY)
-            mem = thresholding_memory_2d_selection.get()
-            selected_set = _get_2d_selected_set(mem, threshold_id, propX, propY)
-            row_index = tbl.index.to_numpy()
-            selectedpoints = np.nonzero(np.isin(row_index, list(selected_set)))[0].tolist()
+            p = (
+                ggplot(df, aes("X", "Y"))
+                + geom_point(
+                    size=input.threshold2d_dot_size() if input.threshold2d_dot_size() is not None else 0,
+                    alpha=input.threshold2d_dot_opacity() if input.threshold2d_dot_opacity() is not None else 0,
+                    color="black",
+                    stroke=0
+                )
+                + coord_equal()
+                + scale_x_continuous(
+                    limits=(0, 1),
+                    breaks=[0, 0.5, 1],
+                    labels=["", "", ""],          # show ticks, no labels
+                    minor_breaks=[0.25, 0.75],    # set minor ticks
+                    expand=(0.035, 0.035),
+                )
+                + scale_y_continuous(
+                    limits=(0, 1),
+                    breaks=[0, 0.5, 1],
+                    labels=["", "", ""],          # show ticks, no labels
+                    minor_breaks=[0.25, 0.75],    # set minor ticks
+                    expand=(0.035, 0.035),
+                )
+                + theme_minimal()
+                + theme(
+                    # keep titles off
+                    axis_title_x=element_blank(),
+                    axis_title_y=element_blank(),
 
-            
-            # Build FigureWidget
-            w = go.FigureWidget(
-                data=[
-                    go.Scattergl(
-                        x=X.values, 
-                        y=Y.values, 
-                        mode="markers",
-                        marker=dict(size=2.5, color="grey"),
-                        selected=dict(marker=dict(color="#337ab7")),
-                        unselected=dict(marker=dict(color="lightgrey")),
-                        selectedpoints=selectedpoints,  # <-- restores from memory
-                        hoverinfo="skip",
-                    )
-                ],
-                layout=go.Layout(
-                    autosize=True,
-                    height=250,
-                    width=None,
-                    margin=dict(l=0, r=0, t=30, b=10),
-                    xaxis=dict(
-                        range=[-0.075, 1.075],
-                        scaleanchor="y",
-                        constrain="domain",
-                        showgrid=False,
-                        showticklabels=False,
-                        ticks="outside",
-                        title=None,
-                        zeroline=False,
-                        showline=True,
-                        linecolor="black",
-                        linewidth=0.5,
-                        mirror=False,  # Only bottom axis line and ticks
-                        side="bottom",  # Explicitly set ticks at bottom
-                    ),
-                    yaxis=dict(
-                        range=[-0.075, 1.075],
-                        scaleanchor="x",
-                        constrain="domain",
-                        showgrid=False,
-                        showticklabels=False,
-                        ticks="outside",
-                        title=None,
-                        zeroline=False,
-                        showline=True,
-                        linecolor="black",
-                        linewidth=0.5,
-                        mirror=False,  # Only left axis line and ticks
-                        side="left",   # Explicitly set ticks at left
-                    ),
-                    dragmode="lasso",
-                    paper_bgcolor="#f5f5f5",
-                    plot_bgcolor="white",
-                ),
+                    # hide text; ticks will still render
+                    axis_text_x=element_blank(),
+                    axis_text_y=element_blank(),
+
+                    # clean panel
+                    panel_grid_major=element_blank(),
+                    panel_grid_minor=element_blank(),
+
+                    # draw only bottom x and left y axes
+                    axis_line_x=element_line(color="#000000", size=0.5),
+                    axis_line_y=element_line(color="#000000", size=0.5),
+
+                    # draw major ticks (no minors)
+                    axis_ticks_major_x=element_line(color="#000000", size=0.5),
+                    axis_ticks_major_y=element_line(color="#000000", size=0.5),
+                    axis_ticks_minor_x=element_line(color="#1E1E1E", size=0.2),
+                    axis_ticks_minor_y=element_line(color="#1E1E1E", size=0.2),
+
+                    # slightly longer ticks (points)
+                    axis_ticks_length=3,
+                )
             )
-
-            # Stash mapping and the props on the widget for the callback
-            w._row_index = row_index
-            w._tid = threshold_id
-            w._propX = propX
-            w._propY = propY
-            threshold2d_widgets[threshold_id] = w 
-
-            # Selection callback (lasso or box)
-            def _on_selection(trace, points, state):
-                inds = points.point_inds or []
-                if len(inds) == 0:
-                    return
-                sel_rows = set(w._row_index[np.array(inds, dtype=int)])
-                cur = thresholding_memory_2d_selection.get()
-                new_mem = _set_2d_selected_set(cur, w._tid, w._propX, w._propY, sel_rows)
-                thresholding_memory_2d_selection.set(new_mem)
-
-            w.data[0].on_selection(_on_selection)
-            return w
-
-        # wire render function to specific id
-        threshold2d_plot._id = f"threshold2d_plot_{threshold_id}"
+            return p
 
 
-    def register_threshold2d_clear(threshold_id: int):
+        # B) Hover: keep “near points” handy (optional memory; tweak threshold if needed)
         @reactive.effect
-        @reactive.event(input[f"threshold2d_clear_{threshold_id}"])
-        def _clear():
+        @reactive.event(input[f"threshold2d_widget_placeholder_{threshold_id}_hover"])
+        def _on_hover():
+            # We don’t need to do anything UI-wise here unless you want to store/show hover rows.
+            pass
+
+        # C) Brush: update the selection memory for this threshold
+        @reactive.effect
+        @reactive.event(input[f"threshold2d_widget_placeholder_{threshold_id}_brush"])
+        def _on_brush():
+            spot_df = UNFILTERED_SPOTSTATS.get()
+            track_df = UNFILTERED_TRACKSTATS.get()
             propX = input[f"thresholding_metric_X_{threshold_id}"]()
             propY = input[f"thresholding_metric_Y_{threshold_id}"]()
-            req(propX and propY)
-            
+            if not (spot_df is not None and track_df is not None and propX and propY):
+                return
+
+            X_raw = _get_metric_series(propX, spot_df, track_df)
+            Y_raw = _get_metric_series(propY, spot_df, track_df)
+            tbl = pd.DataFrame({"_x": X_raw, "_y": Y_raw}).dropna()
+            if tbl.empty:
+                return
+
+            df = pd.DataFrame({"X": _normalize_0_1(tbl["_x"]), "Y": _normalize_0_1(tbl["_y"])})
+            df.index.name = "orig_idx"
+
+            brushed = brushed_points(
+                df,
+                input[f"threshold2d_widget_placeholder_{threshold_id}_brush"](),
+                all_rows=False,
+            )
+
+            # Persist selected original indices by threshold + metric pair
             mem = thresholding_memory_2d_selection.get()
-            if threshold_id in mem and (propX, propY) in mem[threshold_id]:
-                mem = mem.copy()
-                mem[threshold_id].pop((propX, propY), None)
-                thresholding_memory_2d_selection.set(mem)
+            key = (propX, propY)
+            sel = set(brushed.index.tolist()) if brushed is not None and len(brushed) else set()
+            mem_for_tid = mem.get(threshold_id, {})
+            mem_for_tid[key] = sel
+            mem[threshold_id] = mem_for_tid
+            thresholding_memory_2d_selection.set(mem)
 
-            # also clear the live widget view (if mounted)
-            w = threshold2d_widgets.get(threshold_id)
-            if w is not None and len(w.data) > 0:
-                try:
-                    w.data[0].selectedpoints = []
-                except Exception:
-                    pass
-
-
-    @reactive.effect
-    @reactive.event(threshold_list)
-    def normalize_2d_selection_memory():
-        mem = thresholding_memory_2d_selection.get()
-        keep_ids = set(threshold_list.get())
-        new_mem = {tid: pairs for tid, pairs in mem.items() if tid in keep_ids}
-        if new_mem != mem:
-            thresholding_memory_2d_selection.set(new_mem)
+        # D) Clear button: wipe selection for current metric pair
+        @reactive.effect
+        @reactive.event(input[f"threshold2d_clear_{threshold_id}"])
+        def _clear_sel():
+            propX = input[f"thresholding_metric_X_{threshold_id}"]()
+            propY = input[f"thresholding_metric_Y_{threshold_id}"]()
+            mem = thresholding_memory_2d_selection.get()
+            if threshold_id in mem:
+                if (propX, propY) in mem[threshold_id]:
+                    mem[threshold_id][(propX, propY)] = set()
+                    thresholding_memory_2d_selection.set(mem)
 
 
 
@@ -1795,7 +1773,10 @@ def server(input: Inputs, output: Outputs, session: Session):
 
 
 
-    # - - - - Threshold modules management - - - -
+
+
+   
+# - - - - Threshold modules management - - - -
 
     # REMOVED the original first set_threshold_modules() that read a non-existent
     # manual input and caused feedback loops. Its behavior is replaced by the
@@ -1804,92 +1785,85 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.effect
     @reactive.event(threshold_list)
     def register_threshold_modules():
-        # 1) Drop outputs for deleted thresholds
-        current_ids = set(threshold_list.get())
-        for tid in list(threshold2d_outputs.keys()):
-            if tid not in current_ids:
-                # Remove the output registration and any cached widget handle
-                del threshold2d_outputs[tid]
-                threshold2d_widgets.pop(tid, None)
 
-        # 2) Ensure outputs exist for new thresholds (register exactly once)
-        for tid in threshold_list.get():
-            if tid not in threshold2d_outputs:
-                threshold2d_outputs[tid] = render_threshold2d_plot(tid)
-                register_threshold2d_clear(tid)
-
-        # (Leave your existing slider/histogram registrations as they are,
-        #  but apply the same "only once" pattern if they also flicker.)
-
-        # Remove outputs for deleted thresholds
-        for threshold_id in list(threshold_slider_outputs.keys()):
-            if threshold_id not in threshold_list.get():
-                del threshold_slider_outputs[threshold_id]
-        # Add outputs for new thresholds
-        for threshold_id in threshold_list.get():
-            if threshold_id not in threshold_slider_outputs:
-                threshold_slider_outputs[threshold_id] = render_threshold_slider(threshold_id)
-                thresholding_histogram_outputs[threshold_id] = render_threshold_histogram(threshold_id)
-                render_manual_threshold_values_setting(threshold_id)
-                # NEW: keep slider, numerics, and memory in sync (no loops)
-                register_threshold_sync(threshold_id)
+        if threshold_dimension.get() == "1D":
+            # Remove outputs for deleted thresholds
+            for threshold_id in list(threshold_slider_outputs.keys()):
+                if threshold_id not in threshold_list.get():
+                    del threshold_slider_outputs[threshold_id]
+            # Add outputs for new thresholds
+            for threshold_id in threshold_list.get():
+                if threshold_id not in threshold_slider_outputs:
+                    threshold_slider_outputs[threshold_id] = render_threshold_slider(threshold_id)
+                    thresholding_histogram_outputs[threshold_id] = render_threshold_histogram(threshold_id)
+                    render_manual_threshold_values_setting(threshold_id)
+                    # NEW: keep slider, numerics, and memory in sync (no loops)
+                    register_threshold_sync(threshold_id)
+        
+        elif threshold_dimension.get() == "2D":
+            for threshold_id in threshold_list.get():
+                render_threshold2d_widget(threshold_id)
 
 
-    @reactive.Effect
+    @reactive.effect
     def cache_threshold_selections():
-        _property_selections = {}
-        _filter_type_selections = {}
-        _quantile_selections = {}
-        _reference_selections = {}
 
-        for threshold_id in threshold_list.get():
-            property_name = input[f"threshold_property_{threshold_id}"]()
-            filter_type = input[f"threshold_filter_{threshold_id}"]()
-            quantile = input[f"threshold_quantile_{threshold_id}"]()
-            reference = input[f"reference_value_{threshold_id}"]()
+        if threshold_dimension.get() != "1D":
+            return
+        else:
+            _property_selections = {}
+            _filter_type_selections = {}
+            _quantile_selections = {}
+            _reference_selections = {}
 
-            if (
-                isinstance(property_name, str)
-                and property_name is not None
-                and property_name != 0
-                and property_name in Metrics.Thresholding.Properties
-            ):
-                _property_selections[threshold_id] = property_name
+            for threshold_id in threshold_list.get():
+                property_name = input[f"threshold_property_{threshold_id}"]()
+                filter_type = input[f"threshold_filter_{threshold_id}"]()
+                quantile = input[f"threshold_quantile_{threshold_id}"]()
+                reference = input[f"reference_value_{threshold_id}"]()
 
-            if (
-                isinstance(filter_type, str)
-                and filter_type is not None
-                and filter_type != 0
-                and filter_type in Modes.Thresholding
-            ):
-                _filter_type_selections[threshold_id] = filter_type
+                if (
+                    isinstance(property_name, str)
+                    and property_name is not None
+                    and property_name != 0
+                    and property_name in Metrics.Thresholding.Properties
+                ):
+                    _property_selections[threshold_id] = property_name
 
-            if quantile is not None:
-                _quantile_selections[threshold_id] = quantile
-                
-            if isinstance(reference, (str)) and reference is not None:
-                _reference_selections[threshold_id] = reference
-            # if reference == "My own value":
-            #     my_own_value = input[f"my_own_value_{threshold_id}"]()
-            #     if isinstance(my_own_value, (int, float)) and my_own_value is not None:
-            #         _reference_selections[threshold_id] = float(my_own_value)
+                if (
+                    isinstance(filter_type, str)
+                    and filter_type is not None
+                    and filter_type != 0
+                    and filter_type in Modes.Thresholding
+                ):
+                    _filter_type_selections[threshold_id] = filter_type
 
-        _property_selections = {tid: val for tid, val in _property_selections.items() if tid in threshold_list.get()}
-        property_selections.set(_property_selections)
+                if quantile is not None:
+                    _quantile_selections[threshold_id] = quantile
+                    
+                if isinstance(reference, (str)) and reference is not None:
+                    _reference_selections[threshold_id] = reference
+                # if reference == "My own value":
+                #     my_own_value = input[f"my_own_value_{threshold_id}"]()
+                #     if isinstance(my_own_value, (int, float)) and my_own_value is not None:
+                #         _reference_selections[threshold_id] = float(my_own_value)
 
-        _filter_type_selections = {tid: val for tid, val in _filter_type_selections.items() if tid in threshold_list.get()}
-        filter_type_selections.set(_filter_type_selections)
+            _property_selections = {tid: val for tid, val in _property_selections.items() if tid in threshold_list.get()}
+            property_selections.set(_property_selections)
 
-        _quantile_selections = {tid: val for tid, val in _quantile_selections.items() if tid in threshold_list.get()}
-        quantile_selections.set(_quantile_selections)
+            _filter_type_selections = {tid: val for tid, val in _filter_type_selections.items() if tid in threshold_list.get()}
+            filter_type_selections.set(_filter_type_selections)
 
-        _reference_selections = {tid: val for tid, val in _reference_selections.items() if tid in threshold_list.get()}
-        reference_selections.set(_reference_selections)
+            _quantile_selections = {tid: val for tid, val in _quantile_selections.items() if tid in threshold_list.get()}
+            quantile_selections.set(_quantile_selections)
+
+            _reference_selections = {tid: val for tid, val in _reference_selections.items() if tid in threshold_list.get()}
+            reference_selections.set(_reference_selections)
 
 
 
 
-    @reactive.Effect
+    @reactive.effect
     def property_selectize():
         selected = property_selections.get()
         for threshold_id in threshold_list.get():
@@ -1900,7 +1874,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 selected=select
             )
 
-    @reactive.Effect
+    @reactive.effect
     def filter_type_selectize():
         selected = filter_type_selections.get()
         for threshold_id in threshold_list.get():
@@ -1911,7 +1885,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 selected=select
             )
 
-    @reactive.Effect
+    @reactive.effect
     def quantile_selectize():
         selected = quantile_selections.get()
         for threshold_id in threshold_list.get():
@@ -1925,7 +1899,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                     selected=select
                 )
 
-    @reactive.Effect
+    @reactive.effect
     def reference_selectize():
         selected = reference_selections.get()
         for threshold_id in threshold_list.get():
@@ -1987,14 +1961,14 @@ def server(input: Inputs, output: Outputs, session: Session):
 # --- Mount the app ---
 app = App(app_ui, server)
 
-# TODO Keep all the raw data (columns) - rather format them (stripping of _ and have them not all caps)
+# TODO - Keep all the raw data (columns) - rather format them (stripping of _ and have them not all caps)
 # TODO - Make the 2D filtering logic work on the same logic as does the D filtering logic
 # TODO - make both 1D and 2D thresholding operational
 # TODO - Make it possible to save/load threshold configurations
 # TODO - Find a way to program all the functions so that functions do not refresh/re-render unnecessarily on just any reactive action
-# TODO Time point definition
-# TODO Make it possible for the user to title their charts 
-# TODO Make it possible for the user to manually set threshold values
-# TODO Mean directional change rate
-# TODO Select which p-tests should be shown in the superplot chart
-# TODO P-test 
+# TODO - Time point definition
+# TODO - Make it possible for the user to title their charts
+# TODO - Make it possible for the user to manually set threshold values
+# TODO - Mean directional change rate
+# TODO - Select which p-tests should be shown in the superplot chart
+# TODO - P-test
