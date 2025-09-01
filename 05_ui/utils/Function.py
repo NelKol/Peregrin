@@ -4,15 +4,32 @@ import numpy as np
 import pandas as pd
 from math import log10, floor, ceil
 import os.path as op
-from typing import List, Any
+from typing import List, Any, Callable, Literal, Optional, Union
+from pandas.api.types import is_object_dtype
+
 
 
 def _pick_encoding(path, encodings=("utf-8", "cp1252", "latin1", "iso8859_15")):
-        for enc in encodings:
-            try:
-                return pd.read_csv(path, encoding=enc, low_memory=False if enc != "utf-8" else True)
-            except UnicodeDecodeError:
-                continue
+    for enc in encodings:
+        try:
+            return pd.read_csv(path, encoding=enc, low_memory=False if enc != "utf-8" else True)
+        except UnicodeDecodeError:
+            continue
+
+def _has_strings(s: pd.Series) -> bool:
+    # pandas "string" dtype (pyarrow/python)
+    if isinstance(s.dtype, pd.StringDtype):
+        return s.notna().any()
+    # categorical of strings?
+    if isinstance(s.dtype, pd.CategoricalDtype):
+        return isinstance(s.dtype.categories.dtype, pd.StringDtype) and s.notna().any()
+    # numeric, datetime, bool, etc.
+    if not is_object_dtype(s.dtype):
+        return False
+    # Fallback for object-dtype (mixed types): minimal Python loop over NumPy array
+    arr = s.to_numpy(dtype=object, copy=False)
+    return any(isinstance(v, (str, np.str_)) for v in arr)
+
 
 
 class DataLoader:
@@ -48,7 +65,7 @@ class DataLoader:
     @staticmethod
     def Extract(df: pd.DataFrame, id_col: str, t_col: str, x_col: str, y_col: str, mirror_y: bool = True) -> pd.DataFrame:
         # Keep only relevant columns and convert to numeric
-        df = df[[id_col, t_col, x_col, y_col]].apply(pd.to_numeric, errors='coerce').dropna()
+        df = df[[id_col, t_col, x_col, y_col]].apply(pd.to_numeric, errors='coerce').dropna().reset_index(drop=True)
 
         # Mirror Y if needed
         if mirror_y:
@@ -125,6 +142,24 @@ class Process:
                 return x
         except ValueError:
             return x
+        
+    @staticmethod
+    def TryFloat(x: Any) -> Any:
+        """
+        Try to convert a string to an int or float, otherwise return the original value.
+        """
+        try:
+            if isinstance(x, str):
+                x_stripped = x.strip()
+                num = float(x_stripped)
+                if num.is_integer():
+                    return float(num)
+                else:
+                    return num
+            else:
+                return x
+        except ValueError:
+            return x
 
     @staticmethod
     def MergeDFs(dataframes: List[pd.DataFrame], on: List[str]) -> pd.DataFrame:
@@ -146,7 +181,7 @@ class Process:
         merged_df = dataframes[0].map(str)
 
         for df in dataframes[1:]:
-            df = df.reset_index(drop=True).map(str)
+            df = df.map(str)
             # Ensure all key columns are present for merging
             merge_columns = [col for col in df.columns if col not in merged_df.columns or col in on]
             merged_df = pd.merge(
@@ -359,5 +394,151 @@ class Calc:
 
         return time_stats
 
+
+
+class Threshold:
+
+    @staticmethod
+    def Normalize_01(df, col) -> pd.Series:
+        """
+        Normalize a column to the [0, 1] range.
+        """
+        # s = pd.to_numeric(df[col], errors='coerce')
+        s = pd.Series(Process.TryFloat(df[col]), dtype=float)
+        if _has_strings(s):
+            normalized = pd.Series(0.0, index=s.index, name=col)
+        lo, hi = s.min(), s.max()
+        if lo == hi:
+            normalized = pd.Series(0.0, index=s.index, name=col)
+        else:
+            normalized = pd.Series((s - lo) / (hi - lo), index=s.index, name=col)
+        return normalized  # <-- keeps index
+
+    @staticmethod
+    def Join(a: pd.Series, b: pd.Series) -> pd.DataFrame:
+        """
+        Join two Series of potentially different lengths into a DataFrame.
+        """
+
+        if b.index.is_unique and not a.index.is_unique:
+            df = a.rename(a.name).to_frame()
+            df[b.name] = b.reindex(df.index)
+        else:
+            df = b.rename(b.name).to_frame()
+            df[a.name] = a.reindex(df.index)
+
+        return df
+    
+    
+
+    Agg = Union[Literal["first", "last"], Callable[[pd.Series], object]]
+
+    def JoinByIndex(
+        A: pd.Series,
+        B: pd.Series,
+        *,
+        when_both_many: Literal["expand", "aggregate"] = "expand",
+        aggregate_on: Literal["right", "left", "shorter", "longer"] = "right",
+        agg: Agg = "first",
+    ) -> pd.DataFrame:
+        """
+        Join two Series by their (possibly Multi)Index.
+
+        • Keeps all rows from a chosen 'left' side:
+            - If exactly one side has duplicate index labels, that side is kept as left.
+            - If both sides are unique OR both sides are many, choose left via `prefer`.
+
+        • When both sides are many (duplicate index labels on both):
+            - when_both_many='expand'  → many-to-many merge (row count can grow).
+            - when_both_many='aggregate' → aggregate one side to unique with `agg`, then broadcast.
+
+        Parameters
+        ----------
+        prefer : which Series to keep as the left when a decision is needed.
+        when_both_many : strategy if both sides have duplicate index labels.
+        aggregate_on : which side to aggregate to unique when when_both_many='aggregate'.
+        agg : 'first' | 'last' | callable; how to aggregate duplicates.
+
+        Returns
+        -------
+        DataFrame with two columns (s1.name, s2.name; auto-disambiguated) and the chosen left index.
+        """
+        # Names (ensure they differ for columns)
+        col_A_label = A.name or 'A'
+        col_B_label = B.name or 'B'
+        if col_A_label == col_B_label:
+            B.name = f"{col_B_label}_2"
+
+        u1 = A.index.is_unique
+        u2 = B.index.is_unique
+
+        # Case A: exactly one side has duplicates → keep that side as left
+        if (not u1 and u2):
+            df = A.rename(col_A_label).to_frame()
+            df[col_B_label] = B.reindex(df.index)  # broadcast unique → many
+            return df
+        
+        elif (not u2 and u1):
+            df = B.rename(col_B_label).to_frame()
+            df[col_A_label] = A.reindex(df.index)
+            return df
+
+        # Case B: both unique → simple align; choose left via prefer/longer
+        elif u1 and u2:
+            df = A.rename(col_A_label).to_frame()
+            df[col_B_label] = B.reindex(df.index)
+            return df
+
+        if when_both_many == "expand":
+            # Many-to-many merge on index (keeps all rows from `left`)
+            return (
+                A.rename(col_A_label).to_frame()
+                .merge(B.rename(col_B_label).to_frame(),
+                    left_index=True, right_index=True, how="left")
+            )
+
+        # if when_both_many == "aggregate":
+        #     # Decide which side to make unique, then broadcast that onto the other
+        #     if aggregate_on == "left":
+        #         to_uniq, to_uniq_name = A, col_A_label
+        #         base, base_name = B, col_B_label
+        #         # after aggregation, base becomes left for broadcasting
+        #         swap_after = True
+        #     elif aggregate_on == "right":
+        #         to_uniq, to_uniq_name = B, col_B_label
+        #         base, base_name = A, col_A_label
+        #         swap_after = False
+        #     elif aggregate_on == "shorter":
+        #         to_uniq, to_uniq_name, base, base_name = \
+        #             (A, col_A_label, B, col_B_label) if len(A) <= len(B) else (B, col_B_label, A, col_A_label)
+        #         swap_after = (to_uniq is A)
+        #     else:  # "longer"
+        #         to_uniq, to_uniq_name, base, base_name = \
+        #             (A, col_A_label, B, col_B_label) if len(A) >= len(B) else (B, col_B_label, A, col_A_label)
+        #         swap_after = (to_uniq is A)
+
+        #     # Aggregate duplicates on `to_uniq` to make its index unique
+        #     if isinstance(agg, str):
+        #         if agg not in ("first", "last"):
+        #             raise ValueError("agg as string must be 'first' or 'last'.")
+        #         to_uniq_unique = to_uniq[~to_uniq.index.duplicated(keep=agg)]
+        #     else:
+        #         # callable aggregator; works for (Multi)Index
+        #         lvls = list(range(to_uniq.index.nlevels))
+        #         to_uniq_unique = to_uniq.groupby(level=lvls).agg(agg)
+
+        #     # Now broadcast the unique side to the (still-many) base index
+        #     if swap_after:
+        #         # aggregated 'left' becomes unique; 'right/base' is many → make base the left
+        #         df = base.rename(base_name).to_frame()
+        #         df[to_uniq_name] = to_uniq_unique.reindex(df.index)
+        #     else:
+        #         df = base.rename(base_name).to_frame()
+        #         df[to_uniq_name] = to_uniq_unique.reindex(df.index)
+
+        #     # Ensure columns returned in s1,s2 order (nice to have)
+        #     return df[[ln, rn]] if set(df.columns) == {ln, rn} else df
+
+        # raise ValueError("Invalid when_both_many. Use 'expand' or 'aggregate'.")
 
 

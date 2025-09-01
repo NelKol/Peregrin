@@ -1,98 +1,65 @@
-import re
-import math
 import pandas as pd
 
-def _pick_encoding(path, encodings=("utf-8", "cp1252", "latin1", "iso8859_15")):
-    for enc in encodings:
-        try:
-            return pd.read_csv(path, encoding=enc, low_memory=False if enc != "utf-8" else True)
-        except UnicodeDecodeError:
-            continue
+df = {'X': [1, 2, 3, 4, 5], 'Y': [5, 4, 3, 2, 1], 'Track ID': [1, 1, 2, 2, 3]}
+
+df = pd.DataFrame(df)
+
+x = df[['X', 'Track ID']]
+y = df[['Y', 'Track ID']]
+# print(x)
+
+tbl = (
+    x.dropna(subset=['X'])
+      .merge(
+          y.dropna(subset=['Y']),
+          on='Track ID', how='inner', sort=False  # sort=False is default, just explicit
+      )
+      .rename(columns={'X': '_x', 'Y': '_y'})
+)
+
+print(tbl)
 
 
-def _is_numeric_like(x):
-    if pd.isna(x):
+from pandas.api.types import is_object_dtype, is_string_dtype, is_categorical_dtype
+
+def _has_strings(s: pd.Series) -> bool:
+    # pandas "string" dtype (pyarrow/python)
+    if isinstance(s.dtype, pd.StringDtype):
+        return s.notna().any()
+    # categorical of strings?
+    if isinstance(s.dtype, pd.CategoricalDtype):
+        return isinstance(s.dtype.categories.dtype, pd.StringDtype) and s.notna().any()
+    # numeric, datetime, bool, etc.
+    if not is_object_dtype(s.dtype):
         return False
-    s = str(x).strip()
-    print(f"Checking if '{s}' is numeric-like")
-    # numeric, scientific, or percentage looks like data
-    return bool(re.fullmatch(r"[+-]?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?%?", s))
-
-def _detect_header_depth(sample_df, threshold=0.5):
-    """Return number of header rows before data begins."""
-    for i in range(len(sample_df)):
-        row = sample_df.iloc[i].tolist()
-        n = len(row)
-        numericish = sum(_is_numeric_like(v) for v in row)
-        print(f"Row {i}: {n} total, {numericish} numeric-ish")
-        # consider it a data row if at least half look numeric-ish
-        if n > 0 and numericish >= math.ceil(threshold * n):
-            return i  # header rows are 0..i-1
-    # If we never hit a data-looking row, assume first row is header
-    return 1
-
-def _clean_levels(levels):
-    # Replace μm -> microns and tidy whitespace
-    return [ ("" if pd.isna(x) else str(x)).replace("(μm)", "(microns)").strip()
-             for x in levels ]
-
-def _flatten_columns(cols):
-    out = []
-    for tup in cols:
-        parts = []
-        for p in tup:
-            if not p or str(p).startswith("Unnamed:"):
-                continue
-            clean = str(p).replace("(µm)", "(microns)").replace("(μm)", "(microns)").strip()
-            parts.append(clean)
-        # remove duplicates while preserving order
-        seen = set()
-        uniq = [x for x in parts if not (x in seen or seen.add(x))]
-        out.append(" ".join(uniq).strip())
-    return out
+    # Fallback for object-dtype (mixed types): minimal Python loop over NumPy array
+    arr = s.to_numpy(dtype=object, copy=False)
+    return any(isinstance(v, (str, np.str_)) for v in arr)
 
 
-def load_csv_multiheader(path, keep_multiindex=False):
-    enc = _pick_encoding(path)
-    print(f"Using encoding: {enc}")
-    # peek a few rows to detect header depth
-    sample = pd.read_csv(path, encoding=enc, header=None, nrows=50, low_memory=False)
-    header_rows = _detect_header_depth(sample)
-    print(f"Detected {header_rows} header rows")
-    # read with all header rows
-    if header_rows <= 0:
-        header_rows = 1
-    header_idx = list(range(header_rows))
-    print(f"Reading CSV with header rows: {header_idx}")
-    df = pd.read_csv(path, encoding=enc, header=header_idx, low_memory=False)
-
-    # Clean header levels
-    if isinstance(df.columns, pd.MultiIndex):
-        new_levels = list(zip(*[ _clean_levels(level) for level in df.columns.levels ]))
-        # Remap each column via level values
-        mapper = {}
-        for col in df.columns:
-            levels = tuple(_clean_levels(col))
-            mapper[col] = levels
-        df.columns = pd.MultiIndex.from_tuples([mapper[c] for c in df.columns])
-
-        if not keep_multiindex:
-            df.columns = _flatten_columns(df.columns)
+def Normalize_01(df, col):
+    """
+    Normalize a column to the [0, 1] range.
+    """
+    s = pd.to_numeric(df[col], errors='coerce')
+    if _has_strings(s):
+        normalized = pd.Series(0.0, index=s.index, name=col)
+    lo, hi = s.min(), s.max()
+    if lo == hi:
+        normalized = pd.Series(0.0, index=s.index, name=col)
     else:
-        df.columns = [c.replace("(μm)", "(microns)").strip() for c in df.columns]
-
-    return df
-
-# ---- usage ----
-# df = load_csv_multiheader(r"C:\Users\modri\Desktop\python\Peregrin\Peregrin\test data\2025_03_31 NEU_Hoechst_FaDu_spots_6F-01.csv", True)              # flattened headers
-# df = load_csv_multiheader(r"C:\path\to\your.csv", True)        # keep MultiIndex
-
-# print(df)
-
-print(pd.read_csv(r"C:\Users\modri\Desktop\python\Peregrin\Peregrin\test data\2025_03_31 NEU_Hoechst_FaDu_spots_6F-01.csv", encoding="cp1252", low_memory=False))
-
-print(_pick_encoding(r"C:\Users\modri\Desktop\python\Peregrin\Peregrin\test data\2025_03_31 NEU_Hoechst_FaDu_spots_6F-01.csv"))
+        normalized = pd.Series((s - lo) / (hi - lo), index=s.index, name=col)
+    return normalized  # <-- keeps index
 
 
-value = None
-print(type(value))
+data = pd.DataFrame({
+    'A': [1, 2, 3, 4, 5],
+    'B': [5, 4, 3, 2, 1],
+    'C': ['a', 'b', 'c', 'd', 'e']
+})
+
+data.set_index('C', inplace=True, drop=True)
+
+# print(data)
+normalized = Normalize_01(data, 'A')
+print(normalized)
