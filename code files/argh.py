@@ -1,65 +1,61 @@
+# app.py
+# pip install shiny plotnine pandas numpy
+
+import numpy as np
 import pandas as pd
+from shiny import App, ui, render
+from plotnine import ggplot, aes, geom_point, theme_minimal, labs
 
-df = {'X': [1, 2, 3, 4, 5], 'Y': [5, 4, 3, 2, 1], 'Track ID': [1, 1, 2, 2, 3]}
+rng = np.random.default_rng(0)
 
-df = pd.DataFrame(df)
+# --- Build consistent demo data (variable number of spots per track) ---
+track_ids = np.arange(1001, 1021)                     # 20 tracks
+counts = rng.integers(8, 18, size=track_ids.size)      # 8..17 spots per track
+index = np.repeat(track_ids, counts)                   # length N = counts.sum()
+N = index.size
 
-x = df[['X', 'Track ID']]
-y = df[['Y', 'Track ID']]
-# print(x)
+x = rng.random(N)                                      # length N
+y = rng.random(N)                                      # length N
+assert len(index) == len(x) == len(y), "Length mismatch!"
 
-tbl = (
-    x.dropna(subset=['X'])
-      .merge(
-          y.dropna(subset=['Y']),
-          on='Track ID', how='inner', sort=False  # sort=False is default, just explicit
-      )
-      .rename(columns={'X': '_x', 'Y': '_y'})
+df = pd.DataFrame({"TrackIndex": index, "x": x, "y": y}).set_index("TrackIndex")
+
+# --- UI ---
+app_ui = ui.page_fluid(
+    ui.h3("Array plot — brush to select"),
+    ui.output_plot(
+        "plot",
+        height="420px",
+        brush=ui.brush_opts(direction="xy")
+    ),
+    ui.hr(),
+    ui.h4("Brushed rows"),
+    ui.output_table("table")
 )
 
-print(tbl)
+# --- Server ---
+def server(input, output, session):
+    @output
+    @render.plot
+    def plot():
+        # plotnine wants columns, so reset_index for plotting
+        return (
+            ggplot(df.reset_index(), aes("x", "y"))
+            + geom_point(alpha=0.7, size=2)
+            + theme_minimal()
+            + labs(x="x metric", y="y metric", title="Brush to select points")
+        )
 
+    @output
+    @render.table
+    def table():
+        b = input.plot_brush()
+        if not b:
+            return pd.DataFrame(columns=["TrackIndex", "x", "y"])
+        xmin, xmax = (b["xmin"], b["xmax"]) if isinstance(b, dict) else (b.xmin, b.xmax)
+        ymin, ymax = (b["ymin"], b["ymax"]) if isinstance(b, dict) else (b.ymin, b.ymax)
 
-from pandas.api.types import is_object_dtype, is_string_dtype, is_categorical_dtype
+        sel = df[(df["x"] >= xmin) & (df["x"] <= xmax) & (df["y"] >= ymin) & (df["y"] <= ymax)]
+        return sel.reset_index()
 
-def _has_strings(s: pd.Series) -> bool:
-    # pandas "string" dtype (pyarrow/python)
-    if isinstance(s.dtype, pd.StringDtype):
-        return s.notna().any()
-    # categorical of strings?
-    if isinstance(s.dtype, pd.CategoricalDtype):
-        return isinstance(s.dtype.categories.dtype, pd.StringDtype) and s.notna().any()
-    # numeric, datetime, bool, etc.
-    if not is_object_dtype(s.dtype):
-        return False
-    # Fallback for object-dtype (mixed types): minimal Python loop over NumPy array
-    arr = s.to_numpy(dtype=object, copy=False)
-    return any(isinstance(v, (str, np.str_)) for v in arr)
-
-
-def Normalize_01(df, col):
-    """
-    Normalize a column to the [0, 1] range.
-    """
-    s = pd.to_numeric(df[col], errors='coerce')
-    if _has_strings(s):
-        normalized = pd.Series(0.0, index=s.index, name=col)
-    lo, hi = s.min(), s.max()
-    if lo == hi:
-        normalized = pd.Series(0.0, index=s.index, name=col)
-    else:
-        normalized = pd.Series((s - lo) / (hi - lo), index=s.index, name=col)
-    return normalized  # <-- keeps index
-
-
-data = pd.DataFrame({
-    'A': [1, 2, 3, 4, 5],
-    'B': [5, 4, 3, 2, 1],
-    'C': ['a', 'b', 'c', 'd', 'e']
-})
-
-data.set_index('C', inplace=True, drop=True)
-
-# print(data)
-normalized = Normalize_01(data, 'A')
-print(normalized)
+app = App(app_ui, server)

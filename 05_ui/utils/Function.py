@@ -421,10 +421,10 @@ class Threshold:
         """
 
         if b.index.is_unique and not a.index.is_unique:
-            df = a.rename(a.name).to_frame()
+            df = a.rename(a.name).to_frame().set_index(a.index)
             df[b.name] = b.reindex(df.index)
         else:
-            df = b.rename(b.name).to_frame()
+            df = b.rename(b.name).to_frame().set_index(b.index)
             df[a.name] = a.reindex(df.index)
 
         return df
