@@ -404,14 +404,19 @@ class Threshold:
         Normalize a column to the [0, 1] range.
         """
         # s = pd.to_numeric(df[col], errors='coerce')
-        s = pd.Series(Process.TryFloat(df[col]), dtype=float)
-        if _has_strings(s):
-            normalized = pd.Series(0.0, index=s.index, name=col)
-        lo, hi = s.min(), s.max()
-        if lo == hi:
-            normalized = pd.Series(0.0, index=s.index, name=col)
-        else:
-            normalized = pd.Series((s - lo) / (hi - lo), index=s.index, name=col)
+        try:
+            s = pd.Series(Process.TryFloat(df[col]), dtype=float)
+            if _has_strings(s):
+                normalized = pd.Series(0.0, index=s.index, name=col)
+            lo, hi = s.min(), s.max()
+            if lo == hi:
+                normalized = pd.Series(0.0, index=s.index, name=col)
+            else:
+                normalized = pd.Series((s - lo) / (hi - lo), index=s.index, name=col)
+
+        except Exception:
+            normalized = pd.Series(0.0, index=df.index, name=col)
+
         return normalized  # <-- keeps index
 
     @staticmethod

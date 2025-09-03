@@ -6,7 +6,7 @@ from shiny.plotutils import brushed_points, near_points
 from utils.Select import Metrics, Styles, Markers, Modes
 from utils.Function import DataLoader, Process, Calc, Threshold
 from utils.ratelimit import debounce, throttle
-from utils.Customize import Format
+from utils.Customize import Format, Brush
 
 import asyncio
 import pandas as pd
@@ -773,21 +773,31 @@ def server(input: Inputs, output: Outputs, session: Session):
                             ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
                             ui.input_selectize(f"thresholding_metric_X_{threshold_id}", None, Metrics.Thresholding.Properties, selected="Track points"),
                             ui.input_selectize(f"thresholding_metric_Y_{threshold_id}", None, Metrics.Thresholding.Properties, selected="Confinement ratio"),
-                            ui.output_plot(
-                                f"threshold2d_widget_{threshold_id}",
-                                # hover=ui.hover_opts(delay=60, delay_type="throttle"),
-                                brush=ui.brush_opts(
-                                    stroke="#06519c",
-                                    opacity=0.175,
-                                    direction="xy",
-                                    delay=60,
-                                    delay_type="throttle"
-                                ),
-                                height="175px"
-                            ),
                             ui.div(
-                                ui.input_action_button(id=f"pass_selected_{threshold_id}", label="Pass Selected", class_="space-x-2", onclick=f"Shiny.setInputValue('pass_selected', '{threshold_id}', {{priority: 'event'}});"),
+                                {
+                                    "style": "position:relative; width:100%; height:175px;"
+                                },
+                                ui.output_plot(
+                                    id=f"threshold2d_widget_{threshold_id}",
+                                    # keep Shiny's built-in brush if you still want it
+                                    brush=True,
+                                    height="175px"
+                                ),
+                                Brush.OverlayBrush(f"threshold2d_widget_{threshold_id}")  # emits input[f"{out_id}_brush2"]
                             ),
+                            # ui.output_plot(
+                            #     f"threshold2d_widget_{threshold_id}",
+                            #     # hover=ui.hover_opts(delay=60, delay_type="throttle"),
+                            #     brush=ui.brush_opts(
+                            #         stroke="#06519c",
+                            #         opacity=0.175,
+                            #         direction="xy",
+                            #         delay=60,
+                            #         delay_type="debounce"
+                            #     ),
+                            #     height="175px"
+                            # ),
+                            ui.input_action_button(id=f"pass_selected_{threshold_id}", label="Pass Selected", class_="space-x-2")
                         ),
                     ),
                 )
@@ -1739,24 +1749,24 @@ def server(input: Inputs, output: Outputs, session: Session):
         Build XY for *this* block, restricted by prior brushes.
         Prior brushes are stored as sets of Track IDs in `thresholding_memory_2d_selection`.
         """
-        mem = thresholding_memory_2d_selection.get()
+        # mem = thresholding_memory_2d_selection.get()
 
         # 1) Intersect all *previous* selections (by Track ID). If no prior selection -> no restriction.
-        selected_tids: set | None = None
-        for tid in threshold_list.get():
-            if tid == threshold_id:
-                break
-            propX_prev = input[f"thresholding_metric_X_{tid}"]()
-            propY_prev = input[f"thresholding_metric_Y_{tid}"]()
-            if not (propX_prev and propY_prev):
-                continue
-            sel = mem.get(tid, {}).get((propX_prev, propY_prev))
-            if not sel:
-                # No selection at that step => pass-through
-                continue
-            selected_tids = sel if selected_tids is None else (selected_tids & sel)
-            if selected_tids is not None and not selected_tids:
-                break
+        # selected_tids: set | None = None
+        # for tid in threshold_list.get():
+        #     if tid == threshold_id:
+        #         break
+        #     propX_prev = input[f"thresholding_metric_X_{tid}"]()
+        #     propY_prev = input[f"thresholding_metric_Y_{tid}"]()
+        #     if not (propX_prev and propY_prev):
+        #         continue
+        #     sel = mem.get(tid, {}).get((propX_prev, propY_prev))
+        #     if not sel:
+        #         # No selection at that step => pass-through
+        #         continue
+        #     selected_tids = sel if selected_tids is None else (selected_tids & sel)
+        #     if selected_tids is not None and not selected_tids:
+        #         break
 
         # 2) Build XY for THIS block and restrict to previous intersection (if any)
         propX = input[f"thresholding_metric_X_{threshold_id}"]()
@@ -1770,16 +1780,16 @@ def server(input: Inputs, output: Outputs, session: Session):
             _get_series(propY, spot_df, track_df)
         )
 
-        req(not xy_cur.empty)
-        if selected_tids:
-            # keep only rows whose Track ID survived all previous brushes
-            mask = pd.Series(xy_cur.index).isin(selected_tids).to_numpy()
-            xy_cur = xy_cur.loc[mask]
+        # req(not xy_cur.empty)
+        # if selected_tids:
+        #     # keep only rows whose Track ID survived all previous brushes
+        #     mask = pd.Series(xy_cur.index).isin(selected_tids).to_numpy()
+        #     xy_cur = xy_cur.loc[mask]
 
-        print("===========================================================")
+        # print("===========================================================")
         # print(f"2D threshold {threshold_id} on props ({propX}, {propY}) with {len(xy_cur)} points")
         # print(f"Current selection: {selected_tids if selected_tids is not None else 'none'}")
-        print(f"Current data: {xy_cur}")
+        # print(f"Current data: {xy_cur}")
 
         return xy_cur
 
@@ -1807,16 +1817,16 @@ def server(input: Inputs, output: Outputs, session: Session):
         @render.plot
         def threshold2d_chart():
 
-            print("===========================================================")
-            print(f"Passed threshold id {threshold_id}")
+            # print("===========================================================")
+            print(f"Rendering widget for id: {threshold_id}")
 
             state = thresholds_state.get()
             req(state is not None and isinstance(state, dict))
             # print(f"Acquired state: {state}") # works
             # print(f"Whats up: {list(enumerate(state))}")
 
-            print("---------------------------------------------------")
-            print(f"state {len(state)}")
+            # print("---------------------------------------------------")
+            # print(f"state {len(state)}")
             
             try:
                 current_state = state.get(threshold_id)
@@ -1829,8 +1839,8 @@ def server(input: Inputs, output: Outputs, session: Session):
                 and isinstance(current_state["tracks"], pd.DataFrame)
             )
 
-            print("---------------------------------------------------")
-            print(f"Rendering 2D threshold plot for ID {threshold_id}")
+            # print("---------------------------------------------------")
+            # print(f"Rendering 2D threshold plot for ID {threshold_id}")
 
             # print(f"Current state: {current_state}")
 
@@ -1852,18 +1862,18 @@ def server(input: Inputs, output: Outputs, session: Session):
             df = _xy_for_2d_threshold(threshold_id, spot_df, track_df)
             req(not df.empty)
             # print("---------------------------------------------------")
-            # print(f"Widget df: {df}")
+            print(f"Widget df for {threshold_id}")
 
             current_state |= {"xy": df}
             # print("---------------------------------------------------")
             # print(f"option 1: {state[threshold_id]}")
             state[threshold_id] = current_state
-            print("---------------------------------------------------")
-            print(state)
+            # print("---------------------------------------------------")
+            # print(state)
 
             thresholds_state.set(state)
-            print("---------------------------------------------------")
-            print(f"Thresholds state: {thresholds_state.get()}")
+            # print("---------------------------------------------------")
+            # print(f"Thresholds state: {thresholds_state.get()}")
             
 
             # current_state.append(df)
@@ -1924,32 +1934,37 @@ def server(input: Inputs, output: Outputs, session: Session):
 
 
 
-
-    @reactive.Effect
-    @reactive.event(threshold_list or input.pass_selected)
+    # def _uh(id):
+    @reactive.effect
+    # @reactive.event(threshold_list, input[f"threshold2d_widget_{id}_brush"])
     def uh():
-        print("=============================================================")
+        # print("=============================================================")
+        # print(f"Threshold 2D Widget {id} Brush Event Triggered")
 
-        state = thresholds_state.get()
-        if state is None or not isinstance(state, dict):
-            print("--------------------------------------------------------------")
-            print("No state yet")
+        
+        
             
-            return None
+            
         for threshold_id in threshold_list.get():
+            state = thresholds_state.get()
+            if state is None or not isinstance(state, dict):
+                break
+            # print("--------------------------------------------------------------")
+            # print("No state yet")
             print("--------------------------------------------------------------")
             print(f"Processing threshold ID {threshold_id}")
+            print(f"State keys: {state.keys()}")
             current_state = state.get(threshold_id)
 
-            print("--------------------------------------------------------------")
-            print(f"Current state for threshold {threshold_id}: {current_state}")
+            # print("--------------------------------------------------------------")
+            # print(f"Current state for threshold {threshold_id}: {current_state}")
             req(current_state is not None and isinstance(current_state, dict) and "spots" in current_state and "tracks" in current_state)
             # print(current_state)
 
             spot_df_input, track_df_input, xy_df = current_state.get("spots"), current_state.get("tracks"), current_state.get("xy")
             req(not spot_df_input.empty and not track_df_input.empty)
-            print("--------------------------------------------------------------")
-            print(xy_df)
+            # print("--------------------------------------------------------------")
+            # print(xy_df)
             # print(spot_df_input)
             
             # print("Track DataFrame input:")
@@ -1959,10 +1974,14 @@ def server(input: Inputs, output: Outputs, session: Session):
             propY = input[f"thresholding_metric_Y_{threshold_id}"]()
 
             brush = input[f"threshold2d_widget_{threshold_id}_brush"]()
+
+
             print("--------------------------------------------------------------")
             print(f"Brush: {brush}")
 
             if brush is not None and (xy_df is not None and not xy_df.empty):
+                # print("--------------------------------------------------------------")
+                # print("Brush was not none")
 
                 xmin, xmax = brush.get("xmin"), brush.get("xmax")
                 ymin, ymax = brush.get("ymin"), brush.get("ymax")
@@ -1971,23 +1990,30 @@ def server(input: Inputs, output: Outputs, session: Session):
 
                 brushed = xy_df.loc[(xy_df[propX] >= xmin) & (xy_df[propX] <= xmax) & (xy_df[propY] >= ymin) & (xy_df[propY] <= ymax)]
 
-                print(f"Brushed data:\n{brushed}")
+                # print(f"Brushed data:\n{brushed}")
 
             else:
+                print("--------------------------------------------------------------")
+                print("Brush was none")
+
                 brushed = track_df_input
 
             if brushed.empty:
+                print("--------------------------------------------------------------")
+                print("Brushed data is empty")
                 state |= {threshold_id + 1: {"spots": spot_df_input, "tracks": track_df_input}}
             else:
+                print("--------------------------------------------------------------")
+                print("Brushed data is not empty")
                 spot_df_output = spot_df_input.loc[spot_df_input.index.intersection(brushed.index)]
                 track_df_output = track_df_input.loc[track_df_input.index.intersection(brushed.index)]
                 state |= {threshold_id + 1: {"spots": spot_df_output, "tracks": track_df_output}}
 
         thresholds_state.set(state)
 
-        selected_id = input.pass_selected()
+        # selected_id = input.pass_selected()
 
-        render_threshold2d_widget(selected_id)
+        # render_threshold2d_widget(selected_id)
 
 
 
@@ -1997,6 +2023,8 @@ def server(input: Inputs, output: Outputs, session: Session):
     # manual input and caused feedback loops. Its behavior is replaced by the
     # per-threshold sync registered below.
 
+
+    # def _register_threshold_modules(id):
     @reactive.Effect
     @reactive.event(threshold_list)
     def register_threshold_modules():
@@ -2021,18 +2049,25 @@ def server(input: Inputs, output: Outputs, session: Session):
             for threshold_id in threshold_list.get():
                 # print(f"---------------------------------------------------------")
                 # print(f"dicts in thresholds_state: {len(thresholds_state.get())}")
-                print(f"Registering 2D threshold ID {threshold_id}")
+                # print(f"Registering 2D threshold ID {threshold_id}")
                 render_threshold2d_widget(threshold_id)
 
         # @reactive.invalidate_later(1000, session)
 
-    # @reactive.Effect
-    # @reactive.event(input.pass_selected)
-    # def on_pass_selected():
-    #     selected_id = input.pass_selected()
-    #     # print(f"Pass selected: {selected}")
-    #     render_threshold2d_widget(selected_id)
+    def _update_threshold_module(id):
+        @reactive.Effect
+        @reactive.event(input[f"pass_selected_{id}"])
+        def update_threshold_module():
+            print("===========================================================")
+            print(f"Updating threshold module {id+1}")
+            render_threshold2d_widget(id + 1)
 
+
+    @reactive.effect
+    def _():
+        for threshold_id in threshold_list.get():
+            _update_threshold_module(threshold_id)
+            # _uh(threshold_id)
 
     @reactive.Effect
     def cache_threshold_selections():
