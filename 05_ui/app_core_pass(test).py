@@ -1699,11 +1699,11 @@ def server(input: Inputs, output: Outputs, session: Session):
         @render_widget
         def threshold2d_plot():  # id must match output_widget id
             
-            state = thresholds_state.get()
-            req(state is not None and isinstance(state, dict))
+            t_state = thresholds_state.get()
+            req(t_state is not None and isinstance(t_state, dict))
             
             try:
-                current_state = state.get(threshold_id)
+                current_state = t_state.get(threshold_id)
             except Exception:
                 current_state = None
 
@@ -1723,11 +1723,13 @@ def server(input: Inputs, output: Outputs, session: Session):
             df = _xy_for_2d_threshold(threshold_id, spot_df, track_df)
             req(not df.empty)
             
-            current_state |= {"xy": df}
-            
-            state[threshold_id] = current_state
-            
-            thresholds_state.set(state)
+            # print("----------------------------------------------------")
+            # print(current_state)
+
+            if t_state.get(threshold_id + 1) is None:
+                t_state[threshold_id + 1] = {"spots": spot_df, "tracks": track_df}
+                thresholds_state.set(t_state)
+            # print(state.keys())
 
             X = df[propX]
             Y = df[propY]
@@ -1739,6 +1741,9 @@ def server(input: Inputs, output: Outputs, session: Session):
             # Map selected original indices -> trace point indices (0..N-1)
             # We'll keep original row index mapping on the widget to use in callbacks
             row_index = df.index.to_numpy()
+            # input_indexes_list = row_index.tolist()
+            # print(input_indexes_list)
+
             # selectedpoints expects positions in trace arrays
             selectedpoints = np.nonzero(np.isin(row_index, list(selected_set)))[0].tolist()
 
@@ -1827,49 +1832,56 @@ def server(input: Inputs, output: Outputs, session: Session):
 
             # Selection callback (lasso or box)
             def _on_selection(trace, points, state):
-
-                current_state = state.get(threshold_id)
-                print("--------------------------------------------------------------")
-                print(f"Current state for threshold {threshold_id}: {current_state}")
-                req(current_state is not None and isinstance(current_state, dict) and "spots" in current_state and "tracks" in current_state)
-                # print(current_state)
-                spot_df_input, track_df_input, xy_df = current_state.get("spots"), current_state.get("tracks"), current_state.get("xy")
-                req(not spot_df_input.empty and not track_df_input.empty)
-                
-
-
+               
                 # points.point_inds are the integer positions into this trace's x/y arrays
                 inds = points.point_inds or []
                 if len(inds) == 0:
-                    state |= {threshold_id + 1: {"spots": spot_df_input, "tracks": track_df_input}}
+                    return
 
                 else:
                     # Map trace positions -> original row indices
                     print("-----------------------------------------------------------")
                     sel_rows = set(w._row_index[np.array(inds, dtype=int)])
 
-                    indexe_list = [int(i) for i in sel_rows]
-                    # print
+                    # index_list = [int(i) for i in sel_rows]
+                    # print(f"Indexes in sel_rows: {index_list}")
 
-                    spot_df_output = spot_df_input[spot_df_input.index.isin(indexe_list)]
-                    track_df_output = track_df_input[track_df_input.index.isin(indexe_list)]
-                    state |= {threshold_id + 1: {"spots": spot_df_output, "tracks": track_df_output}}
+                    cur = thresholding_memory_2d_selection.get()
+                    new_mem = _set_2d_selected_set(cur, w._tid, w._propX, w._propY, sel_rows)
+                    thresholding_memory_2d_selection.set(new_mem)
 
-                    thresholds_state.set(state)
+                    
+                    spots_filtered = spot_df.loc[spot_df.index.intersection(sel_rows)]
+                    # print("-----------------------------------------------------------")
+                    # print(f"Indexes in spots_filtered: {spots_filtered}")
+                    tracks_filtered = track_df.loc[track_df.index.intersection(sel_rows)]
 
+                    # print("checkS")
+
+                    t_state[threshold_id + 1].update({
+                        "spots": spots_filtered,
+                        "tracks": tracks_filtered
+                    })
+                    # print("-----------------------------------------------------------")
+                    # print(f"T state setting: {t_state.get(threshold_id + 1)}")
+
+                    # print(t_state)
+                    thresholds_state.set(t_state)
+
+                    
 
 
                     
 
 
-                    print(f"selected rows: {sel_rows}")
-                    cur = thresholding_memory_2d_selection.get()
-                    new_mem = _set_2d_selected_set(cur, w._tid, w._propX, w._propY, sel_rows)
-                    thresholding_memory_2d_selection.set(new_mem)
 
             w.data[0].on_selection(_on_selection)  # uses Plotly FigureWidget API
             # print("-----------------------------------------------------------")
             # print(f"w.data[0]: {w.data[0]}")
+
+            
+            # print(thresholds_state.get())
+
 
             return w
 
@@ -1954,13 +1966,13 @@ def server(input: Inputs, output: Outputs, session: Session):
             # else:
             #     brushed = track_df_input
 
-            state |= {threshold_id + 1: {"spots": spot_df_input, "tracks": track_df_input}}
-            # else:
-            #     spot_df_output = spot_df_input.loc[spot_df_input.index.intersection(brushed.index)]
-            #     track_df_output = track_df_input.loc[track_df_input.index.intersection(brushed.index)]
-            #     state |= {threshold_id + 1: {"spots": spot_df_output, "tracks": track_df_output}}
+        #     state |= {threshold_id + 1: {"spots": spot_df_input, "tracks": track_df_input}}
+        #     # else:
+        #     #     spot_df_output = spot_df_input.loc[spot_df_input.index.intersection(brushed.index)]
+        #     #     track_df_output = track_df_input.loc[track_df_input.index.intersection(brushed.index)]
+        #     #     state |= {threshold_id + 1: {"spots": spot_df_output, "tracks": track_df_output}}
 
-        thresholds_state.set(state)
+        # thresholds_state.set(state)
 
         selected_id = input.pass_selected()
 
