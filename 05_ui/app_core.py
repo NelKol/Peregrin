@@ -21,11 +21,11 @@ app_ui = ui.page_sidebar(
     ui.sidebar(
         ui.tags.style(Format.Accordion),
         ui.markdown("""  <p>  """),
-        ui.output_ui("sidebar_label"),
-        ui.input_action_button("add_threshold", "Add threshold", class_="btn-primary"),
-        ui.input_action_button("remove_threshold", "Remove threshold", class_="btn-primary", disabled=True),
-        ui.output_ui("sidebar_accordion"),
-        ui.input_task_button("apply_threshold", label="Apply thresholding", label_busy="Applying...", type="secondary", disabled=True),
+        ui.output_ui(id="sidebar_label"),
+        ui.input_action_button(id="add_threshold", label="Add threshold", class_="btn-primary"),
+        ui.input_action_button(id="remove_threshold", label="Remove threshold", class_="btn-primary", disabled=True),
+        ui.output_ui(id="sidebar_accordion"),
+        ui.input_task_button(id="filter_data", label="Filter Data", label_busy="Applying...", type="secondary", disabled=True),
         id="sidebar", open="closed", position="right", bg="f8f8f8",
     ),
 
@@ -636,7 +636,7 @@ def server(input: Inputs, output: Outputs, session: Session):
             RAWDATA.set(pd.concat(all_data, axis=0, ignore_index=True))
             UNFILTERED_SPOTSTATS.set(Calc.Spots(RAWDATA.get()))
             UNFILTERED_TRACKSTATS.set(Calc.Tracks(RAWDATA.get()))
-            UNFILTERED_TIMESTATS.set(Calc.Time(RAWDATA.get()))
+            UNFILTERED_TIMESTATS.set(Calc.Frames(RAWDATA.get()))
             ui.update_sidebar(id="sidebar", show=True)
         else:
             pass
@@ -714,7 +714,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                     "Filter settings",
                     ui.input_numeric("bins", "Number of bins", value=25, min=1, step=1),
                     ui.markdown(""" <p> """),
-                    ui.input_action_button("threshold_dimensional_toggle", dimension_button_label.get(), width="100%"),
+                    ui.input_action_button(id="threshold_dimensional_toggle", label=dimension_button_label.get(), width="100%"),
                 ),
             )
         elif threshold_dimension.get() == "2D":
@@ -750,12 +750,14 @@ def server(input: Inputs, output: Outputs, session: Session):
             ),
         return ui.accordion(*panels, id="thresholds_accordion", open=True)
     
+
+
     
     # - - - - Threshold dimension toggle - - - -
 
     @reactive.Effect
     @reactive.event(input.threshold_dimensional_toggle)
-    def threshold_dimensional_toggle():
+    def _threshold_dimensional_toggle():
         if threshold_dimension.get() == "1D":
             threshold_dimension.set("2D")
             dimension_button_label.set("1D")
@@ -770,7 +772,30 @@ def server(input: Inputs, output: Outputs, session: Session):
             f""" <h5> <b>  {threshold_dimension.get()} Data filtering  </b> </h5> """
         )
     
-   
+
+
+
+    # - - - - Initialize data memory - - - -
+
+    thresholds1d_state = reactive.Value({int: dict})
+    thresholds2d_state = reactive.Value({int: dict})
+
+    @reactive.Effect
+    @reactive.event(input.threshold_dimensional_toggle, input.run)
+    def _initialize_thresholding_memory():
+        threshold_list.unset()
+        threshold_list.set([0])
+
+        if threshold_dimension.get() == "1D":
+            thresholds1d_state.set({0: {"spots": UNFILTERED_SPOTSTATS.get(), "tracks": UNFILTERED_TRACKSTATS.get()}})
+        elif threshold_dimension.get() == "2D":
+            thresholds2d_state.set({0: {"spots": UNFILTERED_SPOTSTATS.get(), "tracks": UNFILTERED_TRACKSTATS.get()}})
+
+        SPOTSTATS.set(UNFILTERED_SPOTSTATS.get())
+        TRACKSTATS.set(UNFILTERED_TRACKSTATS.get())
+        TIMESTATS.set(UNFILTERED_TIMESTATS.get())
+
+
     # - - - - Storing thresholding values - - - -
 
     def _get_threshold_memory(dict_memory, threshold_id, property_name, filter_type, default_values, quantile=None, reference=None, ref_val=None):
@@ -1047,18 +1072,18 @@ def server(input: Inputs, output: Outputs, session: Session):
         return steps, values, ref_val, minimal, maximal
 
 
-    threshold1d_df_memory = reactive.Value({0: {"spots": pd.DataFrame(), "tracks": pd.DataFrame()}})
+    # threshold1d_df_memory = reactive.Value({0: {"spots": pd.DataFrame(), "tracks": pd.DataFrame()}})
 
-    @reactive.Effect
-    @reactive.event(UNFILTERED_SPOTSTATS, UNFILTERED_TRACKSTATS)
-    def initialize_threshold1d_memory():
-        data = {
-            0: {
-                "spots": UNFILTERED_SPOTSTATS.get(),
-                "tracks": UNFILTERED_TRACKSTATS.get()
-            }
-        }
-        threshold1d_df_memory.set(data)
+    # @reactive.Effect
+    # @reactive.event(UNFILTERED_SPOTSTATS, UNFILTERED_TRACKSTATS)
+    # def initialize_threshold1d_memory():
+    #     data = {
+    #         0: {
+    #             "spots": UNFILTERED_SPOTSTATS.get(),
+    #             "tracks": UNFILTERED_TRACKSTATS.get()
+    #         }
+    #     }
+    #     threshold1d_df_memory.set(data)
 
 
 
@@ -1068,7 +1093,8 @@ def server(input: Inputs, output: Outputs, session: Session):
         @render.ui
         def threshold_slider():
 
-            data_memory = threshold1d_df_memory.get()
+            # data_memory = threshold1d_df_memory.get()
+            data_memory = thresholds1d_state.get()
             current_data = data_memory.get(threshold_id)
             req(current_data is not None and current_data.get("spots") is not None and current_data.get("tracks") is not None)
 
@@ -1113,7 +1139,8 @@ def server(input: Inputs, output: Outputs, session: Session):
         @render.ui
         def manual_threshold_value_setting():
 
-            data_memory = threshold1d_df_memory.get()
+            # data_memory = threshold1d_df_memory.get()
+            data_memory = thresholds1d_state.get()
             current_data = data_memory.get(threshold_id)
             req(current_data is not None and current_data.get("spots") is not None and current_data.get("tracks") is not None)
 
@@ -1166,7 +1193,8 @@ def server(input: Inputs, output: Outputs, session: Session):
         @render.plot
         def threshold_histogram():
 
-            data_memory = threshold1d_df_memory.get()
+            # data_memory = threshold1d_df_memory.get()
+            data_memory = thresholds1d_state.get()
             current_data = data_memory.get(threshold_id)
             req(current_data is not None and current_data.get("spots") is not None and current_data.get("tracks") is not None)
 
@@ -1471,11 +1499,9 @@ def server(input: Inputs, output: Outputs, session: Session):
             
 
             for tid, i in enumerate(threshold_list.get(), start=threshold_id):
-                if tid == threshold_list.get()[-1]:
-                    break
-
                 try:
-                    data_memory = threshold1d_df_memory.get()
+                    # data_memory = threshold1d_df_memory.get()
+                    data_memory = thresholds1d_state.get()
                     current_data = data_memory[threshold_id]
                     req(current_data is not None and current_data.get("spots") is not None and current_data.get("tracks") is not None)
 
@@ -1501,7 +1527,8 @@ def server(input: Inputs, output: Outputs, session: Session):
                         "tracks": tracks_output
                     }
 
-                    threshold1d_df_memory.set(data_memory)
+                    # threshold1d_df_memory.set(data_memory)
+                    thresholds1d_state.set(data_memory)
 
                     render_threshold_slider(tid + 1)
                     render_threshold_histogram(tid + 1)
@@ -1765,13 +1792,6 @@ def server(input: Inputs, output: Outputs, session: Session):
         return xy_cur
 
 
-    thresholds_state = reactive.Value({int: dict})
-
-    @reactive.Effect
-    @reactive.event(input.run)
-    def _pass_data():
-        thresholds_state.set({0: {"spots": UNFILTERED_SPOTSTATS.get(), "tracks": UNFILTERED_TRACKSTATS.get()}})
-
 
 
 
@@ -1781,7 +1801,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         @render_widget
         def threshold2d_plot():  # id must match output_widget id
             
-            t_state = thresholds_state.get()
+            t_state = thresholds2d_state.get()
             req(t_state is not None and isinstance(t_state, dict))
             
             try:
@@ -1807,7 +1827,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
             if t_state.get(threshold_id + 1) is None:
                 t_state[threshold_id + 1] = {"spots": spot_df, "tracks": track_df}
-                thresholds_state.set(t_state)
+                thresholds2d_state.set(t_state)
 
             X = df[propX]
             Y = df[propY]
@@ -1926,14 +1946,12 @@ def server(input: Inputs, output: Outputs, session: Session):
                     tracks_filtered = track_df.loc[track_df.index.intersection(sel_rows)]
 
                     for tid, i in enumerate(threshold_list.get(), start=threshold_id + 1):
-                        if tid not in threshold_list.get():
-                            break
                         t_state[tid].update({
                             "spots": spots_filtered,
                             "tracks": tracks_filtered
                         })
                     
-                    thresholds_state.set(t_state)
+                    thresholds2d_state.set(t_state)
 
             w.data[0].on_selection(_on_selection)  # uses Plotly FigureWidget API
 
@@ -1951,7 +1969,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 if tid not in threshold_list.get():
                     break
 
-                state = thresholds_state.get()
+                state = thresholds2d_state.get()
                 if state is None or not isinstance(state, dict):
                     return None
                 
@@ -1968,7 +1986,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                     "spots": spot_df,
                     "tracks": track_df
                 })
-                thresholds_state.set(state)
+                thresholds2d_state.set(state)
 
                 selection_memory = thresholding_memory_2d_selection.get()
                 if selection_memory.get(tid) is not None and isinstance(selection_memory.get(tid), dict):
@@ -2123,8 +2141,41 @@ def server(input: Inputs, output: Outputs, session: Session):
             #     )
 
 
+    # - - - - - - - - - - - - - - - - - - - - -
 
 
+
+
+    # - - - - Passing filtered data to the app - - - -
+
+    @reactive.Effect
+    @reactive.event(input.filter_data)
+    def pass_filtered_data_to_app():
+
+        print("Passing filtered data to the app...")
+
+        if threshold_dimension.get() == "1D":
+            t_state = thresholds1d_state.get()
+        elif threshold_dimension.get() == "2D":
+            t_state = thresholds2d_state.get()
+        req(t_state is not None and isinstance(t_state, dict))
+
+
+        try:
+            latest_state = t_state.get(list(t_state.keys())[-1])
+            print("Latest state retrieved.")
+        except Exception:
+            latest_state = None
+
+        spots_filtered = pd.DataFrame(latest_state.get("spots") if latest_state is not None and isinstance(latest_state, dict) else UNFILTERED_SPOTSTATS.get())
+        tracks_filtered = pd.DataFrame(latest_state.get("tracks") if latest_state is not None and isinstance(latest_state, dict) else UNFILTERED_TRACKSTATS.get())
+        time_stats = UNFILTERED_TIMESTATS.get()
+
+        print(f"Filtered tracks: {len(tracks_filtered)}")
+
+        SPOTSTATS.set(spots_filtered)
+        TRACKSTATS.set(tracks_filtered)
+        TIMESTATS.set(Calc.Frames(spots_filtered if spots_filtered is not None and not spots_filtered.empty else time_stats))
     
 
 
@@ -2135,7 +2186,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     
     @render.data_frame
     def render_spot_stats():
-        spot_stats = UNFILTERED_SPOTSTATS.get()
+        spot_stats = SPOTSTATS.get()
         if spot_stats is not None and not spot_stats.empty:
             return spot_stats
         else:
@@ -2143,7 +2194,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     @render.data_frame
     def render_track_stats():
-        track_stats = UNFILTERED_TRACKSTATS.get()
+        track_stats = TRACKSTATS.get()
         if track_stats is not None and not track_stats.empty:
             return track_stats
         else:
@@ -2151,7 +2202,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     @render.data_frame
     def render_time_stats():
-        time_stats = UNFILTERED_TIMESTATS.get()
+        time_stats = TIMESTATS.get()
         if time_stats is not None and not time_stats.empty:
             return time_stats
         else:

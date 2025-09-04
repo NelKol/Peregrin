@@ -334,7 +334,7 @@ class Calc:
         return result
 
     @staticmethod
-    def Time(df: pd.DataFrame) -> pd.DataFrame:
+    def Frames(df: pd.DataFrame) -> pd.DataFrame:
         """
         Compute per-frame (time point) summary metrics grouped by Condition, Replicate, Time point:
         - Track length, Net distance, Confinement ratio distributions: min, max, mean, std, median
