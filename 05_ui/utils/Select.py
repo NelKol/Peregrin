@@ -93,6 +93,39 @@ class Metrics:
 
         Properties = TrackProperties + SpotProperties
 
+        class ColorArray:
+            """
+            Class holding color array options for the UI.
+            """
+
+            ColorSelected = {
+                "#337ab7": "default",
+                "#0000FF": "deepblue",
+                "#00FF00": "green",
+                "#008000": "darkgreen",
+                "#FF8000": "orange",
+                "#FF0000": "red",
+                "#B40000": "darkred",
+                "#FF00FF": "pink",
+                "#8000FF": "purple",
+                "#000000": "black",
+            }
+
+            ColorUnselected = {
+                "#D3D3D3": "default",
+                "#000000": "black",
+                "#696969": "dimgrey",
+                "#A9A9A9": "darkgrey",
+                "#F5F5F5": "smokewhite",
+                "#FFFFFF": "invisible",
+                "#BDECFB": "pastelblue",
+                "#D4FCD9": "pastelgreen",
+                "#FFE4C4": "pastelorange",
+                "#FFC4C4": "pastelred",
+                "#FFD4FB": "pastelpink",
+                "#E4C4FF": "pastelpurple",
+            }
+
 
 
 class Styles:
