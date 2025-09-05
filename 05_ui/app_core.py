@@ -1537,14 +1537,9 @@ def server(input: Inputs, output: Outputs, session: Session):
 
                     spots_output = spots_input.loc[filter_df.index.intersection(spots_input.index)]
                     tracks_output = tracks_input.loc[filter_df.index.intersection(tracks_input.index)]
-                    
+
                     print(f"Spots after filtering: {len(spots_output)}")
                     print(f"Tracks after filtering: {len(tracks_output)}")
-
-                    # spots_output = spots_input
-
-                    # spots_output = spots_input.loc[filter_df.index]
-                    # tracks_output = tracks_input.loc[filter_df.index]
 
                     data_memory[tid + 1] = {
                         "spots": spots_output,
