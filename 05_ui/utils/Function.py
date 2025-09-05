@@ -201,11 +201,11 @@ class Process:
         Rounds value to the nearest multiple of step.
         """
         if round_method == "nearest":
-            return round(value / step) * step
+            return round(value)
         elif round_method == "floor":
-            return floor(value / step) * step
+            return floor(value)
         elif round_method == "ceil":
-            return ceil(value / step) * step
+            return ceil(value)
         else:
             raise ValueError(f"Unknown round method: {round_method}")
 
@@ -221,8 +221,8 @@ class Calc:
         - Distance: Euclidean distance between consecutive positions
         - Direction (rad): direction of travel in radians
         - Track length: cumulative distance along the track
-        - Net distance: straight-line distance from track start
-        - Confinement ratio: Net distance / Track length
+        - Track displacement: straight-line distance from track start
+        - Confinement ratio: Track displacement / Track length
 
         Expects columns: Condition, Replicate, Track ID, X coordinate, Y coordinate, Time point
         Returns a DataFrame sorted by Condition, Replicate, Track ID, Time point with new metric columns.
@@ -235,6 +235,10 @@ class Calc:
         # Sort and work on a copy
         # df = df.sort_values(['Condition', 'Replicate', 'Track ID', 'Time point']).copy()
         grp = df.groupby(['Condition', 'Replicate', 'Track ID'], sort=False)
+
+        # ---- Add unique per-track index (1-based) ----
+        df['Track UID'] = grp.ngroup()
+        df.set_index(['Track UID'], drop=True, append=False, inplace=True, verify_integrity=False)
 
         # Distance between current and next position
         df['Distance'] = np.sqrt(
@@ -249,28 +253,29 @@ class Calc:
             ).fillna(0)
 
         # Cumulative track length
-        df['Track length'] = grp['Distance'].cumsum()
+        df['Cumulative track length'] = grp['Distance'].cumsum()
 
         # Net (straight-line) distance from the start of the track
         start = grp[['X coordinate', 'Y coordinate']].transform('first')
-        df['Net distance'] = np.sqrt(
+        df['Cumulative track displacement'] = np.sqrt(
             (df['X coordinate'] - start['X coordinate'])**2 +
             (df['Y coordinate'] - start['Y coordinate'])**2
             )
 
-        # Confinement ratio: net distance vs. actual path length
+        # Confinement ratio: Track displacement vs. actual path length
         # Avoid division by zero by replacing zeros with NaN, then fill
-        df['Confinement ratio'] = (df['Net distance'] / df['Track length'].replace(0, np.nan)).fillna(0)
+        df['Cumulative confinement ratio'] = (df['Cumulative track displacement'] / df['Cumulative track length'].replace(0, np.nan)).fillna(0)
 
         return df
+
 
     @staticmethod
     def Tracks(df: pd.DataFrame) -> pd.DataFrame:
         """
         Compute comprehensive track-level metrics for each cell track in the DataFrame, including:
         - Track length: sum of Distance
-        - Net distance: straight-line from first to last position
-        - Confinement ratio: Net distance / Track length
+        - Track displacement: straight-line from first to last position
+        - Confinement ratio: Track displacement / Track length
         - Min speed, Max speed, Mean speed, Std speed, Median speed (per-track on Distance)
         - Mean direction (rad/deg), Std deviation (rad/deg), Median direction (rad/deg) (circular stats)
 
@@ -280,7 +285,7 @@ class Calc:
         if df.empty:
             cols = [
                 'Condition','Replicate','Track ID',
-                'Track length','Net distance','Confinement ratio',
+                'Track length','Track displacement','Confinement ratio',
                 'Speed min','Speed max','Speed mean','Speed std','Speed median',
                 'Direction mean (rad)','Direction std (rad)','Direction median (rad)',
                 'Direction mean (deg)','Direction std (deg)','Direction median (deg)'
@@ -303,8 +308,8 @@ class Calc:
         )
 
         # Compute net displacement and confinement ratio
-        agg['Net distance'] = np.hypot(agg['end_x'] - agg['start_x'], agg['end_y'] - agg['start_y'])
-        agg['Confinement ratio'] = (agg['Net distance'] / agg['Track length'].replace(0, np.nan)).fillna(0)
+        agg['Track displacement'] = np.hypot(agg['end_x'] - agg['start_x'], agg['end_y'] - agg['start_y'])
+        agg['Confinement ratio'] = (agg['Track displacement'] / agg['Track length'].replace(0, np.nan)).fillna(0)
         agg = agg.drop(columns=['start_x','end_x','start_y','end_y'])
 
         # Circular direction statistics: need sin & cos per observation
@@ -329,27 +334,30 @@ class Calc:
         # Merge all metrics into one DataFrame
         result = agg.merge(dir_agg, left_index=True, right_index=True)
         # Merge point counts
-        result = result.merge(point_counts, left_index=True, right_index=True)
-        result = result.reset_index()
+        result = result.merge(point_counts, left_index=True, right_index=True).reset_index()
+        result['Row UID'] = np.arange(len(result))  # starts at 0
+        result.set_index('Row UID', drop=True, inplace=True, verify_integrity=True)
+
         return result
+
 
     @staticmethod
     def Frames(df: pd.DataFrame) -> pd.DataFrame:
         """
         Compute per-frame (time point) summary metrics grouped by Condition, Replicate, Time point:
-        - Track length, Net distance, Confinement ratio distributions: min, max, mean, std, median
+        - Track length, Track displacement, Confinement ratio distributions: min, max, mean, std, median
         - Speed (Distance) distributions as Speed min, Speed max, Speed mean, Speed std, Speed median
         - Direction (rad) distributions (circular): Direction mean (rad), Direction std (rad), Direction median (rad)
             and corresponding degrees
 
-        Expects columns: Condition, Replicate, Time point, Track length, Net distance,
+        Expects columns: Condition, Replicate, Time point, Track length, Track displacement,
                         Confinement ratio, Distance, Direction (rad)
         Returns a DataFrame indexed by Condition, Replicate, Time point with all time-point metrics.
         """
         if df.empty:
             # define columns
             cols = ['Condition','Replicate','Time point'] + \
-                [f'{metric} {stat}' for metric in ['Track length','Net distance','Confinement ratio'] for stat in ['min','max','mean','std','median']] + \
+                [f'{metric} {stat}' for metric in ['Track length','Track displacement','Confinement ratio'] for stat in ['min','max','mean','std','median']] + \
                 [f'Speed {stat}' for stat in ['min','max','mean','std','median']] + \
                 ['Direction mean (rad)','Direction std (rad)','Direction median (rad)',
                     'Direction mean (deg)','Direction std (deg)','Direction median (deg)']
@@ -358,7 +366,7 @@ class Calc:
         group_cols = ['Condition','Replicate','Time point']
 
         # 1) stats on track metrics per frame
-        metrics = ['Track length','Net distance','Confinement ratio']
+        metrics = ['Cumulative track length','Cumulative track displacement','Cumulative confinement ratio']
         agg_funcs = ['min','max','mean','std','median']
         # build agg dict
         agg_dict = {m: agg_funcs for m in metrics}
@@ -390,6 +398,23 @@ class Calc:
         # merge all
         time_stats = frame_agg.merge(speed_agg, left_index=True, right_index=True)
         time_stats = time_stats.merge(dir_frame, left_index=True, right_index=True)
+        time_stats = time_stats.rename(columns={
+            'Cumulative track length min': 'Track length min',
+            'Cumulative track length max': 'Track length max',
+            'Cumulative track length mean': 'Track length mean',
+            'Cumulative track length std': 'Track length std',
+            'Cumulative track length median': 'Track length median',
+            'Cumulative track displacement min': 'Track displacement min',
+            'Cumulative track displacement max': 'Track displacement max',
+            'Cumulative track displacement mean': 'Track displacement mean',
+            'Cumulative track displacement std': 'Track displacement std',
+            'Cumulative track displacement median': 'Track displacement median',
+            'Cumulative confinement ratio min': 'Confinement ratio min',
+            'Cumulative confinement ratio max': 'Confinement ratio max',
+            'Cumulative confinement ratio mean': 'Confinement ratio mean',
+            'Cumulative confinement ratio std': 'Confinement ratio std',
+            'Cumulative confinement ratio median': 'Confinement ratio median',
+        })
         time_stats = time_stats.reset_index()
 
         return time_stats

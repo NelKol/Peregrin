@@ -935,7 +935,7 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
                     "metricA",  
                     "Thresholding metric:",  
                     select_metrics.tracks,
-                    selected="Net distance"
+                    selected="Track displacement"
                     )  
 
                 ui.input_select(
@@ -1630,7 +1630,7 @@ with ui.nav_panel("Visualisation"):
                     'lut_scaling',
                     'LUT scaling metric:',
                     select_metrics.lut,
-                    selected='Net distance',
+                    selected='Track displacement',
                     )
 
                 ui.input_select(
@@ -2135,7 +2135,7 @@ with ui.nav_panel("Visualisation"):
                     "testing_metric",
                     "Test for metric:",
                     select_metrics.tracks,
-                    selected='Net distance'
+                    selected='Track displacement'
                     )
                 
                 

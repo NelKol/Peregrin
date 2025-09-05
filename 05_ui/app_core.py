@@ -11,6 +11,7 @@ import asyncio
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from math import floor, ceil
 from scipy.stats import gaussian_kde
 import plotly.graph_objs as go
 
@@ -161,7 +162,7 @@ app_ui = ui.page_sidebar(
                             ),
                             ui.accordion_panel(
                                 "Hover info",
-                                ui.input_selectize("let_me_look_at_these", "Let me look at these:", ["Condition", "Track length", "Net distance", "Speed mean"], multiple=True),
+                                ui.input_selectize("let_me_look_at_these", "Let me look at these:", ["Condition", "Track length", "Track displacement", "Speed mean"], multiple=True),
                                 ui.input_action_button("hover_info", "See info"),
                             ),
                         ),
@@ -632,8 +633,10 @@ def server(input: Inputs, output: Outputs, session: Session):
 
                 all_data.append(extracted)
 
+
+
         if all_data:
-            RAWDATA.set(pd.concat(all_data, axis=0, ignore_index=True))
+            RAWDATA.set(pd.concat(all_data, axis=0))
             UNFILTERED_SPOTSTATS.set(Calc.Spots(RAWDATA.get()))
             UNFILTERED_TRACKSTATS.set(Calc.Tracks(RAWDATA.get()))
             UNFILTERED_TIMESTATS.set(Calc.Frames(RAWDATA.get()))
@@ -700,7 +703,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                                 ui.input_selectize(f"reference_value_{threshold_id}", "Reference value", choices=["Mean", "Median", "My own value"]),
                                 ui.panel_conditional(
                                     f"input.reference_value_{threshold_id} == 'My own value'",
-                                    ui.input_numeric(f"my_own_value_{threshold_id}", "My own value", value=None, step=1)
+                                    ui.input_numeric(f"my_own_value_{threshold_id}", "My own value", value=0, step=1)
                                 ),
                             ),
                             ui.output_ui(f"manual_threshold_value_setting_{threshold_id}"),
@@ -963,7 +966,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         elif reference == "Median":
             ref = float(vals.median())
         elif reference == "My own value":
-            ref = float(my_value) if isinstance(my_value, (int, float)) else float(vals.mean())
+            ref = float(my_value) if isinstance(my_value, (int, float)) else 0.0
         else:
             ref = float(vals.mean())
 
@@ -973,24 +976,24 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     # - - - - Threshold slider generator - - - -
 
-    def _get_steps(lowest, highest):
+    def _get_steps(highest):
         """
         Returns the step size for the slider based on the range.
         """
-        if (highest - lowest) < 0.01:
-            steps = 0.00001
-        elif 0.01 < (highest - lowest) < 0.1:
+        if highest < 0.01:
             steps = 0.0001
-        elif 0.1 < (highest - lowest) < 1:
+        elif 0.01 <= highest < 0.1:
             steps = 0.001
-        elif 1 < (highest - lowest) < 10:
+        elif 0.1 <= highest < 1:
             steps = 0.01
-        elif 10 < (highest - lowest) < 100:
+        elif 1 <= highest < 10:
             steps = 0.1
-        elif 100 < (highest - lowest) < 1000:
+        elif 10 <= highest < 1000:
             steps = 1
-        elif 1000 < (highest - lowest) < 10000:
+        elif 1000 <= highest < 100000:
             steps = 10
+        elif 100000 < highest:
+            steps = 100
         else:
             steps = 1
         return steps
@@ -1020,10 +1023,10 @@ def server(input: Inputs, output: Outputs, session: Session):
             default = (lowest, highest)
             
             # Use memory if valid, otherwise use defaults
-            steps = _get_steps(lowest, highest)
+            steps = _get_steps(highest)
             values, ref_val = _get_threshold_memory(memory, threshold_id, property_name, filter_type, default)
-            minimal = Process.Round(lowest, steps, "floor")
-            maximal = Process.Round(highest, steps, "ceil")
+            minimal = floor(lowest)
+            maximal = ceil(highest)
 
         elif filter_type == "Normalized 0-1":
             lowest, highest = 0, 1
@@ -1061,13 +1064,13 @@ def server(input: Inputs, output: Outputs, session: Session):
             highest = float(max_delta) if np.isfinite(max_delta) else 0.0
             default = (lowest, highest)
 
-            steps = _get_steps(lowest, highest)
+            steps = _get_steps(highest)
             values, ref_val = _get_threshold_memory(
                 memory, threshold_id, property_name, filter_type, default,
                 reference=reference, ref_val=reference_value
             )
-            minimal = Process.Round(lowest, steps, "floor")
-            maximal = Process.Round(highest, steps, "ceil")
+            minimal = floor(lowest)
+            maximal = ceil(highest)
             
         return steps, values, ref_val, minimal, maximal
 
@@ -1320,10 +1323,10 @@ def server(input: Inputs, output: Outputs, session: Session):
                     reference_value = float(data[property].dropna().median())
                 elif reference == "My own value":
                     try:
-                        mv = input[f"my_own_value_{threshold_id}"]()
-                        reference_value = float(mv) if isinstance(mv, (int, float)) else float(data[property].dropna().mean())
+                        mv = input[f"my_own_value_{threshold_id}"]() if input[f"my_own_value_{threshold_id}"]() is not None else 0.0
+                        reference_value = float(mv) if isinstance(mv, (int, float)) else 0.0
                     except Exception:
-                        reference_value = float(data[property].dropna().mean())
+                        reference_value = 0.0
                 else:
                     return
 
@@ -1446,7 +1449,7 @@ def server(input: Inputs, output: Outputs, session: Session):
             return df
         
         try:
-            working_df = df[property]
+            working_df = df[property].dropna()
         except Exception:
             return df
         
@@ -1461,22 +1464,31 @@ def server(input: Inputs, output: Outputs, session: Session):
             return working_df[(working_df >= _floor) & (working_df <= _roof)]
 
         elif filter_type == "Normalized 0-1":
-            normalized = Threshold.Normalize_01(working_df)
-            return working_df[(normalized >= _floor) & (normalized <= _roof)]
+            normalized = Threshold.Normalize_01(df, property)
+            return normalized[(normalized >= _floor) & (normalized <= _roof)]
 
         elif filter_type == "Quantile":
-            lower_bound = np.quantile(working_df, _floor)
-            upper_bound = np.quantile(working_df, _roof)
+            
+            q_floor, q_roof = _floor / 100, _roof / 100
+            if not 0 <= q_floor <= 1 or not 0 <= q_roof <= 1:
+                q_floor, q_roof = 0, 1
+
+            lower_bound = np.quantile(working_df, q_floor)
+            upper_bound = np.quantile(working_df, q_roof)
             return working_df[(working_df >= lower_bound) & (working_df <= upper_bound)]
 
         elif filter_type == "Relative to...":
-            req(reference is not None)
+            # req(reference is not None)
+            if reference is None:
+                reference = 0.0
             ref, _ = _compute_reference_and_span(working_df, reference, reference_value)
+
+            print(f"Reference value: {ref}, Floor: {ref + _floor}, Roof: {ref + _roof}, -Floor: {ref - _floor}, -Roof: {ref - _roof}")
 
             return working_df[
                 (working_df >= (ref + _floor)) 
                 & (working_df <= (ref + _roof))
-                & (working_df <= (ref - _floor)) 
+                | (working_df <= (ref - _floor)) 
                 & (working_df >= (ref - _roof))    
             ]
 
@@ -1505,8 +1517,11 @@ def server(input: Inputs, output: Outputs, session: Session):
                     current_data = data_memory[threshold_id]
                     req(current_data is not None and current_data.get("spots") is not None and current_data.get("tracks") is not None)
 
+                    print("-----------------------------")
+                    print(f"Applying 1D threshold ID {threshold_id} on property '{property_name}' with filter '{filter_type}'")
+
                     filter_df = _filter_data_1d(
-                        df=current_data.get("spots") if property_name in Metrics.Thresholding.SpotProperties else current_data.get("tracks"),
+                        df=current_data.get("tracks") if property_name in Metrics.Thresholding.TrackProperties else current_data.get("spots"),
                         threshold=(floor_value, roof_value),
                         property=property_name,
                         filter_type=filter_type,
@@ -1514,13 +1529,22 @@ def server(input: Inputs, output: Outputs, session: Session):
                         reference_value=input[f"my_own_value_{threshold_id}"]() if reference == "My own value" else None
                     )
 
+                    print("Filtered DataFrame:")
+                    print(filter_df)
+
                     spots_input = current_data.get("spots")
                     tracks_input = current_data.get("tracks")
 
-                    spots_output = spots_input.loc[spots_input.index.intersection(filter_df.index)]
-                    tracks_output = tracks_input.loc[tracks_input.index.intersection(filter_df.index)]
+                    spots_output = spots_input.loc[filter_df.index.intersection(spots_input.index)]
+                    tracks_output = tracks_input.loc[filter_df.index.intersection(tracks_input.index)]
+                    
+                    print(f"Spots after filtering: {len(spots_output)}")
+                    print(f"Tracks after filtering: {len(tracks_output)}")
+
+                    # spots_output = spots_input
 
                     # spots_output = spots_input.loc[filter_df.index]
+                    # tracks_output = tracks_input.loc[filter_df.index]
 
                     data_memory[tid + 1] = {
                         "spots": spots_output,
@@ -1607,18 +1631,17 @@ def server(input: Inputs, output: Outputs, session: Session):
             cur_vals, cur_ref_val = _read_stored_pair(mem, threshold_id, prop, ftype, q, ref)
 
             vals = (float(vals[0]), float(vals[1]))
-            if ref == "My own value" and ref_val is not None:
-                try:
-                    ref_val = float(ref_val)
-                except Exception:
+            if ref == "My own value":
+                if not isinstance(ref_val, (int, float)):
                     ref_val = None
 
             # Compute new memory once
             need_vals = (cur_vals is None or not _nearly_equal_pair(vals, cur_vals))
-            need_ref  = (ref == "My own value" and ref_val is not None and (cur_ref_val is None or abs(float(ref_val) - float(cur_ref_val)) > 1e-12))
+            need_ref  = (ref == "My own value")
+            # need_ref  = (ref == "My own value" and ref_val is not None and (cur_ref_val is None or abs(float(ref_val) - float(cur_ref_val)) > 1e-12))
 
             if need_vals or need_ref:
-                new_mem = _set_threshold_memory(mem.copy(), threshold_id, prop, ftype, vals, quantile=q, reference=ref, ref_val=ref_val)
+                new_mem = _set_threshold_memory(mem.copy(), threshold_id, prop, ftype, vals, quantile=q, reference=ref, ref_val=cur_ref_val)
                 thresholding_memory.set(new_mem)
 
 
@@ -1650,7 +1673,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
             if cur_vals is None or not _nearly_equal_pair(new_pair, cur_vals):
                 thresholding_memory.set(
-                    _set_threshold_memory(mem.copy(), threshold_id, prop, ftype, new_pair, quantile=q, reference=ref, ref_val=ref_val)
+                    _set_threshold_memory(mem.copy(), threshold_id, prop, ftype, new_pair, quantile=q, reference=ref, ref_val=cur_ref_val)
                 )
 
 
@@ -1684,6 +1707,9 @@ def server(input: Inputs, output: Outputs, session: Session):
                 mem, threshold_id, prop, ftype, default_vals,
                 quantile=q, reference=ref, ref_val=current_val
             )
+
+            req(current_val is not None)
+
             # Prefer stored; if missing, keep whatever user currently has (don't overwrite)
             effective_ref = stored_ref if isinstance(stored_ref, (int, float)) else current_val
 
@@ -1716,7 +1742,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
             # Ignore non-numeric or None
             if not isinstance(ref_val, (int, float)):
-                return
+                ref_val = None
 
             mem = thresholding_memory.get()
 
@@ -1729,7 +1755,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
             new_mem = _set_threshold_memory(
                 mem.copy(), threshold_id, prop, ftype, pair,
-                quantile=q, reference=ref, ref_val=float(ref_val)
+                quantile=q, reference=ref, ref_val=ref_val
             )
             thresholding_memory.set(new_mem)
 
@@ -1767,7 +1793,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         # if prop in Metrics.Thresholding.SpotProperties and not spot_df.empty:
         if prop in Metrics.Thresholding.SpotProperties:
             return Threshold.Normalize_01(spot_df, prop)
-        return pd.DataFrame(columns=[prop]).set_index(pd.Index([], name='INDEX'))
+        return pd.DataFrame(columns=[prop]).set_index(pd.Index([], name='Track UID'))
 
 
     def _xy_for_2d_threshold(threshold_id: int, spot_df: pd.DataFrame, track_df: pd.DataFrame) -> pd.DataFrame:
@@ -1781,7 +1807,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         propY = input[f"thresholding_metric_Y_{threshold_id}"]()
 
         if not (propX and propY):
-            return pd.DataFrame(columns=[propX, propY]).set_index(pd.Index([], name='INDEX'))
+            return pd.DataFrame(columns=[propX, propY]).set_index(pd.Index([], name='Track UID'))
         
         xy_cur = Threshold.JoinByIndex(
             _get_series(propX, spot_df, track_df), 
@@ -2175,7 +2201,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
         SPOTSTATS.set(spots_filtered)
         TRACKSTATS.set(tracks_filtered)
-        TIMESTATS.set(Calc.Frames(spots_filtered if spots_filtered is not None and not spots_filtered.empty else time_stats))
+        TIMESTATS.set(Calc.Frames(spots_filtered) if spots_filtered is not None and not spots_filtered.empty else time_stats)
     
 
 

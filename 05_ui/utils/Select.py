@@ -10,9 +10,9 @@ class Metrics:
         "Condition",
         "Replicate",
         "Distance",
-        "Track length",
-        "Net distance",
-        "Confinement ratio",
+        "Cumulative length",
+        "Cumulative displacement",
+        "Cumulative confinement ratio",
     ]
 
     Track = [
@@ -20,7 +20,7 @@ class Metrics:
         "Condition",
         "Replicate",
         "Track length",
-        "Net distance",
+        "Track displacement",
         "Confinement ratio",
         "Track points",
         "Speed mean",
@@ -33,10 +33,10 @@ class Metrics:
 
     Time = [
         "Track length mean",
-        "Net distance mean",
+        "Track displacement mean",
         "Confinement ratio mean",
         "Track length median",
-        "Net distance median",
+        "Track displacement median",
         "Confinement ratio median",
         "Distance min",
         "Direction std (deg)",
@@ -60,7 +60,7 @@ class Metrics:
 
     Lut = [
         "Track length", 
-        "Net distance", 
+        "Track displacement", 
         "Confinement ratio",
         "Track points",
         "Speed mean",
@@ -82,7 +82,7 @@ class Metrics:
 
         TrackProperties = [
             "Track length",
-            "Net distance",
+            "Track displacement",
             "Confinement ratio",
             "Track points",
             "Speed mean",
