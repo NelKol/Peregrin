@@ -3,17 +3,22 @@ from shiny.types import FileInfo
 from shinywidgets import render_plotly, render_altair, output_widget, render_widget
 
 from utils.Select import Metrics, Styles, Markers, Modes
-from utils.Function import DataLoader, Process, Calc, Threshold
+from utils.Function import DataLoader, Process, Calc, Threshold, Plot
 from utils.ratelimit import debounce, throttle
 from utils.Customize import Format
 
 import asyncio
+import io
+import tempfile
+
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+import plotly.graph_objs as go
+
 from math import floor, ceil
 from scipy.stats import gaussian_kde
-import plotly.graph_objs as go
+from datetime import date
 
 # --- UI definition ---
 app_ui = ui.page_sidebar(
@@ -27,6 +32,9 @@ app_ui = ui.page_sidebar(
         ui.input_action_button(id="remove_threshold", label="Remove threshold", class_="btn-primary", disabled=True),
         ui.output_ui(id="sidebar_accordion"),
         ui.input_task_button(id="filter_data", label="Filter Data", label_busy="Applying...", type="secondary", disabled=True),
+        ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
+        ui.output_ui(id="filter_info"),
+        ui.download_button(id="download_filter_info", label="Info SVG", width="100%", _class="space-x-2"),
         id="sidebar", open="closed", position="right", bg="f8f8f8",
     ),
 
@@ -418,18 +426,53 @@ app_ui = ui.page_sidebar(
                     ),
                     # ... more cards for line chart and errorband
                 ),
+
                 ui.nav_panel(
                     "Superplots",
+
                     ui.panel_well(
-                        ui.input_selectize("testing_metric", "Test for metric:", []),
-                        ui.input_selectize('palette', 'Color palette:', []),
-                        # ... etc
+                        ui.markdown(
+                            """
+                            #### **Superplots**
+                            *made with*  `seaborn`
+                            <hr style="height: 4px; background-color: black; border: none" />
+                            """
+                        ),
+
+                        ui.input_selectize(id="type_superplot", label="Plot:", choices=["Swarms", "Violins"], selected="Swarms"),
+
+                        ui.accordion(
+
+                            ui.accordion_panel(
+                                "Dataset",
+                                ui.input_selectize("sp_condition", "Condition:", ["all", "not all"]),
+                                ui.panel_conditional(
+                                    "input.sp_condition != 'all'",
+                                    ui.input_selectize("sp_replicate", "Replicate:", ["all", "not all"]),
+                                    ui.panel_conditional(
+                                        "input.sp_replicate == 'all'",
+                                        ui.input_checkbox("sp_separate_replicates", "Show replicates separately", False),
+                                    ),
+                                ),
+                            ),
+
+                            ui.accordion_panel(
+                                "Metric",
+                                ui.input_selectize("sp_metric", label=None, choices=Metrics.Track, selected="Confinement ratio"),
+                                ui.input_radio_buttons("sp_y_axis", "Y axis with", ["Absolute values", "Relative values"]),
+                            ),
+                        ),
+
+                        ui.markdown(""" <br> """),
+                        ui.input_action_button(id="sp_generate", label="Generate", class_="btn-secondary", width="100%"),
                     ),
+                    ui.markdown(""" <br> """),
                     ui.card(
-                        ui.output_plot("seaborn_superplot"),
-                        ui.download_button("download_seaborn_superplot_svg", "Download Seaborn Superplot SVG"),
+                        ui.output_plot(id="swarmplot"),
+                        ui.download_button("download_swarmplot_svg", "Download Swarmplot SVG"),
                     ),
                 ),
+                widths = (2, 10)
             ),
         ),
         ui.nav_panel("Task list"),
@@ -716,7 +759,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 ui.accordion_panel(
                     "Filter settings",
                     ui.input_numeric("bins", "Number of bins", value=25, min=1, step=1),
-                    ui.markdown(""" <p> """),
+                    ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
                     ui.input_action_button(id="threshold_dimensional_toggle", label=dimension_button_label.get(), width="100%"),
                 ),
             )
@@ -736,7 +779,8 @@ def server(input: Inputs, output: Outputs, session: Session):
                                     output_widget(f"threshold2d_plot_{threshold_id}")
                                 )
                             ),
-                            ui.markdown("<p style='font-size:1px; line-height:0.1; color:#f7f7f7;'>_</p>"),
+                            # ui.markdown("<p style='font-size:1px; line-height:0.1; color:#f7f7f7;'>_</p>"),
+                            ui.markdown(""" <p> </p> """),
                             ui.input_action_button(id=f"threshold2d_clear_{threshold_id}", label="Clear", class_="space-x-2", width="100%"),
                         ),
                     ),
@@ -747,15 +791,418 @@ def server(input: Inputs, output: Outputs, session: Session):
                     ui.input_numeric(id="threshold2d_array_size", label="Dot Size:", value=3, min=0, step=1),
                     ui.input_selectize(id="threshold2d_array_color_selected", label="Color Selected:", choices=Metrics.Thresholding.ColorArray.ColorSelected, selected="default"),
                     ui.input_selectize(id="threshold2d_array_color_unselected", label="Color Unselected:", choices=Metrics.Thresholding.ColorArray.ColorUnselected, selected="default"),
-                    ui.markdown("<p style='font-size:5px; line-height:1; color:white;'>_</p>"),
+                    ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
                     ui.input_action_button(id="threshold_dimensional_toggle", label=dimension_button_label.get(), class_="btn-secondary", width="100%"),
                 ),
             ),
         return ui.accordion(*panels, id="thresholds_accordion", open=True)
-    
 
 
-    
+    # - - - - Filtered info display - - - -
+
+    @output()
+    @render.ui
+    def filter_info():
+
+        # --- Threshold blocks (only if 1D and thresholds exist)
+        try:
+            if threshold_dimension.get() == "1D":
+                blocks = []
+                thresholds_state = thresholds1d_state.get()
+
+                # iterate deterministically if keys are integers
+                for t in sorted(thresholds_state.keys()):
+                    if t not in threshold_list.get():
+                        break
+                    try:
+                        t_state = thresholds_state.get(t)
+                        t_state_after = thresholds_state.get(t + 1)
+                        
+                        data = len(t_state.get("tracks"))
+                        data_after = len(t_state_after.get("tracks")) if t_state_after else data
+                        out = data - data_after
+                        out_percent = round(out / data * 100) if data else 0
+
+                        prop = input[f"threshold_property_{t}"]()
+                        ftype = input[f"threshold_filter_{t}"]()
+                        if ftype == "Relative to...":
+                            ref = input[f"reference_value_{t}"]()
+                            if ref == "My own value":
+                                ref_val = input[f"threshold_my_own_value_{t}"]()
+                            else:
+                                ref_val = ref
+                            reference = f"<br>Reference: <br><i><b>{ref}</b> (<b>{ref_val}</b>)</i><br>" if not isinstance(ref_val, str) else f"<br>Reference: <br><i><b>{ref}</b></i><br>"
+                        else:
+                            reference =  ""
+                        vals = input[f"threshold_slider_{t}"]()
+
+                    except Exception:
+                        break
+
+                    blocks.append(
+                        ui.markdown(
+                            f"""
+                            <div style="height:5px;"></div>
+                                <hr style="border:0; border-top:1px solid #000000; margin:8px 0;">
+                            <div style="height:5px;"></div>
+                            <p style="margin-bottom:8px; margin-top:10px;">
+                                <b><h5>Threshold {t + 1}</h5></b>
+                                Filtered out: <br>
+                                <i><b>{out}</b> (<b>{out_percent}%</b>)</i>
+                            </p>
+                            <p style="margin-bottom:8px; margin-top:0px;">
+                                Property: <br>
+                                <i><b>{prop}</b></i> <br>
+                                Filter: <br>
+                                <i><b>{ftype}</b></i> <br>
+                                Range: <br>
+                                <i><b>{vals[0]}</b> - <b>{vals[1]}</b></i>
+                                {reference}
+                            """
+                        )
+                    )
+
+
+            elif threshold_dimension.get() == "2D":
+                blocks = []
+                thresholds_state = thresholds2d_state.get()
+
+                # iterate deterministically if keys are integers
+                for t in sorted(thresholds_state.keys()):
+                    if t not in threshold_list.get():
+                        break
+                    try:
+                        t_state = thresholds_state.get(t)
+                        t_state_after = thresholds_state.get(t + 1)
+                        
+                        data = len(t_state.get("tracks"))
+                        data_after = len(t_state_after.get("tracks")) if t_state_after else data
+                        out = data - data_after
+                        out_percent = round(out / data * 100) if data else 0
+
+                        propX = input[f"thresholding_metric_X_{t}"]()
+                        propY = input[f"thresholding_metric_Y_{t}"]()
+
+                        # print('--------------------')
+
+                        # print(propX, propY)
+                        try: 
+                            track_data = t_state_after.get("tracks")
+                            spot_data = t_state_after.get("spots")
+                        except Exception:
+                            track_data = t_state.get("tracks")
+                            spot_data = t_state.get("spots")
+                        
+                        dataX = track_data[propX] if propX in Metrics.Track else spot_data[propX]
+                        dataY = track_data[propY] if propY in Metrics.Track else spot_data[propY]
+                        
+                        if propX == "Confinement ratio":
+                            minX, maxX = f"{min(dataX):.2f}", f"{ceil(max(dataX)):.2f}"
+                        else:
+                            minX, maxX = floor(min(dataX)), ceil(max(dataX))
+                        if propY == "Confinement ratio":
+                            minY, maxY = f"{min(dataY):.2f}", f"{ceil(max(dataY)):.2f}"
+                        else:
+                            minY, maxY = floor(min(dataY)), ceil(max(dataY))
+
+
+                    except Exception:
+                        break
+
+                    blocks.append( 
+                        ui.markdown(
+                            f"""
+                            <div style="height:5px;"></div>
+                                <hr style="border:0; border-top:1px solid #000000; margin:8px 0;">
+                            <div style="height:5px;"></div>
+                            <p style="margin-bottom:8px; margin-top:10px;">
+                                <b><h5>Threshold {t + 1}</h5></b>
+                                Filtered out: <br>
+                                <i><b>{out}</b> (<b>{out_percent}%</b>)</i>
+                            </p>
+                            <p style="margin-bottom:8px; margin-top:0px;">
+                                Properties: <br>
+                            <div style="height:5px;"></div>
+                                <i><b>{propX}</b></i> <br>
+                                Range: <br>
+                                <i><b>{minX}</b> - <b>{maxX}</b></i> <br>
+                            <div style="height:5px;"></div>
+                                <i><b>{propY}</b></i> <br>
+                                Range: <br>
+                                <i><b>{minY}</b> - <b>{maxY}</b></i>
+                            <p>
+                            """
+                        )
+                    )
+
+        except Exception:
+            pass
+
+        total_tracks = len(UNFILTERED_TRACKSTATS.get())
+        filtered_tracks = len(TRACKSTATS.get())
+
+        filtered_tracks_percent = (
+            round(filtered_tracks / total_tracks * 100) if total_tracks else 0
+        )
+
+        # --- Header + summary block
+        blocks.insert(0,
+            ui.markdown(
+                f"""
+                <p style="margin-bottom:0px; margin-top:0px;">
+                    <h4> <b> Info </b> </h4>
+                </p>
+                <p style="margin-bottom:8px; margin-top:12px;">
+                    Cells in total: <br>
+                    <i><b>{total_tracks}</b> <br></i>
+                </p>
+                <p style="margin-bottom:8px; margin-top:0px;">
+                    In focus: <br>
+                    <i><b>{filtered_tracks}</b> (<b>{filtered_tracks_percent}%</b>)</i>
+                </p>
+                """
+            )
+        )
+
+        # Return a single well with all blocks as children
+        return ui.panel_well(*blocks)
+
+
+
+    def GetInfoSVG(*, width: int = 190, txt_color: str = "#000000") -> str:
+        """
+        Build an SVG 'Info' panel using current Shiny reactives.
+        Works for both 1D and 2D thresholding like in your filter_info().
+        """
+        from html import escape
+        from math import floor, ceil
+
+        # ---------- helpers ----------
+        pad = 16
+        title_size = 18
+        body_size = 14
+        line_gap = 8
+        section_gap = 14
+        rule_gap = 5
+        rule_color = "#000000"
+        font_family = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+
+        def addy(y, inc):  # move the cursor
+            return y + inc
+
+        def tspan(text, cls=None):
+            if cls:
+                return f'<tspan class="{cls}">{escape(str(text))}</tspan>'
+            return f"<tspan>{escape(str(text))}</tspan>"
+
+        # ---------- totals ----------
+        total_tracks = len(UNFILTERED_TRACKSTATS.get())
+        filtered_tracks = len(TRACKSTATS.get())
+        if total_tracks < 0:
+            return ""
+        if filtered_tracks < 0:
+            filtered_tracks = total_tracks
+        percent = 0 if total_tracks == 0 else round((filtered_tracks / total_tracks) * 100)
+
+        # ---------- SVG header (height placeholder) ----------
+        x = pad
+        y = pad + title_size
+        parts = [
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="__HEIGHT__" '
+            f'viewBox="0 0 {width} __HEIGHT__" role="img" aria-label="Info panel">',
+            '<style>.bold{font-weight:700}.ital{font-style:italic}</style>',
+            f'<text x="{x}" y="{y}" font-family="{font_family}" font-size="{title_size}" '
+            f'font-weight="700" fill="{txt_color}">Info</text>',
+            f'<g font-family="{font_family}" font-size="{body_size}" fill="{txt_color}">'
+        ]
+
+        # ---------- header body ----------
+        y = addy(y, section_gap + body_size)
+        parts.append(f'<text x="{x}" y="{y}">Cells in total:</text>')
+        y = addy(y, body_size + line_gap)
+        parts.append(f'<text x="{x}" y="{y}"><tspan class="bold">{total_tracks}</tspan></text>')
+
+        y = addy(y, section_gap + body_size)
+        parts.append(f'<text x="{x}" y="{y}">In focus:</text>')
+        y = addy(y, body_size + line_gap)
+        parts.append(
+            f'<text x="{x}" y="{y}">{tspan(filtered_tracks,"bold")} {tspan(f"({percent}%)","bold")}</text>'
+        )
+
+        # ---------- thresholds (read reactives exactly like your UI) ----------
+        try:
+            if threshold_dimension.get() == "1D":
+                thresholds_state = thresholds1d_state.get()
+                for t in sorted(thresholds_state.keys()):
+                    if t not in threshold_list.get():
+                        break
+                    try:
+                        t_state = thresholds_state.get(t)
+                        t_state_after = thresholds_state.get(t + 1)
+
+                        data = len(t_state.get("tracks"))
+                        data_after = len(t_state_after.get("tracks")) if t_state_after else data
+                        out = data - data_after
+                        out_percent = round(out / data * 100) if data else 0
+
+                        prop = input[f"threshold_property_{t}"]()
+                        ftype = input[f"threshold_filter_{t}"]()
+                        if ftype == "Relative to...":
+                            ref = input[f"reference_value_{t}"]()
+                            if ref == "My own value":
+                                ref_val = input[f"threshold_my_own_value_{t}"]()
+                            else:
+                                ref_val = ref
+                            reference = f"{ref} ({ref_val})" if not isinstance(ref_val, str) else f"{ref}"
+                        else:
+                            reference = ""
+
+                        vmin, vmax = input[f"threshold_slider_{t}"]()
+                    except Exception:
+                        break
+
+                    # hr
+                    y = addy(y, rule_gap + section_gap)
+                    parts.append(f'<line x1="{pad}" x2="{width-pad}" y1="{y}" y2="{y}" stroke="{rule_color}" stroke-width="1"/>')
+                    y = addy(y, rule_gap)
+
+                    # threshold header
+                    y = addy(y, body_size + line_gap)
+                    parts.append(f'<text x="{x}" y="{y}">{tspan(f"Threshold {t+1}","bold")}</text>')
+
+                    # filtered out
+                    y = addy(y, body_size + line_gap)
+                    parts.append(
+                        f'<text x="{x}" y="{y}">Filtered out: '
+                        f'{tspan(out,"ital bold")} {tspan(f"({out_percent}%)","ital bold")}</text>'
+                    )
+
+                    # property / filter / range / reference
+                    y = addy(y, body_size + section_gap)
+                    parts.append(f'<text x="{x}" y="{y}">Property:</text>')
+                    y = addy(y, body_size)
+                    parts.append(f'<text x="{x}" y="{y}">{tspan(prop,"bold ital")}</text>')
+
+                    y = addy(y, body_size + section_gap)
+                    parts.append(f'<text x="{x}" y="{y}">Filter:</text>')
+                    y = addy(y, body_size)
+                    parts.append(f'<text x="{x}" y="{y}">{tspan(ftype,"bold ital")}</text>')
+
+                    y = addy(y, body_size + section_gap)
+                    parts.append(f'<text x="{x}" y="{y}">Range:</text>')
+                    y = addy(y, body_size)
+                    parts.append(
+                        f'<text x="{x}" y="{y}">{tspan(vmin,"bold ital")} - {tspan(vmax,"bold ital")}</text>'
+                    )
+
+                    if reference:
+                        y = addy(y, body_size + section_gap)
+                        parts.append(f'<text x="{x}" y="{y}">Reference:</text>')
+                        y = addy(y, body_size)
+                        parts.append(f'<text x="{x}" y="{y}">{tspan(reference,"bold ital")}</text>')
+
+            elif threshold_dimension.get() == "2D":
+                thresholds_state = thresholds2d_state.get()
+                for t in sorted(thresholds_state.keys()):
+                    if t not in threshold_list.get():
+                        break
+                    try:
+                        t_state = thresholds_state.get(t)
+                        t_state_after = thresholds_state.get(t + 1)
+
+                        data = len(t_state.get("tracks"))
+                        data_after = len(t_state_after.get("tracks")) if t_state_after else data
+                        out = data - data_after
+                        out_percent = round(out / data * 100) if data else 0
+
+                        propX = input[f"thresholding_metric_X_{t}"]()
+                        propY = input[f"thresholding_metric_Y_{t}"]()
+
+                        try:
+                            track_data = t_state_after.get("tracks")
+                            spot_data = t_state_after.get("spots")
+                        except Exception:
+                            track_data = t_state.get("tracks")
+                            spot_data = t_state.get("spots")
+
+                        dataX = track_data[propX] if propX in Metrics.Track else spot_data[propX]
+                        dataY = track_data[propY] if propY in Metrics.Track else spot_data[propY]
+
+                        if propX == "Confinement ratio":
+                            minX, maxX = f"{min(dataX):.2f}", f"{ceil(max(dataX)):.2f}"
+                        else:
+                            minX, maxX = floor(min(dataX)), ceil(max(dataX))
+                        if propY == "Confinement ratio":
+                            minY, maxY = f"{min(dataY):.2f}", f"{ceil(max(dataY)):.2f}"
+                        else:
+                            minY, maxY = floor(min(dataY)), ceil(max(dataY))
+                    except Exception:
+                        break
+
+                    # hr
+                    y = addy(y, rule_gap + section_gap)
+                    parts.append(f'<line x1="{pad}" x2="{width-pad}" y1="{y}" y2="{y}" stroke="{rule_color}" stroke-width="1"/>')
+                    y = addy(y, rule_gap)
+
+                    # threshold header
+                    y = addy(y, body_size + line_gap)
+                    parts.append(f'<text x="{x}" y="{y}">{tspan(f"Threshold {t+1}","bold")}</text>')
+
+                    # filtered out
+                    y = addy(y, body_size + line_gap)
+                    parts.append(
+                        f'<text x="{x}" y="{y}">Filtered out: '
+                        f'{tspan(out,"ital bold")} {tspan(f"({out_percent}%)","ital bold")}</text>'
+                    )
+
+                    # properties for X and Y
+                    y = addy(y, body_size + section_gap)
+                    parts.append(f'<text x="{x}" y="{y}">Properties:</text>')
+
+                    # X
+                    y = addy(y, rule_gap)
+                    parts.append(f'<text x="{x}" y="{y}">{tspan(propX,"bold ital")}</text>')
+                    y = addy(y, body_size)
+                    parts.append(f'<text x="{x}" y="{y}">Range:</text>')
+                    y = addy(y, body_size)
+                    parts.append(
+                        f'<text x="{x}" y="{y}">{tspan(minX,"bold ital")} - {tspan(maxX,"bold ital")}</text>'
+                    )
+
+                    # Y
+                    y = addy(y, rule_gap)
+                    parts.append(f'<text x="{x}" y="{y}">{tspan(propY,"bold ital")}</text>')
+                    y = addy(y, body_size)
+                    parts.append(f'<text x="{x}" y="{y}">Range:</text>')
+                    y = addy(y, body_size)
+                    parts.append(
+                        f'<text x="{x}" y="{y}">{tspan(minY,"bold ital")} - {tspan(maxY,"bold ital")}</text>'
+                    )
+
+        except Exception:
+            pass
+
+        # ---------- close and set height ----------
+        parts.append("</g></svg>")
+        height = y + pad
+        svg = "".join(parts).replace("__HEIGHT__", str(height))
+        return svg
+
+
+    @render.download(filename=f"Filter Info {date.today()}.svg", media_type="svg")
+    def download_filter_info():
+        svg = GetInfoSVG()
+        # svg = GetInfoSVG(
+        #     total_tracks=len(UNFILTERED_TRACKSTATS.get()),
+        #     in_focus_tracks=len(TRACKSTATS.get()),
+        #     thresholds=threshold_list.get(),
+
+        # )
+
+        yield svg.encode("utf-8")
+
+        
+
     # - - - - Threshold dimension toggle - - - -
 
     @reactive.Effect
@@ -2233,6 +2680,38 @@ def server(input: Inputs, output: Outputs, session: Session):
 
 
 
+
+
+
+    # ======================= DATA VISUALIZATION =======================
+
+    # - - - - - - Swarmplot - - - - - -
+
+    def render_swarmplot(df, metric):
+        @output(id="swarmplot")
+        @render.plot
+        def swarmplot():
+            fig = Plot.Superplots.SwarmPlot(
+                df=df,
+                metric=metric,
+                palette='Set2',
+                show_violin=True,
+            )
+
+    @reactive.Effect
+    @reactive.event(input.sp_generate)
+    def _render_swarmplot():
+        render_swarmplot(
+            df=TRACKSTATS.get(),
+            metric=input.sp_metric()
+        )
+
+
+
+
+
+
+
     # (Other outputs and logic remain unchanged...)
 
 # --- Mount the app ---
@@ -2252,3 +2731,5 @@ app = App(app_ui, server)
 # TODO - P-test
 # TODO - Again add rendered text showing the total number of cells in the input and the number of output cells
 # TODO - Option to download a simple legend showing how much data was filtered out and how so
+# TODO - input_selectize("Plot:"... with options "Polar/Normalized" or "Cartesian/Raw"
+# TODO - Differentiate between frame(s) annotations and time annotations
