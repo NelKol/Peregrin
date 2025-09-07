@@ -71,14 +71,21 @@ app_ui = ui.page_sidebar(
                 ),
             ),
         ),
+        
 
         # ========== PROCESSED DATA DISPLAY ==========
         ui.nav_panel(
             "Data frames",
-            ui.markdown(""" <p> """),
 
             # Input for already processed data
-            ui.input_file("already_proccesed_input", "Got previously processed data?", placeholder="Drag and drop here!", accept=[".csv"], multiple=False),
+            ui.markdown(
+                """ 
+                <p style='line-height:0.1;'> <br> </p>
+                <h4 style="margin:0;"> Got previously processed data? </h4> 
+                <i> Drop in <b>Spot Stats CSV</b> file here: </i>
+                """
+            ),
+            ui.input_file(id="already_processed_input", label=None, placeholder="Drag and drop here!", accept=[".csv"], multiple=False),
             ui.markdown(""" ___ """),
 
             # Data frames display
@@ -95,8 +102,8 @@ app_ui = ui.page_sidebar(
                 ),
                 ui.card( # Time stats
                     ui.card_header("Time stats"),
-                    ui.output_data_frame("render_time_stats"),
-                    ui.download_button("download_time_stats", "Download CSV"),
+                    ui.output_data_frame("render_frame_stats"),
+                    ui.download_button("download_frame_stats", "Download CSV"),
                 ),
             ),
         ),
@@ -560,10 +567,10 @@ def server(input: Inputs, output: Outputs, session: Session):
     RAWDATA = reactive.Value(pd.DataFrame())         # Placeholder for raw data
     UNFILTERED_SPOTSTATS = reactive.Value(pd.DataFrame())    # Placeholder for spot statistics
     UNFILTERED_TRACKSTATS = reactive.Value(pd.DataFrame())   # Placeholder for track statistics
-    UNFILTERED_TIMESTATS = reactive.Value(pd.DataFrame())    # Placeholder for time statistics
+    UNFILTERED_FRAMESTATS = reactive.Value(pd.DataFrame())    # Placeholder for frame statistics
     SPOTSTATS = reactive.Value(pd.DataFrame())       # Placeholder for processed spot statistics
     TRACKSTATS = reactive.Value(pd.DataFrame())      # Placeholder for processed track statistics
-    TIMESTATS = reactive.Value(pd.DataFrame())       # Placeholder for processed time statistics
+    FRAMESTATS = reactive.Value(pd.DataFrame())       # Placeholder for processed frame statistics
 
 
 
@@ -682,7 +689,7 @@ def server(input: Inputs, output: Outputs, session: Session):
             RAWDATA.set(pd.concat(all_data, axis=0))
             UNFILTERED_SPOTSTATS.set(Calc.Spots(RAWDATA.get()))
             UNFILTERED_TRACKSTATS.set(Calc.Tracks(RAWDATA.get()))
-            UNFILTERED_TIMESTATS.set(Calc.Frames(RAWDATA.get()))
+            UNFILTERED_FRAMESTATS.set(Calc.Frames(RAWDATA.get()))
             ui.update_sidebar(id="sidebar", show=True)
         else:
             pass
@@ -1243,7 +1250,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
         SPOTSTATS.set(UNFILTERED_SPOTSTATS.get())
         TRACKSTATS.set(UNFILTERED_TRACKSTATS.get())
-        TIMESTATS.set(UNFILTERED_TIMESTATS.get())
+        FRAMESTATS.set(UNFILTERED_FRAMESTATS.get())
 
 
     # - - - - Storing thresholding values - - - -
@@ -2637,13 +2644,13 @@ def server(input: Inputs, output: Outputs, session: Session):
 
         spots_filtered = pd.DataFrame(latest_state.get("spots") if latest_state is not None and isinstance(latest_state, dict) else UNFILTERED_SPOTSTATS.get())
         tracks_filtered = pd.DataFrame(latest_state.get("tracks") if latest_state is not None and isinstance(latest_state, dict) else UNFILTERED_TRACKSTATS.get())
-        time_stats = UNFILTERED_TIMESTATS.get()
+        frame_stats = UNFILTERED_FRAMESTATS.get()
 
         print(f"Filtered tracks: {len(tracks_filtered)}")
 
         SPOTSTATS.set(spots_filtered)
         TRACKSTATS.set(tracks_filtered)
-        TIMESTATS.set(Calc.Frames(spots_filtered) if spots_filtered is not None and not spots_filtered.empty else time_stats)
+        FRAMESTATS.set(Calc.Frames(spots_filtered) if spots_filtered is not None and not spots_filtered.empty else frame_stats)
     
 
 
@@ -2669,16 +2676,45 @@ def server(input: Inputs, output: Outputs, session: Session):
             pass
 
     @render.data_frame
-    def render_time_stats():
-        time_stats = TIMESTATS.get()
-        if time_stats is not None and not time_stats.empty:
-            return time_stats
+    def render_frame_stats():
+        frame_stats = FRAMESTATS.get()
+        if frame_stats is not None and not frame_stats.empty:
+            return frame_stats
         else:
             pass
     
-    # - - - - - - - - - - - - - - - - - - - -
 
+    # - - - - DataFrame Downloads - - - -
 
+    @render.download(filename=f"Spot stats {date.today()}.csv")
+    def download_spot_stats():
+        spot_stats = SPOTSTATS.get()
+        if spot_stats is not None and not spot_stats.empty:
+            with io.BytesIO() as buffer:
+                spot_stats.to_csv(buffer, index=False)
+                yield buffer.getvalue()
+        else:
+            pass
+
+    @render.download(filename=f"Track stats {date.today()}.csv")
+    def download_track_stats():
+        track_stats = TRACKSTATS.get()
+        if track_stats is not None and not track_stats.empty:
+            with io.BytesIO() as buffer:
+                track_stats.to_csv(buffer, index=False)
+                yield buffer.getvalue()
+        else:
+            pass
+    
+    @render.download(filename=f"Frame stats {date.today()}.csv")
+    def download_frame_stats():
+        frame_stats = FRAMESTATS.get()
+        if frame_stats is not None and not frame_stats.empty:
+            with io.BytesIO() as buffer:
+                frame_stats.to_csv(buffer, index=False)
+                yield buffer.getvalue()
+        else:
+            pass
 
 
 
