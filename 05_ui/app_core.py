@@ -86,6 +86,7 @@ app_ui = ui.page_sidebar(
                 """
             ),
             ui.input_file(id="already_processed_input", label=None, placeholder="Drag and drop here!", accept=[".csv"], multiple=False),
+            ui.output_ui("initialize_processed"),
             ui.markdown(""" ___ """),
 
             # Data frames display
@@ -452,26 +453,181 @@ app_ui = ui.page_sidebar(
 
                             ui.accordion_panel(
                                 "Dataset",
-                                ui.input_selectize("sp_condition", "Condition:", ["all", "not all"]),
-                                ui.panel_conditional(
-                                    "input.sp_condition != 'all'",
-                                    ui.input_selectize("sp_replicate", "Replicate:", ["all", "not all"]),
-                                    ui.panel_conditional(
-                                        "input.sp_replicate == 'all'",
-                                        ui.input_checkbox("sp_separate_replicates", "Show replicates separately", False),
-                                    ),
+                                # ui.input_selectize("sp_condition", "Condition:", ["all", "not all"]),
+                                # ui.panel_conditional(
+                                #     "input.sp_condition != 'all'",
+                                #     ui.input_selectize("sp_replicate", "Replicate:", ["all", "not all"]),
+                                # ),
+                                ui.markdown(
+                                    """
+                                    **Note:** Superplots always show all conditions and replicates. <br>
+                                    *In future versions, an option, in which desired conditions can be specified may be added.*
+                                    """
                                 ),
                             ),
 
                             ui.accordion_panel(
                                 "Metric",
                                 ui.input_selectize("sp_metric", label=None, choices=Metrics.Track, selected="Confinement ratio"),
-                                ui.input_radio_buttons("sp_y_axis", "Y axis with", ["Absolute values", "Relative values"]),
+                                # TODO: ui.input_radio_buttons("sp_y_axis", "Y axis with", ["Absolute values", "Relative values"]),
+                            ),
+                            ui.accordion_panel(
+                                "General plot definition",
+                                ui.input_selectize(id="sp_palette", label="Color palette:", choices=Styles.PaletteQualitative, selected="tab10"),
+                                ui.input_checkbox(id="sp_show_swarms", label="Show swarms", value=True),
+                                ui.input_checkbox(id="sp_show_violins", label="Show violins", value=True),
+                                ui.input_checkbox(id="sp_show_kde", label="Show KDE", value=False),
+                                ui.panel_conditional(
+                                    "input.sp_show_kde == true",
+                                    ui.input_checkbox(id="sp_kde_legend", label="Show KDE legend", value=False),
+                                ),
+                                ui.input_checkbox(id="sp_show_cond_mean", label="Show condition means as lines", value=False),
+                                ui.input_checkbox(id="sp_show_cond_median", label="Show condition medians as lines", value=False),
+                                ui.input_checkbox(id="sp_show_errbars", label="Show error bars", value=False),
+                                ui.input_checkbox(id="sp_show_rep_means", label="Show replicate mean bullets", value=True),
+                                ui.input_checkbox(id="sp_show_rep_medians", label="Show replicate median bullets", value=False),
+                                ui.input_checkbox(id="sp_show_legend", label="Show legend", value=True),
+                                ui.input_checkbox(id="sp_grid", label="Show grid", value=True),
+                                ui.input_checkbox(id="sp_spine", label="Open axes top/right", value=True),
+                                # TODO: ui.input_checkbox(id="sp_flip", label="Flip axes", value=False),
+                            ),
+
+                            ui.accordion_panel(
+                                "Aesthetics",
+                                ui.accordion(
+
+                                    ui.accordion_panel(
+                                        "Swarms",
+                                        ui.panel_conditional(
+                                            "input.sp_show_swarms == true",
+                                            ui.input_numeric("sp_swarm_marker_size", "Dot size:", 2, min=0, step=1),
+                                            ui.input_numeric("sp_swarm_marker_alpha", "Dot opacity:", 0.5, min=0, max=1, step=0.1),
+                                            ui.input_selectize("sp_swarm_marker_outline", "Dot outline color:", Styles.Color, selected="black"),
+                                        ),
+                                        ui.panel_conditional(
+                                            "input.sp_show_swarms == false",
+                                            ui.markdown(
+                                                """
+                                                *Swarms not enabled.*
+                                                """
+                                            )
+                                        )
+                                    ),
+
+                                    ui.accordion_panel(
+                                        "Violins",
+                                        ui.panel_conditional(
+                                            "input.sp_show_violins == true",
+                                            ui.input_selectize("sp_violin_fill", "Fill color:", Styles.Color, selected="whitesmoke"),
+                                            ui.input_numeric("sp_violin_alpha", "Fill opacity:", 0.5, min=0, max=1, step=0.1),
+                                            ui.input_selectize("sp_violin_outline", "Outline color:", Styles.Color, selected="lightgrey"),
+                                            ui.input_numeric("sp_violin_outline_width", "Outline width:", 1, min=0, step=1),
+                                        ),
+                                        ui.panel_conditional(
+                                            "input.sp_show_violins == false",
+                                            ui.markdown(
+                                                """
+                                                *Violins not enabled.*
+                                                """
+                                            )
+                                        ),
+                                    ),
+
+                                    ui.accordion_panel(
+                                        "Kernel Density Estimate (KDE)",
+                                        ui.markdown(
+                                            """
+                                            *KDEs are computed across data points of specific replicates in each condition, modeling the underlying data distribution* <br>
+                                            """
+                                        ),
+                                        ui.panel_conditional(
+                                            "input.sp_show_kde == true",
+                                            ui.input_numeric("sp_kde_line_width", "Outline width:", 1, min=0, step=0.1),
+                                            ui.input_checkbox("sp_kde_fill", "Fill area", False),
+                                            ui.panel_conditional(
+                                                "input.sp_kde_fill == true",
+                                                ui.input_numeric("sp_kde_fill_alpha", "Fill opacity:", 0.5, min=0, max=1, step=0.1),
+                                            ),
+                                            ui.input_numeric("sp_kde_bandwidth", "KDE bandwidth:", 0.5, min=0.1, step=0.1),
+                                        ),
+                                        ui.panel_conditional(
+                                            "input.sp_show_kde == false",
+                                            ui.markdown(
+                                                """
+                                                *KDE not enabled.*
+                                                """
+                                            )
+                                        ),
+                                    ),
+
+                                    ui.accordion_panel(
+                                        "Lines and error bars",
+                                        ui.panel_conditional(
+                                            "input.sp_show_cond_mean == true && input.sp_show_cond_median == true",
+                                            ui.input_selectize("sp_set_as_primary", label="Set as primary:", choices=["mean", "median"], selected="mean"),
+                                        ),
+                                        ui.panel_conditional(
+                                            "input.sp_show_cond_mean == true",
+                                            ui.input_numeric(id="sp_mean_line_span", label="Mean line span length:", value=0.12, min=0, step=0.01),
+                                            ui.input_selectize(id="sp_mean_line_color", label="Mean line color:", choices=Styles.Color, selected="black"),
+                                        ),
+                                        ui.panel_conditional(
+                                            "input.sp_show_cond_median == true",
+                                            ui.input_numeric(id="sp_median_line_span", label="Median line span length:", value=0.08, min=0, step=0.01),
+                                            ui.input_selectize(id="sp_median_line_color", label="Median line color:", choices=Styles.Color, selected="darkblue"),
+                                        ),
+                                        ui.panel_conditional(
+                                            "input.sp_show_cond_mean == true || input.sp_show_cond_median == true",
+                                            ui.input_numeric(id="sp_lines_lw", label="Mean/Median Line width:", value=1, min=0, step=0.5),
+                                        ),
+                                        ui.panel_conditional(
+                                            "input.sp_show_errbars == true",
+                                            ui.input_numeric(id="sp_errorbar_capsize", label="Error bar cap size:", value=4, min=0, step=1),
+                                            ui.input_numeric(id="sp_errorbar_lw", label="Error bar line width:", value=1, min=0, step=0.5),
+                                            ui.input_selectize(id="sp_errorbar_color", label="Error bar color:", choices=Styles.Color, selected="black"),
+                                            ui.input_numeric(id="sp_errorbar_alpha", label="Error bar opacity:", value=1, min=0, max=1, step=0.1),
+                                        ),
+                                        ui.panel_conditional(
+                                            "input.sp_show_cond_means == false && input.sp_show_cond_medians == false && input.sp_show_errbars == false",
+                                            ui.markdown(
+                                                """
+                                                *Condition means/medians/error bars not enabled.*
+                                                """
+                                            )
+                                        ),
+                                    ),
+
+                                    ui.accordion_panel(
+                                        "Bullets",
+                                        ui.panel_conditional(
+                                            "input.sp_show_rep_means == true",
+                                            ui.input_numeric("sp_mean_bullet_size", "Mean bullet size:", 80, min=0, step=1),
+                                            ui.input_selectize("sp_mean_bullet_outline", "Mean bullet outline color:", Styles.Color, selected="black"),
+                                            ui.input_numeric("sp_mean_bullet_outline_width", "Mean bullet outline width:", 0.75, min=0, step=0.05),
+                                            ui.input_numeric("sp_mean_bullet_alpha", "Mean bullet opacity:", 1, min=0, max=1, step=0.1),
+                                        ),
+                                        ui.panel_conditional(
+                                            "input.sp_show_rep_medians == true",
+                                            ui.input_numeric("sp_median_bullet_size", "Median bullet size:", 50, min=0, step=1),
+                                            ui.input_selectize("sp_median_bullet_outline", "Median bullet outline color:", Styles.Color, selected="black"),
+                                            ui.input_numeric("sp_median_bullet_outline_width", "Median bullet outline width:", 0.75, min=0, step=0.05),
+                                            ui.input_numeric("sp_median_bullet_alpha", "Median bullet opacity:", 1, min=0, max=1, step=0.1),
+                                        ),
+                                        ui.panel_conditional(
+                                            "input.sp_show_rep_means == false && input.sp_show_rep_medians == false",
+                                            ui.markdown(
+                                                """
+                                                *Replicate means/medians not enabled.*
+                                                """
+                                            ),
+                                        ),
+                                    ),
+                                ),
                             ),
                         ),
 
                         ui.markdown(""" <br> """),
-                        ui.input_action_button(id="sp_generate", label="Generate", class_="btn-secondary", width="100%"),
+                        ui.input_task_button(id="sp_generate", label="Generate", class_="btn-secondary", width="100%"),
                     ),
                     ui.markdown(""" <br> """),
                     ui.card(
@@ -636,6 +792,28 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     # - - - - - - - - - - - - - - - - - - - -
 
+
+
+    # - - - - Already processed data input - - - -
+
+    @reactive.Effect
+    @reactive.event(input.already_processed_input)
+    def load_processed_data():
+        fileinfo = input.already_processed_input()
+        try:
+            df = DataLoader.GetDataFrame(fileinfo[0]["datapath"])
+
+            UNFILTERED_SPOTSTATS.set(df)
+            UNFILTERED_TRACKSTATS.set(Calc.Tracks(df))
+            UNFILTERED_FRAMESTATS.set(Calc.Frames(df))
+
+            SPOTSTATS.set(df)
+            TRACKSTATS.set(Calc.Tracks(df))
+            FRAMESTATS.set(Calc.Frames(df))
+
+            # ui.update_sidebar(id="sidebar", show=True)
+        except Exception as e:
+            print(e)
 
 
 
@@ -1199,13 +1377,6 @@ def server(input: Inputs, output: Outputs, session: Session):
     @render.download(filename=f"Filter Info {date.today()}.svg", media_type="svg")
     def download_filter_info():
         svg = GetInfoSVG()
-        # svg = GetInfoSVG(
-        #     total_tracks=len(UNFILTERED_TRACKSTATS.get()),
-        #     in_focus_tracks=len(TRACKSTATS.get()),
-        #     thresholds=threshold_list.get(),
-
-        # )
-
         yield svg.encode("utf-8")
 
         
@@ -1238,7 +1409,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     thresholds2d_state = reactive.Value({int: dict})
 
     @reactive.Effect
-    @reactive.event(input.threshold_dimensional_toggle, input.run)
+    @reactive.event(input.threshold_dimensional_toggle, input.run, input.already_processed_input)
     def _initialize_thresholding_memory():
         threshold_list.unset()
         threshold_list.set([0])
@@ -2721,27 +2892,254 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     # ======================= DATA VISUALIZATION =======================
 
-    # - - - - - - Swarmplot - - - - - -
 
-    def render_swarmplot(df, metric):
+    # - - - - - - Swarmplot - - - - - -    
+
+    def output_swarmplot(
+        df,
+        metric,
+        palette,
+        show_swarm,
+        swarm_size,
+        swarm_outline_color,
+        swarm_alpha,
+        show_violin,
+        violin_fill_color,
+        violin_edge_color,
+        violin_alpha,
+        violin_outline_width,
+        show_mean,
+        mean_span,
+        mean_color,
+        show_median,
+        median_span,
+        median_color,
+        line_width,
+        set_main_line,
+        show_error_bars,
+        errorbar_capsize,
+        errorbar_color,
+        errorbar_lw,
+        errorbar_alpha,
+        show_mean_balls,
+        mean_ball_size,
+        mean_ball_outline_color,
+        mean_ball_outline_width,
+        mean_ball_alpha,
+        show_median_balls,
+        median_ball_size,
+        median_ball_outline_color,
+        median_ball_outline_width,
+        median_ball_alpha,
+        show_kde,
+        kde_inset_width,
+        kde_outline,
+        kde_alpha,
+        kde_legend,
+        kde_fill,
+        p_test,
+        show_legend,
+        show_grid,
+        open_spine
+    ):
         @output(id="swarmplot")
         @render.plot
         def swarmplot():
-            fig = Plot.Superplots.SwarmPlot(
-                df=df,
+            track_df = TRACKSTATS.get() if TRACKSTATS.get() is not None else pd.DataFrame()
+            return Plot.Superplots.SwarmPlot(
+                df=track_df,
                 metric=metric,
-                palette='Set2',
-                show_violin=True,
+                palette=palette,
+                show_swarm=show_swarm,
+                swarm_size=swarm_size,
+                swarm_outline_color=swarm_outline_color,
+                swarm_alpha=swarm_alpha,
+                show_violin=show_violin,
+                violin_fill_color=violin_fill_color,
+                violin_edge_color=violin_edge_color,
+                violin_alpha=violin_alpha,
+                violin_outline_width=violin_outline_width,
+                show_mean=show_mean,
+                mean_span=mean_span,
+                mean_color=mean_color,
+                show_median=show_median,
+                median_span=median_span,
+                median_color=median_color,
+                line_width=line_width,
+                set_main_line=set_main_line,
+                show_error_bars=show_error_bars,
+                errorbar_capsize=errorbar_capsize,
+                errorbar_color=errorbar_color,
+                errorbar_lw=errorbar_lw,
+                errorbar_alpha=errorbar_alpha,
+                show_mean_balls=show_mean_balls,
+                mean_ball_size=mean_ball_size,
+                mean_ball_outline_color=mean_ball_outline_color,
+                mean_ball_outline_width=mean_ball_outline_width,
+                mean_ball_alpha=mean_ball_alpha,
+                show_median_balls=show_median_balls,
+                median_ball_size=median_ball_size,
+                median_ball_outline_color=median_ball_outline_color,
+                median_ball_outline_width=median_ball_outline_width,
+                median_ball_alpha=median_ball_alpha,
+                show_kde=show_kde,
+                kde_inset_width=kde_inset_width,
+                kde_outline=kde_outline,
+                kde_alpha=kde_alpha,
+                kde_legend=kde_legend,
+                kde_fill=kde_fill,
+                p_test=p_test,
+                show_legend=show_legend,
+                show_grid=show_grid,
+                open_spine=open_spine
             )
 
+    @debounce(6)
     @reactive.Effect
     @reactive.event(input.sp_generate)
-    def _render_swarmplot():
-        render_swarmplot(
-            df=TRACKSTATS.get(),
-            metric=input.sp_metric()
+    def render_swarmplot():
+
+        output_swarmplot(
+            df=TRACKSTATS.get() if TRACKSTATS.get() is not None else pd.DataFrame(),
+            metric=input.sp_metric(),
+            palette=input.sp_palette(),
+
+            show_swarm=input.sp_show_swarms(),
+            swarm_size=input.sp_swarm_marker_size(),
+            swarm_outline_color=input.sp_swarm_marker_outline(),
+            swarm_alpha=input.sp_swarm_marker_alpha(),
+
+            show_violin=input.sp_show_violins(),
+            violin_fill_color=input.sp_violin_fill(),
+            violin_edge_color=input.sp_violin_outline(),
+            violin_alpha=input.sp_violin_alpha(),
+            violin_outline_width=input.sp_violin_outline_width(),
+
+            show_mean=input.sp_show_cond_mean(),
+            mean_span=input.sp_mean_line_span(),
+            mean_color=input.sp_mean_line_color(),
+            show_median=input.sp_show_cond_median(),
+            median_span=input.sp_median_line_span(),
+            median_color=input.sp_median_line_color(),
+            line_width=input.sp_lines_lw(),
+            set_main_line=input.sp_set_as_primary(),
+            show_error_bars=input.sp_show_errbars(),
+            errorbar_capsize=input.sp_errorbar_capsize(),
+            errorbar_color=input.sp_errorbar_color(),
+            errorbar_lw=input.sp_errorbar_lw(),
+            errorbar_alpha=input.sp_errorbar_alpha(),
+
+            show_mean_balls=input.sp_show_rep_means(),
+            mean_ball_size=input.sp_mean_bullet_size(),
+            mean_ball_outline_color=input.sp_mean_bullet_outline(),
+            mean_ball_outline_width=input.sp_mean_bullet_outline_width(),
+            mean_ball_alpha=input.sp_mean_bullet_alpha(),
+            show_median_balls=input.sp_show_rep_medians(),
+            median_ball_size=input.sp_median_bullet_size(),
+            median_ball_outline_color=input.sp_median_bullet_outline(),
+            median_ball_outline_width=input.sp_median_bullet_outline_width(),
+            median_ball_alpha=input.sp_median_bullet_alpha(),
+
+            show_kde=input.sp_show_kde(),
+            kde_inset_width=input.sp_kde_bandwidth(),
+            kde_outline=input.sp_kde_line_width(),
+            kde_alpha=input.sp_kde_fill_alpha(),
+            kde_legend=input.sp_kde_legend(),
+            kde_fill=input.sp_kde_fill(),
+
+            p_test=False,
+            show_legend=input.sp_show_legend(),
+            show_grid=input.sp_grid(),
+            open_spine=input.sp_spine()
         )
 
+    @render.download(filename=f"Swarmplot {date.today()}.svg")
+    def download_swarmplot_svg():
+        track_df = TRACKSTATS.get() if TRACKSTATS.get() is not None else pd.DataFrame()
+        fig = Plot.Superplots.SwarmPlot(
+            df=track_df,
+            metric=input.sp_metric(),
+            palette=input.sp_palette(),
+
+            show_swarm=input.sp_show_swarms(),
+            swarm_size=input.sp_swarm_marker_size(),
+            swarm_outline_color=input.sp_swarm_marker_outline(),
+            swarm_alpha=input.sp_swarm_marker_alpha(),
+
+            show_violin=input.sp_show_violins(),
+            violin_fill_color=input.sp_violin_fill(),
+            violin_edge_color=input.sp_violin_outline(),
+            violin_alpha=input.sp_violin_alpha(),
+            violin_outline_width=input.sp_violin_outline_width(),
+
+            show_mean=input.sp_show_cond_mean(),
+            mean_span=input.sp_mean_line_span(),
+            mean_color=input.sp_mean_line_color(),
+            show_median=input.sp_show_cond_median(),
+            median_span=input.sp_median_line_span(),
+            median_color=input.sp_median_line_color(),
+            line_width=input.sp_lines_lw(),
+            set_main_line=input.sp_set_as_primary(),
+            show_error_bars=input.sp_show_errbars(),
+            errorbar_capsize=input.sp_errorbar_capsize(),
+            errorbar_color=input.sp_errorbar_color(),
+            errorbar_lw=input.sp_errorbar_lw(),
+            errorbar_alpha=input.sp_errorbar_alpha(),
+
+            show_mean_balls=input.sp_show_rep_means(),
+            mean_ball_size=input.sp_mean_bullet_size(),
+            mean_ball_outline_color=input.sp_mean_bullet_outline(),
+            mean_ball_outline_width=input.sp_mean_bullet_outline_width(),
+            mean_ball_alpha=input.sp_mean_bullet_alpha(),
+            show_median_balls=input.sp_show_rep_medians(),
+            median_ball_size=input.sp_median_bullet_size(),
+            median_ball_outline_color=input.sp_median_bullet_outline(),
+            median_ball_outline_width=input.sp_median_bullet_outline_width(),
+            median_ball_alpha=input.sp_median_bullet_alpha(),
+
+            show_kde=input.sp_show_kde(),
+            kde_inset_width=input.sp_kde_bandwidth(),
+            kde_outline=input.sp_kde_line_width(),
+            kde_alpha=input.sp_kde_fill_alpha(),
+            kde_legend=input.sp_kde_legend(),
+            kde_fill=input.sp_kde_fill(),
+
+            p_test=False,
+            show_legend=input.sp_show_legend(),
+            show_grid=input.sp_grid(),
+            open_spine=input.sp_spine()
+        )
+        if fig is not None:
+            with io.BytesIO() as buffer:
+                fig.savefig(buffer, format="svg", bbox_inches='tight')
+                yield buffer.getvalue()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    # - - - - - - Initialization progress - - - - - -
+
+    @render.text
+    @reactive.event(input.already_processed_input)
+    async def initialize_processed():
+        with ui.Progress(min=0, max=60) as p:
+            p.set(message="Initialization in progress")
+
+            for i in range(1, 12):
+                p.set(i, message="Initializing Peregrin...")
+                await asyncio.sleep(0.12)
+        pass
 
 
 

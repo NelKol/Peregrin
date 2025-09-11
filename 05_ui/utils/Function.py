@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 import pandas as pd
 from math import floor, ceil
@@ -823,76 +824,80 @@ class Plot:
         
         return list(markers.items())[-1][-1]            # Return the last symbol for thr 100th percentile (which is not included in the ranges)
 
-    def _get_markers(markers):
-        """
-        Get the markers according to the selected mode.
+    # def _get_markers(markers):
+    #     """
+    #     Get the markers according to the selected mode.
 
-        """
+    #     """
 
-        if markers == 'cell':
-            return _cell
-        elif markers == 'scaled':
-            return _scaled
-        elif markers == 'trains':
-            return _trains
-        elif markers == 'random':
-            return _random
-        elif markers == 'farm':
-            return _farm
-        elif markers == 'safari':
-            return _safari
-        elif markers == 'insects':
-            return _insects
-        elif markers == 'birds':
-            return _birds
-        elif markers == 'forest':
-            return _forest
-        elif markers == 'aquarium':
-            return _aquarium
+    #     if markers == 'cell':
+    #         return _cell
+    #     elif markers == 'scaled':
+    #         return _scaled
+    #     elif markers == 'trains':
+    #         return _trains
+    #     elif markers == 'random':
+    #         return _random
+    #     elif markers == 'farm':
+    #         return _farm
+    #     elif markers == 'safari':
+    #         return _safari
+    #     elif markers == 'insects':
+    #         return _insects
+    #     elif markers == 'birds':
+    #         return _birds
+    #     elif markers == 'forest':
+    #         return _forest
+    #     elif markers == 'aquarium':
+    #         return _aquarium
 
 
     class Superplots:
 
         @staticmethod
         def SwarmPlot(
-
             df: pd.DataFrame,                                     
             metric: str,
-            palette: str = 'Set2',
+            *args,
+            palette: str = 'tab10',
 
-            show_violin: bool = False, 
-            violin_fill_color: str = 'lightgrey', 
-            violin_edge_color: str = 'dimgrey', 
+            show_swarm: bool = True,
+            swarm_size: int = 1,
+            swarm_outline_color: str = 'black',
+            swarm_alpha: float = 0.5,
+
+            show_violin: bool = True, 
+            violin_fill_color: str = 'whitesmoke', 
+            violin_edge_color: str = 'lightgrey', 
             violin_alpha: float = 0.5,
             violin_outline_width: float = 1,
 
             show_mean: bool = True,
-            mean_span: float = 0,
+            mean_span: float = 0.12,
             mean_color: str = 'black',
-            show_median: bool = False,
-            median_span: float = 0,
+            show_median: bool = True,
+            median_span: float = 0.08,
             median_color: str = 'black',
             line_width: float = 1,
             set_main_line: str = 'mean',
 
-
-            show_error_bars: bool = False,
+            show_error_bars: bool = True,
             errorbar_capsize: int = 4,
             errorbar_color: str = 'black',
             errorbar_lw: int = 1,
             errorbar_alpha: float = 0.5,
 
-            show_swarm: bool = False,
-            swarm_size: int = 5,
-            swarm_outline_color: str = 'black',
-            swarm_alpha: float = 0.5,
+            show_mean_balls: bool = True,
+            mean_ball_size: int = 5,
+            mean_ball_outline_color: str = 'black',
+            mean_ball_outline_width: float = 0.75,
+            mean_ball_alpha: int = 1,
+            show_median_balls: bool = False,
+            median_ball_size: int = 5,
+            median_ball_outline_color: str = 'black',
+            median_ball_outline_width: float = 0.75,
+            median_ball_alpha: int = 1,
 
-            show_balls: bool = False,
-            ball_size: int = 5,
-            ball_outline_color: str = 'black',
-            ball_outline_width: int = 1,
-            ball_alpha: int = 1,
-   
             show_kde: bool = False,
             kde_inset_width: float = 0.5,
             kde_outline: float = 1,
@@ -902,30 +907,115 @@ class Plot:
 
             p_test: bool = False,
 
-            show_legend: bool = False,
+            show_legend: bool = True,
             show_grid: bool = False,
-            open_spine: bool = False,
+            open_spine: bool = True,
 
-            plot_width: int = 10,
-            plot_height: int = 6,
+            # plot_width: int = 15,
+            # plot_height: int = 9,
         ):
-        
+
 
             """
-            MEGALOMANIC - DIRTY - EDGY   
-            seaborn plotting function.
+            **Swarmplot plotting function.**
 
-            1. Swarm plot
-            2. Violin plot
-            3. Scatter plot of replicate means
-            4. Mean and median lines as well as errorbars
-            5. KDE inset subplots
-            6. P-testing using combinations of real conditions (compare every pair)
-
+            ## Parameters:
+                **df**:
+                Track DataFrame;
+                **metric**:
+                Column name of the desired metric;
+                **palette**:
+                Qualitative color palette differentiating replicates (default: 'tab10');
+                **show_swarm**:
+                Show individual tracks as swarm points (default: True);
+                **swarm_size**:
+                Size of the swarm points (default: 5); *Swarm point size is automatically adjusted if the points are overcrowded*;
+                **swarm_outline_color**:
+                (default: 'black');
+                **swarm_alpha**:
+                Swarm points transparency (default: 0.5);
+                **show_violin**:
+                (default: True);
+                **violin_fill_color**:
+                (default: 'whitesmoke');
+                **violin_edge_color**:
+                (default: 'lightgrey');
+                **violin_alpha**:
+                Violins transparency (default: 0.5);
+                **violin_outline_width**:
+                (default: 1);
+                **show_mean**:
+                Show condition mean as a line (default: True);
+                **mean_span**:
+                Span length of the mean line (default: 0.12);
+                **mean_color**:
+                (default: 'black');
+                **show_median**:
+                Show condition median as a line (default: True);
+                **median_span**:
+                Span length of the median line (default: 0.08);
+                **median_color**:
+                (default: 'black');
+                **line_width**:
+                Line width of mean and median lines (default: 1);
+                **set_main_line**:
+                Set whether to show mean or median as a full line, while showing the other as a dashed line (default: 'mean');
+                **show_error_bars**:
+                Show standard deviation error bars around the mean (default: True);
+                **errorbar_capsize**:
+                Span length of the errorbar caps (default: 4);
+                **errorbar_color**:
+                (default: 'black');
+                **errorbar_lw**:
+                Line width of the error bars (default: 1);
+                **errorbar_alpha**:
+                Transparency of the error bars (default: 0.5);
+                **show_mean_balls**:
+                Show replicate means (default: True);
+                **mean_ball_size**:
+                (default: 5);
+                **mean_ball_outline_color**:
+                (default: 'black');
+                **mean_ball_outline_width**:
+                (default: 0.75);
+                **mean_ball_alpha**:
+                (default: 1);
+                **show_median_balls**:
+                Show replicate medians (default: False);
+                **median_ball_size**:
+                (default: 5);
+                **median_ball_outline_color**:
+                (default: 'black');
+                **median_ball_outline_width**:
+                (default: 0.75);
+                **median_ball_alpha**:
+                (default: 1);
+                **show_kde**:
+                Show inset KDE plotted next to each condition for each replicate (default: False);
+                **kde_inset_width**:
+                Height of the inset KDE (default: 0.5);
+                **kde_outline**:
+                Line width of the KDE outline (default: 1);
+                **kde_alpha**:
+                Transparency of the KDE (default: 0.5);
+                **kde_legend**:
+                Show legend for the KDE plots (default: False);
+                **kde_fill**:
+                Fill the KDE plots (default: False);
+                **p_test**:
+                Perform Mann-Whitney U test between all conditions and annotate the plot with the p-values (default: False);
+                **show_legend**:
+                Show legend (default: True);
+                **show_grid**:
+                Show grid (default: False);
+                **open_spine**:
+                Don't show the top and right axes spines (default: True);
             """
-                
 
-            plt.figure(figsize=(plot_width, plot_height))
+
+
+
+            plt.figure()
             
 
             df['Condition'] = df['Condition'].astype(str)
@@ -936,6 +1026,18 @@ class Plot:
                 hue = 'Condition'
             else:
                 hue = 'Replicate'
+
+            if show_mean and show_median:
+                if set_main_line == 'mean':
+                    mean_ls = '-'
+                    median_ls = '--'
+                elif set_main_line == 'median':
+                    mean_ls = '--'
+                    median_ls = '-'
+            if show_mean and not show_median:
+                mean_ls = '-'
+            if not show_mean and show_median:
+                median_ls = '-'
             
 
             # ======================= KDE INSET =========================
@@ -952,27 +1054,63 @@ class Plot:
 
                     if i < len(conditions) - 1:
                         spaced_conditions.append(f"spacer_{i+1}")
-        
+
                 df['Condition'] = pd.Categorical(df['Condition'], categories=spaced_conditions, ordered=True)
                 
                 
                 # ----------------------- Swarm plot --------------------------
 
                 if show_swarm:
-                    sns.swarmplot(
-                        data=df, 
-                        x='Condition', 
-                        y=metric,
-                        hue=hue, 
-                        palette=palette, 
-                        size=swarm_size, 
-                        dodge=False, 
-                        alpha=swarm_alpha,
-                        legend=False, 
-                        zorder=3, 
-                        edgecolor=swarm_outline_color, 
-                        order=spaced_conditions
-                        )
+                    ax = plt.gca()
+                    size = int(swarm_size)
+
+                    while True:
+                        ax.cla()  # clear so failed attempts don't stack markers
+                        try:
+                            with warnings.catch_warnings():
+                                # treat UserWarnings from seaborn/matplotlib as exceptions
+                                warnings.simplefilter("error", UserWarning)
+                                sns.swarmplot(
+                                    data=df,
+                                    x="Condition",
+                                    y=metric,
+                                    hue=hue,
+                                    palette=palette,
+                                    size=size,
+                                    edgecolor=swarm_outline_color,
+                                    dodge=False,
+                                    alpha=swarm_alpha,
+                                    legend=False,
+                                    zorder=2,
+                                    ax=ax,
+                                )
+                            break  # SUCCESS at current size -> leave the loop
+
+                        except UserWarning:
+                            # still too crowded at this size
+                            if size <= 0.1:
+                                # Final attempt with size=-0.1 (as you requested), and suppress the warning
+                                ax.cla()
+                                with warnings.catch_warnings():
+                                    warnings.simplefilter("ignore", UserWarning)
+                                    sns.swarmplot(
+                                        data=df,
+                                        x="Condition",
+                                        y=metric,
+                                        hue=hue,
+                                        palette=palette,
+                                        size=-0.09,
+                                        edgecolor=swarm_outline_color,
+                                        dodge=False,
+                                        alpha=swarm_alpha,
+                                        legend=False,
+                                        zorder=2,
+                                        ax=ax,
+                                    )
+                                break  # done after final fallback
+                            # otherwise, shrink and try again
+                            size -= 0.1
+                            
                 
 
                 # ------------------------ Violinplot -------------------------
@@ -984,7 +1122,8 @@ class Plot:
                         color=violin_fill_color, 
                         edgecolor=violin_edge_color, 
                         width=violin_outline_width, 
-                        inner=None, 
+                        inner=None,
+                        gap=0.1, 
                         alpha=violin_alpha, 
                         zorder=2, 
                         order=spaced_conditions
@@ -993,25 +1132,41 @@ class Plot:
 
                 # ------------------------ Scatterplot of replicate means ------------------------------
 
-                replicate_means = df.groupby(['Condition', 'Replicate'])[metric].mean().reset_index()
-                if show_balls:
+                
+                if show_mean_balls:
+                    replicate_means = df.groupby(['Condition', 'Replicate'])[metric].mean().reset_index()
                     sns.scatterplot(
                         data=replicate_means, 
                         x='Condition', 
                         y=metric, 
                         hue=hue, 
                         palette=palette, 
-                        edgecolor=ball_outline_color, 
-                        s=ball_size, 
+                        edgecolor=mean_ball_outline_color, 
+                        s=mean_ball_size, 
                         legend=False, 
-                        alpha=ball_alpha, 
-                        linewidth=ball_outline_width, 
+                        alpha=mean_ball_alpha, 
+                        linewidth=mean_ball_outline_width, 
+                        zorder=4
+                        )
+                if show_median_balls:
+                    replicate_medians = df.groupby(['Condition', 'Replicate'])[metric].median().reset_index()
+                    sns.scatterplot(
+                        data=replicate_medians, 
+                        x='Condition', 
+                        y=metric, 
+                        hue=hue, 
+                        palette=palette, 
+                        edgecolor=median_ball_outline_color, 
+                        s=median_ball_size, 
+                        legend=False, 
+                        alpha=median_ball_alpha, 
+                        linewidth=median_ball_outline_width, 
                         zorder=4
                         )
                 
 
                 # ---------------------------- Mean, Meadian and Error bars --------------------------------
-        
+
                 condition_stats = df.groupby('Condition')[metric].agg(['mean', 'median', 'std']).reset_index()
 
                 cond_num_list = list(range(len(conditions)*2)) 
@@ -1023,8 +1178,8 @@ class Plot:
                         sns.lineplot(
                             x=[x_center - mean_span, x_center + mean_span],
                             y=[condition_stats['mean'].iloc[cond], condition_stats['mean'].iloc[cond]],
-                            color='black', 
-                            linestyle='-', 
+                            color=mean_color, 
+                            linestyle=mean_ls, 
                             linewidth=line_width,
                             label='Mean' if cond == 0 else "", zorder=5
                             )
@@ -1033,8 +1188,8 @@ class Plot:
                         sns.lineplot(
                             x=[x_center - median_span, x_center + median_span],
                             y=[condition_stats['median'].iloc[cond], condition_stats['median'].iloc[cond]],
-                            color='black', 
-                            linestyle='--', 
+                            color=median_color, 
+                            linestyle=median_ls, 
                             linewidth=line_width,
                             label='Median' if cond == 0 else "", zorder=5
                             )
@@ -1045,7 +1200,7 @@ class Plot:
                             condition_stats['mean'].iloc[cond], 
                             yerr=condition_stats['std'].iloc[cond], 
                             fmt='None',
-                            color='black', 
+                            color=errorbar_color, 
                             alpha=errorbar_alpha,
                             linewidth=errorbar_lw, 
                             capsize=errorbar_capsize, 
@@ -1061,13 +1216,14 @@ class Plot:
                     real_conditions = [cond for cond in spaced_conditions if not cond.startswith('spacer')]
                     pos_mapping = {cat: idx for idx, cat in enumerate(spaced_conditions)}
                 
+                    y_max = df[metric].max()
+                    y_offset = y_max * 0.1
+
                     for i, (cond1, cond2) in enumerate(combinations(real_conditions, 2)):
                         data1 = df[df['Condition'] == cond1][metric]
                         data2 = df[df['Condition'] == cond2][metric]
                         stat, p_value = mannwhitneyu(data1, data2)
                         x1, x2 = pos_mapping[cond1], pos_mapping[cond2]
-                        y_max = df[metric].max()
-                        y_offset = y_max * 0.1
                         y = y_max + y_offset * (i + 1)
                         plt.plot([x1, x1, x2, x2],
                                 [y+4.5, y + y_offset / 2.5, y + y_offset / 2.5, y+1.5],
@@ -1130,7 +1286,7 @@ class Plot:
                     inset_ax.set_yticks([])
                     inset_ax.set_xlabel('')
                     inset_ax.set_ylabel('')
-
+        
                     sns.despine(ax=inset_ax, left=True, bottom=False, top=True, right=True)
 
 
@@ -1142,49 +1298,117 @@ class Plot:
                     ticks=range(len(spaced_conditions)),
                     labels=[lbl if not lbl.startswith("spacer") else "" for lbl in spaced_conditions]
                     )
-                plt.yticks(ticks=np.arange(0, y_ax_max, step=25))
+                # plt.yticks(ticks=np.arange(0, y_ax_max, step=25))
 
 
 
 
             # ======================= IF FALSE KDE INSET =========================
             
-            elif show_kde == False:
+            if show_kde == False:
 
                 # ------------------------------------------ Swarm plot -----------------------------------------------------------
 
                 if show_swarm:
-                    sns.swarmplot(
-                        data=df, 
-                        x='Condition', 
-                        y=metric, 
-                        hue=hue, 
-                        palette=palette, 
-                        size=swarm_size, 
-                        edgecolor=swarm_outline_color, 
-                        dodge=False, 
-                        alpha=swarm_alpha, 
-                        legend=False, 
-                        zorder=2
-                        )
+                    ax = plt.gca()
+                    size = swarm_size
+
+                    while True:
+                        ax.cla()  # clear so failed attempts don't stack markers
+                        try:
+                            with warnings.catch_warnings():
+                                # treat UserWarnings from seaborn/matplotlib as exceptions
+                                warnings.simplefilter("error", UserWarning)
+                                sns.swarmplot(
+                                    data=df,
+                                    x="Condition",
+                                    y=metric,
+                                    hue=hue,
+                                    palette=palette,
+                                    size=size,
+                                    edgecolor=swarm_outline_color,
+                                    dodge=False,
+                                    alpha=swarm_alpha,
+                                    legend=False,
+                                    zorder=2,
+                                    ax=ax,
+                                )
+                            break  # SUCCESS at current size -> leave the loop
+
+                        except UserWarning:
+                            # still too crowded at this size
+                            if size <= 0.1:
+                                # Final attempt with size=-0.1 (as you requested), and suppress the warning
+                                ax.cla()
+                                with warnings.catch_warnings():
+                                    warnings.simplefilter("ignore", UserWarning)
+                                    sns.swarmplot(
+                                        data=df,
+                                        x="Condition",
+                                        y=metric,
+                                        hue=hue,
+                                        palette=palette,
+                                        size=-0.09,
+                                        edgecolor=swarm_outline_color,
+                                        dodge=False,
+                                        alpha=swarm_alpha,
+                                        legend=False,
+                                        zorder=2,
+                                        ax=ax,
+                                    )
+                                break  # done after final fallback
+                            # otherwise, shrink and try again
+                            size -= 0.1
+                            
+
+
+
+                    # sns.swarmplot(
+                    #     data=df, 
+                    #     x='Condition', 
+                    #     y=metric, 
+                    #     hue=hue, 
+                    #     palette=palette, 
+                    #     size=swarm_size, 
+                    #     edgecolor=swarm_outline_color, 
+                    #     dodge=False, 
+                    #     alpha=swarm_alpha, 
+                    #     legend=False, 
+                    #     zorder=2
+                    # )
                 
 
                 # ----------------------------------- Scatterplot of replicate means ------------------------------------------------------
 
-                replicate_means = df.groupby(['Condition', 'Replicate'])[metric].mean().reset_index()
-                if show_balls:
+                if show_mean_balls:
+                    replicate_means = df.groupby(['Condition', 'Replicate'])[metric].mean().reset_index()
                     sns.scatterplot(
-                        data=replicate_means,
+                        data=replicate_means, 
                         x='Condition', 
                         y=metric, 
                         hue=hue, 
                         palette=palette, 
-                        edgecolor=ball_outline_color, 
-                        s=ball_size, 
+                        edgecolor=mean_ball_outline_color, 
+                        s=mean_ball_size, 
                         legend=False, 
-                        alpha=ball_alpha, 
-                        linewidth=ball_outline_width, 
-                        zorder=3
+                        alpha=mean_ball_alpha, 
+                        linewidth=mean_ball_outline_width, 
+                        zorder=4
+                        )
+                if show_median_balls:
+                    replicate_medians = df.groupby(['Condition', 'Replicate'])[metric].median().reset_index()
+                    sns.scatterplot(
+                        data=replicate_medians, 
+                        x='Condition', 
+                        y=metric, 
+                        hue=hue, 
+                        palette=palette, 
+                        edgecolor=median_ball_outline_color, 
+                        s=median_ball_size, 
+                        legend=False, 
+                        alpha=median_ball_alpha, 
+                        linewidth=median_ball_outline_width, 
+                        zorder=4
                         )
 
 
@@ -1198,7 +1422,8 @@ class Plot:
                         color=violin_fill_color, 
                         edgecolor=violin_edge_color, 
                         width=violin_outline_width, 
-                        inner=None, 
+                        inner=None,
+                        gap=0.2, 
                         alpha=violin_alpha, 
                         zorder=1
                         )
@@ -1213,8 +1438,8 @@ class Plot:
                         sns.lineplot(
                             x=[x_center - mean_span, x_center + mean_span], 
                             y=[row['mean'], row['mean']], 
-                            color='black', 
-                            linestyle='-', 
+                            color=mean_color, 
+                            linestyle=mean_ls, 
                             linewidth=line_width, 
                             label='Mean' if i == 0 else "", 
                             zorder=4
@@ -1224,8 +1449,8 @@ class Plot:
                         sns.lineplot(
                             x=[x_center - median_span, x_center + median_span], 
                             y=[row['median'], row['median']], 
-                            color='black', 
-                            linestyle='--', 
+                            color=median_color, 
+                            linestyle=median_ls, 
                             linewidth=line_width, 
                             label='Median' if i == 0 else "", 
                             zorder=4
@@ -1237,7 +1462,7 @@ class Plot:
                             y=row['mean'], 
                             yerr=row['std'], 
                             fmt='None',
-                            color='black', 
+                            color=errorbar_color, 
                             alpha=errorbar_alpha, 
                             linewidth=errorbar_lw, 
                             capsize=errorbar_capsize, 
@@ -1268,34 +1493,36 @@ class Plot:
 
             # ----------------------- Title settings ----------------------------
 
-            if show_kde:
-                if show_swarm & show_mean & show_median:
-                    title = f"Swarm Plot with Mean, Median and KDE for {metric}"
-                elif show_swarm & show_mean & show_median == False:
-                    title = f"Swarm Plot with Mean and KDE for {metric}"
-                elif show_swarm & show_mean == False & show_median:
-                    title = f"Swarm Plot with Median and KDE for {metric}"
-                elif show_swarm == False:
-                    if show_violin & show_mean & show_median:
-                        title = f"Violin Plot with Mean, Median and KDE for {metric}"
-                    elif show_violin & show_mean & show_median == False:
-                        title = f"Violin Plot with Mean and KDE for {metric}"
-                    elif show_violin & show_mean == False & show_median:
-                        title = f"Violin Plot with Median and KDE for {metric}"
-            else:
-                if show_swarm & show_mean & show_median:
-                    title = f"Swarm Plot with Mean and Median for {metric}"
-                elif show_swarm & show_mean & show_median == False:
-                    title = f"Swarm Plot with Mean for {metric}"
-                elif show_swarm & show_mean == False & show_median:
-                    title = f"Swarm Plot with Median for {metric}"
-                elif show_swarm == False:
-                    if show_violin & show_mean & show_median:
-                        title = f"Violin Plot with Mean and Median for {metric}"
-                    elif show_violin & show_mean & show_median == False:
-                        title = f"Violin Plot with Mean for {metric}"
-                    elif show_violin & show_mean == False & show_median:
-                        title = f"Violin Plot with Median for {metric}"
+            # if show_kde:
+            #     if show_swarm & show_mean & show_median:
+            #         title = f"Swarm Plot with Mean, Median and KDE for {metric}"
+            #     elif show_swarm & show_mean & show_median == False:
+            #         title = f"Swarm Plot with Mean and KDE for {metric}"
+            #     elif show_swarm & show_mean == False & show_median:
+            #         title = f"Swarm Plot with Median and KDE for {metric}"
+            #     elif show_swarm == False:
+            #         if show_violin & show_mean & show_median:
+            #             title = f"Violin Plot with Mean, Median and KDE for {metric}"
+            #         elif show_violin & show_mean & show_median == False:
+            #             title = f"Violin Plot with Mean and KDE for {metric}"
+            #         elif show_violin & show_mean == False & show_median:
+            #             title = f"Violin Plot with Median and KDE for {metric}"
+            # else:
+            #     if show_swarm & show_mean & show_median:
+            #         title = f"Swarm Plot with Mean and Median for {metric}"
+            #     elif show_swarm & show_mean & show_median == False:
+            #         title = f"Swarm Plot with Mean for {metric}"
+            #     elif show_swarm & show_mean == False & show_median:
+            #         title = f"Swarm Plot with Median for {metric}"
+            #     elif show_swarm == False:
+            #         if show_violin & show_mean & show_median:
+            #             title = f"Violin Plot with Mean and Median for {metric}"
+            #         elif show_violin & show_mean & show_median == False:
+            #             title = f"Violin Plot with Mean for {metric}"
+            #         elif show_violin & show_mean == False & show_median:
+            #             title = f"Violin Plot with Median for {metric}"
+
+            title = f"Swarm Plot for {metric}"
 
 
             plt.title(title)
@@ -1303,10 +1530,16 @@ class Plot:
             plt.ylabel(metric)
 
             # Add a legend
-            replicate_handle = mlines.Line2D([], [], marker='o', color='w', markerfacecolor=sns.color_palette('tab10')[0], markeredgecolor='black', markersize=10, label='Replicates')
-            handles, labels = plt.gca().get_legend_handles_labels()
-            handles.insert(0, replicate_handle)
-            labels.insert(0, 'Replicates')
+            if show_mean_balls:
+                replicate_handle = mlines.Line2D([], [], marker='o', color='w', markerfacecolor=sns.color_palette('tab10')[0], markeredgecolor=mean_ball_outline_color, markersize=10, label='Replicate Means')
+                handles, labels = plt.gca().get_legend_handles_labels()
+                handles.insert(0, replicate_handle)
+                labels.insert(0, 'Replicate Means')
+            if show_median_balls:
+                replicate_handle = mlines.Line2D([], [], marker='o', color='w', markerfacecolor=sns.color_palette('tab10')[0], markeredgecolor='black', markersize=10, label='Replicate Medians')
+                handles, labels = plt.gca().get_legend_handles_labels()
+                handles.insert(0, replicate_handle)
+                labels.insert(0, 'Replicate Medians')
             
             if show_legend:
                 plt.legend(handles=handles, labels=labels, title='Legend', title_fontsize='12', fontsize='10', loc='upper right', bbox_to_anchor=(1.15, 1), frameon=True)
@@ -1321,10 +1554,16 @@ class Plot:
             else:
                 plt.grid(False)
 
-            plt.tight_layout()
+            # Only move legend if it exists
+            if plt.gca().get_legend() is not None:
+                sns.move_legend(ax, "upper left", bbox_to_anchor=(1.05, 1))
 
+            # plt.tight_layout()
+
+            # return plt.gcf()
+            
+            # plt.savefig("plot.svg", format='svg', bbox_inches='tight')
             return plt.gcf()
-
 
     class Tracks:
         pass

@@ -7,8 +7,6 @@ class Metrics:
         "Time point",
         "X coordinate",
         "Y coordinate",
-        "Condition",
-        "Replicate",
         "Distance",
         "Cumulative length",
         "Cumulative displacement",
@@ -16,9 +14,6 @@ class Metrics:
     ]
 
     Track = [
-        "Track ID",
-        "Condition",
-        "Replicate",
         "Track length",
         "Track displacement",
         "Confinement ratio",
