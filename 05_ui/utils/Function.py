@@ -313,6 +313,9 @@ class Calc:
             **{
                 'Track length': ('Distance', 'sum'),
                 'Speed mean':  ('Distance', 'mean'),
+                'Speed median':('Distance', 'median'),
+                'Speed min':   ('Distance', 'min'),
+                'Speed max':   ('Distance', 'max'),
                 'Speed std':   ('Distance', 'std'),
                 'start_x':     ('X coordinate', 'first'),
                 'end_x':       ('X coordinate', 'last'),
@@ -1531,12 +1534,12 @@ class Plot:
 
             # Add a legend
             if show_mean_balls:
-                replicate_handle = mlines.Line2D([], [], marker='o', color='w', markerfacecolor=sns.color_palette('tab10')[0], markeredgecolor=mean_ball_outline_color, markersize=10, label='Replicate Means')
+                replicate_handle = mlines.Line2D([], [], marker='o', color='w', markerfacecolor=sns.color_palette(palette)[0], markeredgecolor=mean_ball_outline_color, markersize=10, label='Replicate Means')
                 handles, labels = plt.gca().get_legend_handles_labels()
                 handles.insert(0, replicate_handle)
                 labels.insert(0, 'Replicate Means')
             if show_median_balls:
-                replicate_handle = mlines.Line2D([], [], marker='o', color='w', markerfacecolor=sns.color_palette('tab10')[0], markeredgecolor='black', markersize=10, label='Replicate Medians')
+                replicate_handle = mlines.Line2D([], [], marker='o', color='w', markerfacecolor=sns.color_palette(palette)[0], markeredgecolor='black', markersize=10, label='Replicate Medians')
                 handles, labels = plt.gca().get_legend_handles_labels()
                 handles.insert(0, replicate_handle)
                 labels.insert(0, 'Replicate Medians')
