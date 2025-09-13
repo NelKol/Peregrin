@@ -55,7 +55,12 @@ app_ui = ui.page_sidebar(
                 ui.markdown("""___"""),
                 # File inputs
                 ui.row(
-                    ui.column(4, ui.output_ui("input_file_pairs")),
+                    ui.column(4, ui.div(
+                        {"id": "input_file_container_1"},
+                        ui.input_text(id=f"condition_label1", label=f"Condition", placeholder="Label me!"),
+                        ui.input_file(id=f"input_file1", label="Upload files:", placeholder="Drag and drop here!", multiple=True),
+                        ui.markdown(""" <hr style="border: none; border-top: 1px dotted" /> """),
+                    ))
                 ),
                 # Assigning selected columns - draggable window
                 ui.panel_absolute(
@@ -750,18 +755,104 @@ def server(input: Inputs, output: Outputs, session: Session):
 
             session.send_input_message("remove_input", {"disabled": True})
 
-    @output()
-    @render.ui
-    def input_file_pairs():
-        ids = input_list.get()
-        ui_blocks = []
-        for idx in ids:
-            ui_blocks.append([
-                ui.input_text(f"condition_label{idx}", f"Condition {idx}" if len(ids) > 1 else "Condition", placeholder=f"Label me!"),
-                ui.input_file(f"input_file{idx}", "Upload files:", placeholder="Drag and drop here!", multiple=True),
-                ui.markdown(""" <hr style="border: none; border-top: 1px dotted" /> """),
-            ])
-        return ui_blocks
+    # @output()
+    # @render.ui
+    # def input_file_pairs():
+    #     ids = input_list.get()
+    #     ui_blocks = []
+    #     for idx in ids:
+    #         ui_blocks.append([
+    #             ui.input_text(f"condition_label{idx}", f"Condition {idx}" if len(ids) > 1 else "Condition", placeholder=f"Label me!"),
+    #             ui.input_file(f"input_file{idx}", "Upload files:", placeholder="Drag and drop here!", multiple=True),
+    #             ui.markdown(""" <hr style="border: none; border-top: 1px dotted" /> """),
+    #         ])
+    #     return ui_blocks
+
+    # @output()
+    # @render.ui
+    # def input_file_container_1():
+    #     ids = []
+    #     for id in input_list.get():
+    #         if id not in ids:
+    #             ids.append(id)
+    #     _input_file_first = []
+    #     _input_file_first.append([
+            
+    #     ])
+    #     return _input_file_first
+
+    # @reactive.effect
+    # @reactive.event(input.add_input)
+    # def _():
+    #     ids = []
+    #     for id in input_list.get():
+    #         if id not in ids:
+    #             ids.append(id)
+    #     ui.insert_ui([
+    #             ui.input_text(id=f"condition_label{ids[-1]}", label=f"Condition {ids[-1]}", placeholder=f"Label me!"),
+    #             ui.input_file(id=f"input_file{ids[-1]}", label="Upload files:", placeholder="Drag and drop here!", multiple=True),
+    #             # ui.markdown(""" <hr style="border: none; border-top: 1px dotted" /> """),
+    #         ],
+    #         selector="#input_file_first",
+    #         where="afterEnd",
+    #     )
+
+    # @reactive.effect
+    # @reactive.event(input.remove_input)
+    # def _():
+    #     ids = []
+    #     for id in input_list.get():
+    #         if id not in ids:
+    #             ids.append(id)
+    #     ui.remove_ui(
+    #         selector=f"#condition_label{ids[-1]}, #input_file{ids[-1]}",
+    #         multiple=True
+    #     )
+
+    # Helper that builds one pair wrapped in a removable container
+    def _pair_ui(id: int):
+        return ui.div(
+            {"id": f"input_file_container_{id}"},
+            ui.input_text(
+                id=f"condition_label{id}",
+                label=f"Condition {id}",
+                placeholder="Label me!",
+            ),
+            ui.input_file(
+                id=f"input_file{id}",
+                label="Upload files:",
+                placeholder="Drag and drop here!",
+                multiple=True,
+            ),
+            ui.markdown('<hr style="border: none; border-top: 1px dotted" />'),
+        )
+
+    # ADD: append the newest id from input_list right after #input_file_first (or wherever you want)
+    @reactive.effect
+    @reactive.event(input.add_input)
+    def _add_pair():
+        ids = []
+        for id in input_list.get():
+            if id not in ids:
+                ids.append(id)
+        ui.insert_ui(
+            ui=_pair_ui(ids[-1]),
+            selector=f"#input_file_container_{ids[-2]}",
+            where="afterEnd"
+        )
+
+    # REMOVE: remove the container for the latest id in input_list
+    @reactive.effect
+    @reactive.event(input.remove_input)
+    def _remove_pair():
+        ids = []
+        for id in input_list.get():
+            if id not in ids:
+                ids.append(id)
+        ui.remove_ui(
+            selector=f"#input_file_container_{ids[-1]+1}",
+            multiple=True
+        )
     
     # - - - - - - - - - - - - - - - - - - - -
 
