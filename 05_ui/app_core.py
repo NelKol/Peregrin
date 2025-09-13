@@ -822,6 +822,10 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.Effect
     def column_selection():
         ids = input_list.get()
+        ui.update_selectize(id="select_id", choices=["e.g. TRACK ID"])
+        ui.update_selectize(id="select_time", choices=["e.g. POSITION T"])
+        ui.update_selectize(id="select_x", choices=["e.g. POSITION X"])
+        ui.update_selectize(id="select_y", choices=["e.g. POSITION Y"])
 
         for idx in ids:
             files = input[f"input_file{idx}"]()
@@ -1013,7 +1017,6 @@ def server(input: Inputs, output: Outputs, session: Session):
                                     output_widget(f"threshold2d_plot_{threshold_id}")
                                 )
                             ),
-                            # ui.markdown("<p style='font-size:1px; line-height:0.1; color:#f7f7f7;'>_</p>"),
                             ui.markdown(""" <p> </p> """),
                             ui.input_action_button(id=f"threshold2d_clear_{threshold_id}", label="Clear", class_="space-x-2", width="100%"),
                         ),
