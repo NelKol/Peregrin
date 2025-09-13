@@ -755,59 +755,6 @@ def server(input: Inputs, output: Outputs, session: Session):
 
             session.send_input_message("remove_input", {"disabled": True})
 
-    # @output()
-    # @render.ui
-    # def input_file_pairs():
-    #     ids = input_list.get()
-    #     ui_blocks = []
-    #     for idx in ids:
-    #         ui_blocks.append([
-    #             ui.input_text(f"condition_label{idx}", f"Condition {idx}" if len(ids) > 1 else "Condition", placeholder=f"Label me!"),
-    #             ui.input_file(f"input_file{idx}", "Upload files:", placeholder="Drag and drop here!", multiple=True),
-    #             ui.markdown(""" <hr style="border: none; border-top: 1px dotted" /> """),
-    #         ])
-    #     return ui_blocks
-
-    # @output()
-    # @render.ui
-    # def input_file_container_1():
-    #     ids = []
-    #     for id in input_list.get():
-    #         if id not in ids:
-    #             ids.append(id)
-    #     _input_file_first = []
-    #     _input_file_first.append([
-            
-    #     ])
-    #     return _input_file_first
-
-    # @reactive.effect
-    # @reactive.event(input.add_input)
-    # def _():
-    #     ids = []
-    #     for id in input_list.get():
-    #         if id not in ids:
-    #             ids.append(id)
-    #     ui.insert_ui([
-    #             ui.input_text(id=f"condition_label{ids[-1]}", label=f"Condition {ids[-1]}", placeholder=f"Label me!"),
-    #             ui.input_file(id=f"input_file{ids[-1]}", label="Upload files:", placeholder="Drag and drop here!", multiple=True),
-    #             # ui.markdown(""" <hr style="border: none; border-top: 1px dotted" /> """),
-    #         ],
-    #         selector="#input_file_first",
-    #         where="afterEnd",
-    #     )
-
-    # @reactive.effect
-    # @reactive.event(input.remove_input)
-    # def _():
-    #     ids = []
-    #     for id in input_list.get():
-    #         if id not in ids:
-    #             ids.append(id)
-    #     ui.remove_ui(
-    #         selector=f"#condition_label{ids[-1]}, #input_file{ids[-1]}",
-    #         multiple=True
-    #     )
 
     # Helper that builds one pair wrapped in a removable container
     def _pair_ui(id: int):
@@ -830,7 +777,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     # ADD: append the newest id from input_list right after #input_file_first (or wherever you want)
     @reactive.effect
     @reactive.event(input.add_input)
-    def _add_pair():
+    def _add_container():
         ids = []
         for id in input_list.get():
             if id not in ids:
@@ -844,11 +791,22 @@ def server(input: Inputs, output: Outputs, session: Session):
     # REMOVE: remove the container for the latest id in input_list
     @reactive.effect
     @reactive.event(input.remove_input)
-    def _remove_pair():
+    def _remove_container():
         ids = []
         for id in input_list.get():
             if id not in ids:
                 ids.append(id)
+
+        ui.insert_ui(
+            ui.tags.script(
+                f"Shiny.setInputValue('input_file{ids[-1]+1}', null, {{priority:'event'}});"
+                f"Shiny.setInputValue('condition_label{ids[-1]+1}', '', {{priority:'event'}});"
+                # Clear browser chooser if the element still exists
+            ), 
+            selector="body", 
+            where="beforeEnd"
+        )
+
         ui.remove_ui(
             selector=f"#input_file_container_{ids[-1]+1}",
             multiple=True
