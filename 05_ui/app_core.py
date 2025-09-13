@@ -4,7 +4,7 @@ from shinywidgets import render_plotly, render_altair, output_widget, render_wid
 
 from utils.Select import Metrics, Styles, Markers, Modes
 from utils.Function import DataLoader, Process, Calc, Threshold, Plot
-from utils.ratelimit import debounce, throttle
+from utils.RateLimit import Debounce, Throttle, MakeThrottled
 from utils.Customize import Format
 
 import asyncio
@@ -49,8 +49,8 @@ app_ui = ui.page_sidebar(
                 ui.input_action_button("add_input", "Add data input", class_="btn-primary"),
                 ui.input_action_button("remove_input", "Remove data input", class_="btn-primary", disabled=True),
                 ui.input_action_button("run", label="Run", class_="btn-secondary", disabled=True),
-                ui.input_action_button("reset", "Reset", class_="btn-danger"),
-                ui.input_action_button("input_help", "Show help"),
+                # ui.input_action_button("reset", "Reset", class_="btn-danger"),
+                # ui.input_action_button("input_help", "Show help"),
                 ui.output_ui("initialize"),
                 ui.markdown("""___"""),
                 # File inputs
@@ -757,7 +757,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
 
     # Helper that builds one pair wrapped in a removable container
-    def _pair_ui(id: int):
+    def _input_container_ui(id: int):
         return ui.div(
             {"id": f"input_file_container_{id}"},
             ui.input_text(
@@ -783,7 +783,7 @@ def server(input: Inputs, output: Outputs, session: Session):
             if id not in ids:
                 ids.append(id)
         ui.insert_ui(
-            ui=_pair_ui(ids[-1]),
+            ui=_input_container_ui(ids[-1]),
             selector=f"#input_file_container_{ids[-2]}",
             where="afterEnd"
         )
@@ -817,7 +817,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
 
 
-    # - - - - Defined column specification - - - -
+    # - - - - Required columns specification - - - -
 
     @reactive.Effect
     def column_selection():
@@ -1025,9 +1025,9 @@ def server(input: Inputs, output: Outputs, session: Session):
             panels.append(
                 ui.accordion_panel(
                     "Filter settings",
-                    ui.input_numeric(id="threshold2d_array_size", label="Dot Size:", value=3, min=0, step=1),
-                    ui.input_selectize(id="threshold2d_array_color_selected", label="Color Selected:", choices=Metrics.Thresholding.ColorArray.ColorSelected, selected="default"),
-                    ui.input_selectize(id="threshold2d_array_color_unselected", label="Color Unselected:", choices=Metrics.Thresholding.ColorArray.ColorUnselected, selected="default"),
+                    ui.input_numeric(id="threshold2d_array_size", label="Dot Size:", value=2, min=0, step=1),
+                    # ui.input_selectize(id="threshold2d_array_color_selected", label="Color Selected:", choices=Metrics.Thresholding.ColorArray.ColorSelected, selected="default"),
+                    # ui.input_selectize(id="threshold2d_array_color_unselected", label="Color Unselected:", choices=Metrics.Thresholding.ColorArray.ColorUnselected, selected="default"),
                     ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
                     ui.input_action_button(id="threshold_dimensional_toggle", label=dimension_button_label.get(), class_="btn-secondary", width="100%"),
                 ),
@@ -2490,10 +2490,11 @@ def server(input: Inputs, output: Outputs, session: Session):
         return xy_cur
 
 
-
-
-
- 
+    @Debounce(1)
+    @reactive.Calc
+    def get_array_size():
+        return input.threshold2d_array_size() if input.threshold2d_array_size() is not None or input.threshold2d_array_size() != 0 else 2
+        
     def render_threshold2d_widget(threshold_id: int):
         @output(id=f"threshold2d_plot_{threshold_id}")
         @render_widget
@@ -2527,29 +2528,67 @@ def server(input: Inputs, output: Outputs, session: Session):
                 t_state[threshold_id + 1] = {"spots": spot_df, "tracks": track_df}
                 thresholds2d_state.set(t_state)
 
-            X = df[propX]
-            Y = df[propY]
+            X = df[propX].to_numpy()
+            Y = df[propY].to_numpy()
 
-            # Recover previously selected points for this (propX, propY)
+            # ---- density colors for each point -----------------------------------------
+            # Use same range as the axes (you set [-0.025, 1.025])
+            xmin, xmax = -0.025, 1.025
+            ymin, ymax = -0.025, 1.025
+
+            # Choose grid resolution ~ screen pixels; tune for speed/quality
+            nx, ny = 300, 300
+
+            # 2D histogram → H[y, x] counts and bin edges
+            H, xedges, yedges = np.histogram2d(
+                X, Y, bins=(nx, ny), range=[[xmin, xmax], [ymin, ymax]]
+            )
+
+            # For each point, find its (xbin, ybin) → count
+            ix = np.clip(np.searchsorted(xedges, X, side="right") - 1, 0, nx - 1)
+            iy = np.clip(np.searchsorted(yedges, Y, side="right") - 1, 0, ny - 1)
+            dens = H[ix, iy]
+
+            # Optional log scale helps dynamic range
+            dens = np.log10(dens + 1.0)
+
+            # Normalize 0..1 for colorscale
+            dmin, dmax = dens.min(), dens.max()
+            if dmax > dmin:
+                dens_norm = (dens - dmin) / (dmax - dmin)
+            else:
+                dens_norm = np.zeros_like(dens)
+
+            # FlowJo-like blue→cyan→green→yellow→red
+            FLOWJO = [
+                [0.00, "rgb(0,0,130)"],
+                [0.25, "rgb(0,180,255)"],
+                [0.50, "rgb(0,200,0)"],
+                [0.75, "rgb(255,255,0)"],
+                [1.00, "rgb(255,0,0)"],
+            ]
+            # ---------------------------------------------------------------------------
+
+            # Recover previously selected points (your existing code)
             mem = thresholding_memory_2d_selection.get()
             selected_set = _get_2d_selected_set(mem, threshold_id, propX, propY)
-
-            # Map selected original indices -> trace point indices (0..N-1)
-            # We'll keep original row index mapping on the widget to use in callbacks
             row_index = df.index.to_numpy()
-
-            # selectedpoints expects positions in trace arrays
             selectedpoints = np.nonzero(np.isin(row_index, list(selected_set)))[0].tolist()
 
-            # Build FigureWidget
             w = go.FigureWidget(
                 data=[
                     go.Scattergl(
-                        x=X.values, y=Y.values, mode="markers",
-                        marker=dict(size=input.threshold2d_array_size(), color="dimgrey"),
-                        selected=dict(marker=dict(color=input.threshold2d_array_color_selected())),
-                        unselected=dict(marker=dict(color=input.threshold2d_array_color_unselected())),
-                        selectedpoints=selectedpoints,  # reflect memory in the view
+                        x=X, y=Y, mode="markers",
+                        marker=dict(
+                            size=get_array_size(),
+                            color=dens_norm,
+                            colorscale=FLOWJO,
+                            cmin=0, cmax=1,
+                            showscale=False
+                        ),
+                        selected=dict(marker=dict(opacity=1.0)),
+                        unselected=dict(marker=dict(opacity=0.25)),
+                        selectedpoints=selectedpoints,
                         hoverinfo="skip",
                     )
                 ],
@@ -2657,6 +2696,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
         # wire render function to specific id
         threshold2d_plot._id = f"threshold2d_plot_{threshold_id}"
+        
 
     def _clear_2d_selection_for_id(threshold_id: int):
         @reactive.Effect
@@ -2693,8 +2733,9 @@ def server(input: Inputs, output: Outputs, session: Session):
 
                 render_threshold2d_widget(tid)
 
+
     @reactive.Effect
-    def uh():
+    def _():
         for threshold_id in threshold_list.get():
             _clear_2d_selection_for_id(threshold_id)
             render_threshold2d_widget(threshold_id)
@@ -3046,7 +3087,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 open_spine=open_spine
             )
 
-    @debounce(6)
+    @Debounce(6)
     @reactive.Effect
     @reactive.event(input.sp_generate)
     def render_swarmplot():
