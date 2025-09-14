@@ -30,7 +30,7 @@ app_ui = ui.page_sidebar(
         ui.output_ui(id="sidebar_label"),
         ui.input_action_button(id="add_threshold", label="Add threshold", class_="btn-primary"),
         ui.input_action_button(id="remove_threshold", label="Remove threshold", class_="btn-primary", disabled=True),
-        ui.output_ui(id="sidebar_accordion"),
+        ui.output_ui(id="sidebar_accordion_placeholder"),
         ui.input_task_button(id="filter_data", label="Filter Data", label_busy="Applying...", type="secondary", disabled=True),
         ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
         ui.output_ui(id="filter_info"),
@@ -57,7 +57,7 @@ app_ui = ui.page_sidebar(
                 ui.row(
                     ui.column(4, ui.div(
                         {"id": "input_file_container_1"},
-                        ui.input_text(id=f"condition_label1", label=f"Condition", placeholder="Label me!"),
+                        ui.input_text(id=f"condition_label1", label=f"Label:", placeholder="Condition 1"),
                         ui.input_file(id=f"input_file1", label="Upload files:", placeholder="Drag and drop here!", multiple=True),
                         ui.markdown(""" <hr style="border: none; border-top: 1px dotted" /> """),
                     ))
@@ -683,7 +683,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     # - - - - Dynamic Thresholds - - - -
     threshold_dimension = reactive.Value("1D")
     dimension_button_label = reactive.Value("2D")
-    threshold_list = reactive.Value([0])  # Start with one threshold
+    threshold_list = reactive.Value([1])  # Start with one threshold
     property_selections = reactive.Value({})
     filter_type_selections = reactive.Value({})
     quantile_selections = reactive.Value({})
@@ -762,8 +762,8 @@ def server(input: Inputs, output: Outputs, session: Session):
             {"id": f"input_file_container_{id}"},
             ui.input_text(
                 id=f"condition_label{id}",
-                label=f"Condition {id}",
-                placeholder="Label me!",
+                label="Label:",
+                placeholder=f"Condition {id}",
             ),
             ui.input_file(
                 id=f"input_file{id}",
@@ -778,10 +778,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.effect
     @reactive.event(input.add_input)
     def _add_container():
-        ids = []
-        for id in input_list.get():
-            if id not in ids:
-                ids.append(id)
+        ids = input_list.get()
         ui.insert_ui(
             ui=_input_container_ui(ids[-1]),
             selector=f"#input_file_container_{ids[-2]}",
@@ -792,10 +789,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.effect
     @reactive.event(input.remove_input)
     def _remove_container():
-        ids = []
-        for id in input_list.get():
-            if id not in ids:
-                ids.append(id)
+        ids = input_list.get()
 
         ui.insert_ui(
             ui.tags.script(
@@ -943,96 +937,246 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     # - - - - Adding and removing thresholds - - - -
 
-    @reactive.Effect
-    @reactive.event(input.add_threshold)
-    def add_threshold():
-        ids = threshold_list.get()
-        threshold_list.set(ids + [max(ids)+1 if ids else 0])
-        session.send_input_message("remove_threshold", {"disabled": False})
+    # @reactive.Effect
+    # @reactive.event(input.add_threshold)
+    # def add_threshold():
+    #     ids = threshold_list.get()
+    #     threshold_list.set(ids + [ids[-1] + 1 if ids else 1])
+    #     session.send_input_message("remove_threshold", {"disabled": False})
 
-    @reactive.Effect
-    @reactive.event(input.remove_threshold)
-    def remove_threshold():
-        ids = threshold_list.get()
-        if len(ids) > 1:
-            threshold_list.set(ids[:-1])
-        if len(threshold_list.get()) <= 1:
-            session.send_input_message("remove_threshold", {"disabled": True})
+    # @reactive.Effect
+    # @reactive.event(input.remove_threshold)
+    # def remove_threshold():
+    #     ids = threshold_list.get()
+    #     if len(ids) > 1:
+    #         threshold_list.set(ids[:-1])
+    #     if len(threshold_list.get()) <= 1:
+    #         session.send_input_message("remove_threshold", {"disabled": True})
 
 
     # - - - - Sidebar accordion layout for thresholds - - - -
 
     @output()
     @render.ui
-    def sidebar_accordion():
-        ids = threshold_list.get()
-        panels = []
+    def sidebar_accordion_placeholder():
         if threshold_dimension.get() == "1D":
-            for i, threshold_id in enumerate(ids, 1):
-                panels.append(
-                    ui.accordion_panel(
-                        f"Threshold {i}" if len(ids) >= 2 else "Threshold",
-                        ui.panel_well(
-                            ui.input_selectize(f"threshold_property_{threshold_id}", "Property", choices=Metrics.Thresholding.Properties),
-                            ui.input_selectize(f"threshold_filter_{threshold_id}", "Filter type", choices=Modes.Thresholding),
-                            ui.panel_conditional(
-                                f"input.threshold_filter_{threshold_id} == 'Quantile'",
-                                ui.input_selectize(f"threshold_quantile_{threshold_id}", "Quantile", choices=[200, 100, 50, 25, 20, 10, 5, 4, 2], selected=100),
-                            ),
-                            ui.panel_conditional(
-                                f"input.threshold_filter_{threshold_id} == 'Relative to...'",
-                                ui.input_selectize(f"reference_value_{threshold_id}", "Reference value", choices=["Mean", "Median", "My own value"]),
-                                ui.panel_conditional(
-                                    f"input.reference_value_{threshold_id} == 'My own value'",
-                                    ui.input_numeric(f"my_own_value_{threshold_id}", "My own value", value=0, step=1)
-                                ),
-                            ),
-                            ui.output_ui(f"manual_threshold_value_setting_{threshold_id}"),
-                            ui.output_ui(f"threshold_slider_placeholder_{threshold_id}"),
-                            ui.output_plot(f"thresholding_histogram_placeholder_{threshold_id}"),
-                        ),
-                    ),
-                )
-            panels.append(
+            return ui.accordion(
                 ui.accordion_panel(
                     "Filter settings",
                     ui.input_numeric("bins", "Number of bins", value=25, min=1, step=1),
                     ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
                     ui.input_action_button(id="threshold_dimensional_toggle", label=dimension_button_label.get(), width="100%"),
                 ),
-            )
-        elif threshold_dimension.get() == "2D":
-            for i, threshold_id in enumerate(ids, 1):
-                panels.append(
-                    ui.accordion_panel(
-                        f"Threshold {i}" if len(ids) >= 2 else "Threshold",
-                        ui.panel_well(
-                            ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
-                            ui.input_selectize(f"thresholding_metric_X_{threshold_id}", None, Metrics.Thresholding.Properties, selected="Confinement ratio"),
-                            ui.input_selectize(f"thresholding_metric_Y_{threshold_id}", None, Metrics.Thresholding.Properties, selected="Track length"),
-                            ui.div(
-                                {"style": "position:relative; width:100%; padding-top:100%; padding-bottom:50%;"},
-                                ui.div(
-                                    {"style": "position:absolute; inset:0;"},
-                                    output_widget(f"threshold2d_plot_{threshold_id}")
-                                )
-                            ),
-                            ui.markdown(""" <p> </p> """),
-                            ui.input_action_button(id=f"threshold2d_clear_{threshold_id}", label="Clear", class_="space-x-2", width="100%"),
+                ui.accordion_panel(
+                    f"Threshold 1",
+                    ui.panel_well(
+                        ui.input_selectize(f"threshold_property_1", "Property", choices=Metrics.Thresholding.Properties),
+                        ui.input_selectize(f"threshold_filter_1", "Filter type", choices=Modes.Thresholding),
+                        ui.panel_conditional(
+                            f"input.threshold_filter_1 == 'Quantile'",
+                            ui.input_selectize(f"threshold_quantile_1", "Quantile", choices=[200, 100, 50, 25, 20, 10, 5, 4, 2], selected=100),
                         ),
+                        ui.panel_conditional(
+                            f"input.threshold_filter_1 == 'Relative to...'",
+                            ui.input_selectize(f"reference_value_1", "Reference value", choices=["Mean", "Median", "My own value"]),
+                            ui.panel_conditional(
+                                f"input.reference_value_1 == 'My own value'",
+                                ui.input_numeric(f"my_own_value_1", "My own value", value=0, step=1)
+                            ),
+                        ),
+                        ui.output_ui(f"manual_threshold_value_setting_1"),
+                        ui.output_ui(f"threshold_slider_placeholder_1"),
+                        ui.output_plot(f"thresholding_histogram_placeholder_1"),
                     ),
                 ),
-            panels.append(
+                id="threshold_accordion",
+                open="Threshold 1",
+            )
+        elif threshold_dimension.get() == "2D":
+            return ui.accordion(
                 ui.accordion_panel(
                     "Filter settings",
-                    ui.input_numeric(id="threshold2d_array_size", label="Dot Size:", value=2, min=0, step=1),
+                    ui.input_numeric(id="threshold2d_array_size", label="Dot Size:", value=1, min=0, step=1),
                     # ui.input_selectize(id="threshold2d_array_color_selected", label="Color Selected:", choices=Metrics.Thresholding.ColorArray.ColorSelected, selected="default"),
                     # ui.input_selectize(id="threshold2d_array_color_unselected", label="Color Unselected:", choices=Metrics.Thresholding.ColorArray.ColorUnselected, selected="default"),
                     ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
                     ui.input_action_button(id="threshold_dimensional_toggle", label=dimension_button_label.get(), class_="btn-secondary", width="100%"),
                 ),
-            ),
-        return ui.accordion(*panels, id="thresholds_accordion", open=True)
+                ui.accordion_panel(
+                    f"Threshold 1",
+                    ui.panel_well(
+                        ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
+                        ui.input_selectize(f"thresholding_metric_X_1", None, Metrics.Thresholding.Properties, selected="Confinement ratio"),
+                        ui.input_selectize(f"thresholding_metric_Y_1", None, Metrics.Thresholding.Properties, selected="Track length"),
+                        ui.div(
+                            {"style": "position:relative; width:100%; padding-top:100%; padding-bottom:50%;"},
+                            ui.div(
+                                {"style": "position:absolute; inset:0;"},
+                                output_widget(f"threshold2d_plot_1")
+                            )
+                        ),
+                        ui.markdown(""" <p> </p> """),
+                        ui.input_action_button(id=f"threshold2d_clear_1", label="Clear", class_="space-x-2", width="100%"),
+                    ),
+                ),
+                id="threshold_accordion",
+                open="Threshold 1"
+            )
+    
+    # @Debounce(3)
+    # @reactive.Calc
+    def render_threshold_accordion_panel(id):
+        # id = threshold_list.get()[-1]
+        if threshold_dimension.get() == "1D":
+            print("Rendering threshold panel", id)
+            return ui.accordion_panel(
+                f"Threshold {id}",
+                ui.panel_well(
+                    ui.input_selectize(f"threshold_property_{id}", "Property", choices=Metrics.Thresholding.Properties),
+                    ui.input_selectize(f"threshold_filter_{id}", "Filter type", choices=Modes.Thresholding),
+                    ui.panel_conditional(
+                        f"input.threshold_filter_{id} == 'Quantile'",
+                        ui.input_selectize(f"threshold_quantile_{id}", "Quantile", choices=[200, 100, 50, 25, 20, 10, 5, 4, 2], selected=100),
+                    ),
+                    ui.panel_conditional(
+                        f"input.threshold_filter_{id} == 'Relative to...'",
+                        ui.input_selectize(f"reference_value_{id}", "Reference value", choices=["Mean", "Median", "My own value"]),
+                        ui.panel_conditional(
+                            f"input.reference_value_{id} == 'My own value'",
+                            ui.input_numeric(f"my_own_value_{id}", "My own value", value=0, step=1)
+                        ),
+                    ),
+                    ui.output_ui(f"manual_threshold_value_setting_{id}"),
+                    ui.output_ui(f"threshold_slider_placeholder_{id}"),
+                    ui.output_plot(f"thresholding_histogram_placeholder_{id}"),
+                ),
+            )
+        elif threshold_dimension.get() == "2D":
+            return ui.accordion_panel(
+                f"Threshold {id}",
+                ui.panel_well(
+                    ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
+                    ui.input_selectize(f"thresholding_metric_X_{id}", None, Metrics.Thresholding.Properties, selected="Confinement ratio"),
+                    ui.input_selectize(f"thresholding_metric_Y_{id}", None, Metrics.Thresholding.Properties, selected="Track length"),
+                    ui.div(
+                        {"style": "position:relative; width:100%; padding-top:100%; padding-bottom:50%;"},
+                        ui.div(
+                            {"style": "position:absolute; inset:0;"},
+                            output_widget(f"threshold2d_plot_{id}")
+                        )
+                    ),
+                    ui.markdown(""" <p> </p> """),
+                    ui.input_action_button(id=f"threshold2d_clear_{id}", label="Clear", class_="space-x-2", width="100%"),
+                ),
+            )
+
+
+
+    @reactive.Effect
+    @reactive.event(input.add_threshold)
+    def add_threshold():
+        ids = threshold_list.get()
+        threshold_list.set(ids + [ids[-1] + 1] if ids else [1])
+        id = ids[-1] + 1
+        session.send_input_message("remove_threshold", {"disabled": False})
+
+        print("Adding threshold panel", threshold_list.get())
+
+        ui.insert_accordion_panel(
+            id="threshold_accordion",
+            panel=render_threshold_accordion_panel(id),
+            position="after"
+        )
+
+    @reactive.Effect
+    @reactive.event(input.remove_threshold)
+    def remove_threshold():
+        ids = threshold_list.get()
+        id = ids[-1]
+        if len(ids) > 1:
+            threshold_list.set(ids[:-1])
+        if len(threshold_list.get()) <= 1:
+            session.send_input_message("remove_threshold", {"disabled": True})
+        
+        ui.remove_accordion_panel(
+            id="threshold_accordion",
+            target=f"Threshold {id}"
+        )
+
+
+
+    # @output()
+    # @render.ui
+    # def sidebar_accordion():
+    #     ids = threshold_list.get()
+    #     panels = []
+    #     if threshold_dimension.get() == "1D":
+    #         for i, threshold_id in enumerate(ids, 1):
+    #             panels.append(
+    #                 ui.accordion_panel(
+    #                     f"Threshold {i}" if len(ids) >= 2 else "Threshold",
+    #                     ui.panel_well(
+    #                         ui.input_selectize(f"threshold_property_{threshold_id}", "Property", choices=Metrics.Thresholding.Properties),
+    #                         ui.input_selectize(f"threshold_filter_{threshold_id}", "Filter type", choices=Modes.Thresholding),
+    #                         ui.panel_conditional(
+    #                             f"input.threshold_filter_{threshold_id} == 'Quantile'",
+    #                             ui.input_selectize(f"threshold_quantile_{threshold_id}", "Quantile", choices=[200, 100, 50, 25, 20, 10, 5, 4, 2], selected=100),
+    #                         ),
+    #                         ui.panel_conditional(
+    #                             f"input.threshold_filter_{threshold_id} == 'Relative to...'",
+    #                             ui.input_selectize(f"reference_value_{threshold_id}", "Reference value", choices=["Mean", "Median", "My own value"]),
+    #                             ui.panel_conditional(
+    #                                 f"input.reference_value_{threshold_id} == 'My own value'",
+    #                                 ui.input_numeric(f"my_own_value_{threshold_id}", "My own value", value=0, step=1)
+    #                             ),
+    #                         ),
+    #                         ui.output_ui(f"manual_threshold_value_setting_{threshold_id}"),
+    #                         ui.output_ui(f"threshold_slider_placeholder_{threshold_id}"),
+    #                         ui.output_plot(f"thresholding_histogram_placeholder_{threshold_id}"),
+    #                     ),
+    #                 ),
+    #             )
+    #         panels.append(
+    #             ui.accordion_panel(
+    #                 "Filter settings",
+    #                 ui.input_numeric("bins", "Number of bins", value=25, min=1, step=1),
+    #                 ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
+    #                 ui.input_action_button(id="threshold_dimensional_toggle", label=dimension_button_label.get(), width="100%"),
+    #             ),
+    #         )
+    #     elif threshold_dimension.get() == "2D":
+    #         for i, threshold_id in enumerate(ids, 1):
+    #             panels.append(
+    #                 ui.accordion_panel(
+    #                     f"Threshold {i}" if len(ids) >= 2 else "Threshold",
+    #                     ui.panel_well(
+    #                         ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
+    #                         ui.input_selectize(f"thresholding_metric_X_{threshold_id}", None, Metrics.Thresholding.Properties, selected="Confinement ratio"),
+    #                         ui.input_selectize(f"thresholding_metric_Y_{threshold_id}", None, Metrics.Thresholding.Properties, selected="Track length"),
+    #                         ui.div(
+    #                             {"style": "position:relative; width:100%; padding-top:100%; padding-bottom:50%;"},
+    #                             ui.div(
+    #                                 {"style": "position:absolute; inset:0;"},
+    #                                 output_widget(f"threshold2d_plot_{threshold_id}")
+    #                             )
+    #                         ),
+    #                         ui.markdown(""" <p> </p> """),
+    #                         ui.input_action_button(id=f"threshold2d_clear_{threshold_id}", label="Clear", class_="space-x-2", width="100%"),
+    #                     ),
+    #                 ),
+    #             ),
+    #         panels.append(
+    #             ui.accordion_panel(
+    #                 "Filter settings",
+    #                 ui.input_numeric(id="threshold2d_array_size", label="Dot Size:", value=1, min=0, step=1),
+    #                 # ui.input_selectize(id="threshold2d_array_color_selected", label="Color Selected:", choices=Metrics.Thresholding.ColorArray.ColorSelected, selected="default"),
+    #                 # ui.input_selectize(id="threshold2d_array_color_unselected", label="Color Unselected:", choices=Metrics.Thresholding.ColorArray.ColorUnselected, selected="default"),
+    #                 ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
+    #                 ui.input_action_button(id="threshold_dimensional_toggle", label=dimension_button_label.get(), class_="btn-secondary", width="100%"),
+    #             ),
+    #         ),
+    #     return ui.accordion(*panels, id="thresholds_accordion", open=True)
+
 
 
     # - - - - Filtered info display - - - -
@@ -1464,12 +1608,12 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.event(input.threshold_dimensional_toggle, input.run, input.already_processed_input)
     def _initialize_thresholding_memory():
         threshold_list.unset()
-        threshold_list.set([0])
+        threshold_list.set([1])
 
         if threshold_dimension.get() == "1D":
-            thresholds1d_state.set({0: {"spots": UNFILTERED_SPOTSTATS.get(), "tracks": UNFILTERED_TRACKSTATS.get()}})
+            thresholds1d_state.set({1: {"spots": UNFILTERED_SPOTSTATS.get(), "tracks": UNFILTERED_TRACKSTATS.get()}})
         elif threshold_dimension.get() == "2D":
-            thresholds2d_state.set({0: {"spots": UNFILTERED_SPOTSTATS.get(), "tracks": UNFILTERED_TRACKSTATS.get()}})
+            thresholds2d_state.set({1: {"spots": UNFILTERED_SPOTSTATS.get(), "tracks": UNFILTERED_TRACKSTATS.get()}})
 
         SPOTSTATS.set(UNFILTERED_SPOTSTATS.get())
         TRACKSTATS.set(UNFILTERED_TRACKSTATS.get())
@@ -1752,18 +1896,18 @@ def server(input: Inputs, output: Outputs, session: Session):
         return steps, values, ref_val, minimal, maximal
 
 
-    # threshold1d_df_memory = reactive.Value({0: {"spots": pd.DataFrame(), "tracks": pd.DataFrame()}})
+    threshold1d_df_memory = reactive.Value({0: {"spots": pd.DataFrame(), "tracks": pd.DataFrame()}})
 
-    # @reactive.Effect
-    # @reactive.event(UNFILTERED_SPOTSTATS, UNFILTERED_TRACKSTATS)
-    # def initialize_threshold1d_memory():
-    #     data = {
-    #         0: {
-    #             "spots": UNFILTERED_SPOTSTATS.get(),
-    #             "tracks": UNFILTERED_TRACKSTATS.get()
-    #         }
-    #     }
-    #     threshold1d_df_memory.set(data)
+    @reactive.Effect
+    @reactive.event(UNFILTERED_SPOTSTATS, UNFILTERED_TRACKSTATS)
+    def initialize_threshold1d_memory():
+        data = {
+            0: {
+                "spots": UNFILTERED_SPOTSTATS.get(),
+                "tracks": UNFILTERED_TRACKSTATS.get()
+            }
+        }
+        threshold1d_df_memory.set(data)
 
 
 
@@ -1866,7 +2010,13 @@ def server(input: Inputs, output: Outputs, session: Session):
                 )),
             )
 
+
     # - - - - Threshold histogram generator - - - -
+
+    @Debounce(1)
+    @reactive.Calc
+    def get_bins():
+        return input.bins() if input.bins() is not None and input.bins() != 0 else 25
 
     def render_threshold_histogram(threshold_id):
         @output(id=f"thresholding_histogram_placeholder_{threshold_id}")
@@ -1894,7 +2044,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
             if filter_type == "Literal":
 
-                bins = input.bins() if input.bins() is not None else 25
+                bins = get_bins()
                 values = data[property].dropna()
 
                 fig, ax = plt.subplots()
@@ -2068,6 +2218,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         metric_x_selections.set({tid: v for tid, v in _x.items() if tid in ids})
         metric_y_selections.set({tid: v for tid, v in _y.items() if tid in ids})
 
+
     @reactive.Effect
     def metric_x_selectize():
         saved = metric_x_selections.get()
@@ -2226,10 +2377,10 @@ def server(input: Inputs, output: Outputs, session: Session):
                     # threshold1d_df_memory.set(data_memory)
                     thresholds1d_state.set(data_memory)
 
-                    render_threshold_slider(tid + 1)
-                    render_threshold_histogram(tid + 1)
-                    render_manual_threshold_values_setting(tid + 1)
-                    register_threshold_sync(tid + 1)
+                    # render_threshold_slider(tid + 1)
+                    # render_threshold_histogram(tid + 1)
+                    # render_manual_threshold_values_setting(tid + 1)
+                    # register_threshold_sync(tid + 1)
 
                 except Exception:
                     pass
@@ -2493,7 +2644,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     @Debounce(1)
     @reactive.Calc
     def get_array_size():
-        return input.threshold2d_array_size() if input.threshold2d_array_size() is not None or input.threshold2d_array_size() != 0 else 2
+        return input.threshold2d_array_size() if input.threshold2d_array_size() is not None or input.threshold2d_array_size() != 0 else 1
         
     def render_threshold2d_widget(threshold_id: int):
         @output(id=f"threshold2d_plot_{threshold_id}")
@@ -2805,7 +2956,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 
             if isinstance(reference, (str)) and reference is not None:
                 _reference_selections[threshold_id] = reference
-            # if reference == "My own value":
+            # if reference == "My own value":z
             #     my_own_value = input[f"my_own_value_{threshold_id}"]()
             #     if isinstance(my_own_value, (int, float)) and my_own_value is not None:
             #         _reference_selections[threshold_id] = float(my_own_value)
@@ -2871,13 +3022,13 @@ def server(input: Inputs, output: Outputs, session: Session):
                 choices=["Mean", "Median", "My own value"],
                 selected=select
             )
-            # # Update the numeric input for "My own value"
-            # if select == "My own value":
-            #     my_own_value = input[f"my_own_value_{threshold_id}"]()
-            #     ui.update_numeric(
-            #         id=f"my_own_value_{threshold_id}",
-            #         value=my_own_value if isinstance(my_own_value, (int, float)) else None
-            #     )
+            # Update the numeric input for "My own value"
+            if select == "My own value":
+                my_own_value = input[f"my_own_value_{threshold_id}"]()
+                ui.update_numeric(
+                    id=f"my_own_value_{threshold_id}",
+                    value=my_own_value if isinstance(my_own_value, (int, float)) else None
+                )
 
 
     # - - - - - - - - - - - - - - - - - - - - -
