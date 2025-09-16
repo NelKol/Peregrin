@@ -3356,7 +3356,12 @@ def server(input: Inputs, output: Outputs, session: Session):
 app = App(app_ui, server)
 
 
-# TODO: !!! utilize @extended_task !!!
+# TODO - Get rid of the calculation expensive iterations
+#      - Either use a machine learning algorithm to calculate the the swarmplot dot size
+#      - Or write code that  will let the user set the swarmmsize in a way, where the steps will be 
+#        0.1 inbetween 0-1;
+#        0.5 inbetween 1-5;
+#        1 inbetween 5-infinity
 
 # TODO - Keep all the raw data (columns) - rather format them (stripping of _ and have them not all caps)
 # TODO - Make the 2D filtering logic work on the same logic as does the D filtering logic
