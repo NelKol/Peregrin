@@ -23,18 +23,6 @@ import plotly.graph_objects as go
 
 
 
-warnings.filterwarnings(
-    "ignore",
-    message="Starting a Matplotlib GUI outside of the main thread will likely fail",
-    category=UserWarning,
-    module="matplotlib"
-)
-
-
-
-
-
-
 def _pick_encoding(path, encodings=("utf-8", "cp1252", "latin1", "iso8859_15")):
     for enc in encodings:
         try:
