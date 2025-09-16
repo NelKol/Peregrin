@@ -9,6 +9,7 @@ from utils.Customize import Format
 
 import asyncio
 import io
+import warnings
 import tempfile
 
 import pandas as pd
@@ -19,6 +20,18 @@ import plotly.graph_objs as go
 from math import floor, ceil
 from scipy.stats import gaussian_kde
 from datetime import date
+
+
+
+
+
+
+
+
+
+
+
+
 
 # --- UI definition ---
 app_ui = ui.page_sidebar(
@@ -635,10 +648,11 @@ app_ui = ui.page_sidebar(
                         ui.input_task_button(id="sp_generate", label="Generate", class_="btn-secondary", width="100%"),
                     ),
                     ui.markdown(""" <br> """),
-                    ui.card(
-                        ui.output_plot(id="swarmplot"),
-                        ui.download_button("download_swarmplot_svg", "Download Swarmplot SVG"),
-                    ),
+                    ui.output_plot(id="swarmplot"),
+                    # ui.card(
+                    #     ui.output_plot(id="swarmplot"),
+                    #     ui.download_button("download_swarmplot_svg", "Download Swarmplot SVG"),
+                    # ),
                 ),
                 widths = (2, 10)
             ),
@@ -1102,81 +1116,6 @@ def server(input: Inputs, output: Outputs, session: Session):
             id="threshold_accordion",
             target=f"Threshold {id}"
         )
-
-
-
-    # @output()
-    # @render.ui
-    # def sidebar_accordion():
-    #     ids = threshold_list.get()
-    #     panels = []
-    #     if threshold_dimension.get() == "1D":
-    #         for i, threshold_id in enumerate(ids, 1):
-    #             panels.append(
-    #                 ui.accordion_panel(
-    #                     f"Threshold {i}" if len(ids) >= 2 else "Threshold",
-    #                     ui.panel_well(
-    #                         ui.input_selectize(f"threshold_property_{threshold_id}", "Property", choices=Metrics.Thresholding.Properties),
-    #                         ui.input_selectize(f"threshold_filter_{threshold_id}", "Filter type", choices=Modes.Thresholding),
-    #                         ui.panel_conditional(
-    #                             f"input.threshold_filter_{threshold_id} == 'Quantile'",
-    #                             ui.input_selectize(f"threshold_quantile_{threshold_id}", "Quantile", choices=[200, 100, 50, 25, 20, 10, 5, 4, 2], selected=100),
-    #                         ),
-    #                         ui.panel_conditional(
-    #                             f"input.threshold_filter_{threshold_id} == 'Relative to...'",
-    #                             ui.input_selectize(f"reference_value_{threshold_id}", "Reference value", choices=["Mean", "Median", "My own value"]),
-    #                             ui.panel_conditional(
-    #                                 f"input.reference_value_{threshold_id} == 'My own value'",
-    #                                 ui.input_numeric(f"my_own_value_{threshold_id}", "My own value", value=0, step=1)
-    #                             ),
-    #                         ),
-    #                         ui.output_ui(f"manual_threshold_value_setting_{threshold_id}"),
-    #                         ui.output_ui(f"threshold_slider_placeholder_{threshold_id}"),
-    #                         ui.output_plot(f"thresholding_histogram_placeholder_{threshold_id}"),
-    #                     ),
-    #                 ),
-    #             )
-    #         panels.append(
-    #             ui.accordion_panel(
-    #                 "Filter settings",
-    #                 ui.input_numeric("bins", "Number of bins", value=25, min=1, step=1),
-    #                 ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
-    #                 ui.input_action_button(id="threshold_dimensional_toggle", label=dimension_button_label.get(), width="100%"),
-    #             ),
-    #         )
-    #     elif threshold_dimension.get() == "2D":
-    #         for i, threshold_id in enumerate(ids, 1):
-    #             panels.append(
-    #                 ui.accordion_panel(
-    #                     f"Threshold {i}" if len(ids) >= 2 else "Threshold",
-    #                     ui.panel_well(
-    #                         ui.markdown(""" <h6>  Properties X;Y  </h6>"""),
-    #                         ui.input_selectize(f"thresholding_metric_X_{threshold_id}", None, Metrics.Thresholding.Properties, selected="Confinement ratio"),
-    #                         ui.input_selectize(f"thresholding_metric_Y_{threshold_id}", None, Metrics.Thresholding.Properties, selected="Track length"),
-    #                         ui.div(
-    #                             {"style": "position:relative; width:100%; padding-top:100%; padding-bottom:50%;"},
-    #                             ui.div(
-    #                                 {"style": "position:absolute; inset:0;"},
-    #                                 output_widget(f"threshold2d_plot_{threshold_id}")
-    #                             )
-    #                         ),
-    #                         ui.markdown(""" <p> </p> """),
-    #                         ui.input_action_button(id=f"threshold2d_clear_{threshold_id}", label="Clear", class_="space-x-2", width="100%"),
-    #                     ),
-    #                 ),
-    #             ),
-    #         panels.append(
-    #             ui.accordion_panel(
-    #                 "Filter settings",
-    #                 ui.input_numeric(id="threshold2d_array_size", label="Dot Size:", value=1, min=0, step=1),
-    #                 # ui.input_selectize(id="threshold2d_array_color_selected", label="Color Selected:", choices=Metrics.Thresholding.ColorArray.ColorSelected, selected="default"),
-    #                 # ui.input_selectize(id="threshold2d_array_color_unselected", label="Color Unselected:", choices=Metrics.Thresholding.ColorArray.ColorUnselected, selected="default"),
-    #                 ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
-    #                 ui.input_action_button(id="threshold_dimensional_toggle", label=dimension_button_label.get(), class_="btn-secondary", width="100%"),
-    #             ),
-    #         ),
-    #     return ui.accordion(*panels, id="thresholds_accordion", open=True)
-
 
 
     # - - - - Filtered info display - - - -
@@ -3139,7 +3078,9 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     # - - - - - - Swarmplot - - - - - -    
 
-    def output_swarmplot(
+    @ui.bind_task_button(button_id="sp_generate")
+    @reactive.extended_task
+    async def output_swarmplot(
         df,
         metric,
         palette,
@@ -3184,64 +3125,75 @@ def server(input: Inputs, output: Outputs, session: Session):
         p_test,
         show_legend,
         show_grid,
-        open_spine
+        open_spine,
     ):
-        @output(id="swarmplot")
-        @render.plot
-        def swarmplot():
-            track_df = TRACKSTATS.get() if TRACKSTATS.get() is not None else pd.DataFrame()
-            return Plot.Superplots.SwarmPlot(
-                df=track_df,
-                metric=metric,
-                palette=palette,
-                show_swarm=show_swarm,
-                swarm_size=swarm_size,
-                swarm_outline_color=swarm_outline_color,
-                swarm_alpha=swarm_alpha if swarm_alpha <= 1.0 and swarm_alpha >= 0.0 else 1.0,
-                show_violin=show_violin,
-                violin_fill_color=violin_fill_color,
-                violin_edge_color=violin_edge_color,
-                violin_alpha=violin_alpha if violin_alpha <= 1.0 and violin_alpha >= 0.0 else 1.0,
-                violin_outline_width=violin_outline_width,
-                show_mean=show_mean,
-                mean_span=mean_span,
-                mean_color=mean_color,
-                show_median=show_median,
-                median_span=median_span,
-                median_color=median_color,
-                line_width=line_width,
-                set_main_line=set_main_line,
-                show_error_bars=show_error_bars,
-                errorbar_capsize=errorbar_capsize,
-                errorbar_color=errorbar_color,
-                errorbar_lw=errorbar_lw,
-                errorbar_alpha=errorbar_alpha if errorbar_alpha <= 1.0 and errorbar_alpha >= 0.0 else 1.0,
-                show_mean_balls=show_mean_balls,
-                mean_ball_size=mean_ball_size,
-                mean_ball_outline_color=mean_ball_outline_color,
-                mean_ball_outline_width=mean_ball_outline_width,
-                mean_ball_alpha=mean_ball_alpha if mean_ball_alpha <= 1.0 and mean_ball_alpha >= 0.0 else 1.0,
-                show_median_balls=show_median_balls,
-                median_ball_size=median_ball_size,
-                median_ball_outline_color=median_ball_outline_color,
-                median_ball_outline_width=median_ball_outline_width,
-                median_ball_alpha=median_ball_alpha if median_ball_alpha <= 1.0 and median_ball_alpha >= 0.0 else 1.0,
-                show_kde=show_kde,
-                kde_inset_width=kde_inset_width,
-                kde_outline=kde_outline,
-                kde_alpha=kde_alpha if kde_alpha <= 1.0 and kde_alpha >= 0.0 else 1.0,
-                kde_legend=kde_legend,
-                kde_fill=kde_fill,
-                p_test=p_test,
-                show_legend=show_legend,
-                show_grid=show_grid,
-                open_spine=open_spine
-            )
+        # run sync plotting off the event loop
+        def build():
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message="Starting a Matplotlib GUI outside of the main thread will likely fail",
+                    category=UserWarning,
+                )
 
-    @Debounce(6)
-    @reactive.Effect
-    @reactive.event(input.sp_generate)
-    def render_swarmplot():
+                local_df = df.copy(deep=True) if df is not None else pd.DataFrame()
+                return Plot.Superplots.SwarmPlot(
+                    df=local_df,
+                    metric=metric,
+                    palette=palette,
+                    show_swarm=show_swarm,
+                    swarm_size=swarm_size,
+                    swarm_outline_color=swarm_outline_color,
+                    swarm_alpha=swarm_alpha,
+                    show_violin=show_violin,
+                    violin_fill_color=violin_fill_color,
+                    violin_edge_color=violin_edge_color,
+                    violin_alpha=violin_alpha,
+                    violin_outline_width=violin_outline_width,
+                    show_mean=show_mean,
+                    mean_span=mean_span,
+                    mean_color=mean_color,
+                    show_median=show_median,
+                    median_span=median_span,
+                    median_color=median_color,
+                    line_width=line_width,
+                    set_main_line=set_main_line,
+                    show_error_bars=show_error_bars,
+                    errorbar_capsize=errorbar_capsize,
+                    errorbar_color=errorbar_color,
+                    errorbar_lw=errorbar_lw,
+                    errorbar_alpha=errorbar_alpha,
+                    show_mean_balls=show_mean_balls,
+                    mean_ball_size=mean_ball_size,
+                    mean_ball_outline_color=mean_ball_outline_color,
+                    mean_ball_outline_width=mean_ball_outline_width,
+                    mean_ball_alpha=mean_ball_alpha,
+                    show_median_balls=show_median_balls,
+                    median_ball_size=median_ball_size,
+                    median_ball_outline_color=median_ball_outline_color,
+                    median_ball_outline_width=median_ball_outline_width,
+                    median_ball_alpha=median_ball_alpha,
+                    show_kde=show_kde,
+                    kde_inset_width=kde_inset_width,
+                    kde_outline=kde_outline,
+                    kde_alpha=kde_alpha,
+                    kde_legend=kde_legend,
+                    kde_fill=kde_fill,
+                    p_test=p_test,
+                    show_legend=show_legend,
+                    show_grid=show_grid,
+                    open_spine=open_spine,
+                )
+
+        # Either form is fine; pick one:
+        # return await asyncio.get_running_loop().run_in_executor(None, build)
+        return await asyncio.to_thread(build)
+    
+
+    @reactive.effect
+    @reactive.event(input.sp_generate, ignore_none=False)
+    def trigger_swarmplot():
+        output_swarmplot.cancel()
 
         output_swarmplot(
             df=TRACKSTATS.get() if TRACKSTATS.get() is not None else pd.DataFrame(),
@@ -3251,12 +3203,12 @@ def server(input: Inputs, output: Outputs, session: Session):
             show_swarm=input.sp_show_swarms(),
             swarm_size=input.sp_swarm_marker_size(),
             swarm_outline_color=input.sp_swarm_marker_outline(),
-            swarm_alpha=input.sp_swarm_marker_alpha(),
+            swarm_alpha=input.sp_swarm_marker_alpha() if 0.0 <= input.sp_swarm_marker_alpha() <= 1.0 else 1.0,
 
             show_violin=input.sp_show_violins(),
             violin_fill_color=input.sp_violin_fill(),
             violin_edge_color=input.sp_violin_outline(),
-            violin_alpha=input.sp_violin_alpha(),
+            violin_alpha=input.sp_violin_alpha() if 0.0 <= input.sp_violin_alpha() <= 1.0 else 1.0,
             violin_outline_width=input.sp_violin_outline_width(),
 
             show_mean=input.sp_show_cond_mean(),
@@ -3271,23 +3223,23 @@ def server(input: Inputs, output: Outputs, session: Session):
             errorbar_capsize=input.sp_errorbar_capsize(),
             errorbar_color=input.sp_errorbar_color(),
             errorbar_lw=input.sp_errorbar_lw(),
-            errorbar_alpha=input.sp_errorbar_alpha(),
+            errorbar_alpha=input.sp_errorbar_alpha() if 0.0 <= input.sp_errorbar_alpha() <= 1.0 else 1.0,
 
             show_mean_balls=input.sp_show_rep_means(),
             mean_ball_size=input.sp_mean_bullet_size(),
             mean_ball_outline_color=input.sp_mean_bullet_outline(),
             mean_ball_outline_width=input.sp_mean_bullet_outline_width(),
-            mean_ball_alpha=input.sp_mean_bullet_alpha(),
+            mean_ball_alpha=input.sp_mean_bullet_alpha() if 0.0 <= input.sp_mean_bullet_alpha() <= 1.0 else 1.0,
             show_median_balls=input.sp_show_rep_medians(),
             median_ball_size=input.sp_median_bullet_size(),
             median_ball_outline_color=input.sp_median_bullet_outline(),
             median_ball_outline_width=input.sp_median_bullet_outline_width(),
-            median_ball_alpha=input.sp_median_bullet_alpha(),
+            median_ball_alpha=input.sp_median_bullet_alpha() if 0.0 <= input.sp_median_bullet_alpha() <= 1.0 else 1.0,
 
             show_kde=input.sp_show_kde(),
             kde_inset_width=input.sp_kde_bandwidth(),
             kde_outline=input.sp_kde_line_width(),
-            kde_alpha=input.sp_kde_fill_alpha(),
+            kde_alpha=input.sp_kde_fill_alpha() if 0.0 <= input.sp_kde_fill_alpha() <= 1.0 else 1.0,
             kde_legend=input.sp_kde_legend(),
             kde_fill=input.sp_kde_fill(),
 
@@ -3296,6 +3248,14 @@ def server(input: Inputs, output: Outputs, session: Session):
             show_grid=input.sp_grid(),
             open_spine=input.sp_spine()
         )
+
+    # @output(id="swarmplot")
+    @render.plot
+    def swarmplot():
+        # Only update when output_swarmplot task completes (not reactively)
+        return output_swarmplot.result()
+
+
 
     @render.download(filename=f"Swarmplot {date.today()}.svg")
     def download_swarmplot_svg():
@@ -3395,6 +3355,8 @@ def server(input: Inputs, output: Outputs, session: Session):
 # --- Mount the app ---
 app = App(app_ui, server)
 
+
+# TODO: !!! utilize @extended_task !!!
 
 # TODO - Keep all the raw data (columns) - rather format them (stripping of _ and have them not all caps)
 # TODO - Make the 2D filtering logic work on the same logic as does the D filtering logic
