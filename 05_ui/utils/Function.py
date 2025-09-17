@@ -1068,54 +1068,20 @@ class Plot:
 
                 if show_swarm:
                     ax = plt.gca()
-                    size = int(swarm_size)
-
-                    while True:
-                        ax.cla()  # clear so failed attempts don't stack markers
-                        try:
-                            with warnings.catch_warnings():
-                                # treat UserWarnings from seaborn/matplotlib as exceptions
-                                warnings.simplefilter("error", UserWarning)
-                                sns.swarmplot(
-                                    data=df,
-                                    x="Condition",
-                                    y=metric,
-                                    hue=hue,
-                                    palette=palette,
-                                    size=size,
-                                    edgecolor=swarm_outline_color,
-                                    dodge=False,
-                                    alpha=swarm_alpha,
-                                    legend=False,
-                                    zorder=2,
-                                    ax=ax,
-                                )
-                            break  # SUCCESS at current size -> leave the loop
-
-                        except UserWarning:
-                            # still too crowded at this size
-                            if size <= 0.1:
-                                # Final attempt with size=-0.1 (as you requested), and suppress the warning
-                                ax.cla()
-                                with warnings.catch_warnings():
-                                    warnings.simplefilter("ignore", UserWarning)
-                                    sns.swarmplot(
-                                        data=df,
-                                        x="Condition",
-                                        y=metric,
-                                        hue=hue,
-                                        palette=palette,
-                                        size=-0.09,
-                                        edgecolor=swarm_outline_color,
-                                        dodge=False,
-                                        alpha=swarm_alpha,
-                                        legend=False,
-                                        zorder=2,
-                                        ax=ax,
-                                    )
-                                break  # done after final fallback
-                            # otherwise, shrink and try again
-                            size -= 0.1
+                    sns.swarmplot(
+                        data=df,
+                        x="Condition",
+                        y=metric,
+                        hue=hue,
+                        palette=palette,
+                        size=swarm_size,
+                        edgecolor=swarm_outline_color,
+                        dodge=False,
+                        alpha=swarm_alpha,
+                        legend=False,
+                        zorder=2,
+                        ax=ax,
+                    )
                             
                 
 
@@ -1317,72 +1283,21 @@ class Plot:
 
                 if show_swarm:
                     ax = plt.gca()
-                    size = swarm_size
+                    sns.swarmplot(
+                        data=df,
+                        x="Condition",
+                        y=metric,
+                        hue=hue,
+                        palette=palette,
+                        size=swarm_size,
+                        edgecolor=swarm_outline_color,
+                        dodge=False,
+                        alpha=swarm_alpha,
+                        legend=False,
+                        zorder=2,
+                        ax=ax,
+                    )
 
-                    while True:
-                        ax.cla()  # clear so failed attempts don't stack markers
-                        try:
-                            with warnings.catch_warnings():
-                                # treat UserWarnings from seaborn/matplotlib as exceptions
-                                warnings.simplefilter("error", UserWarning)
-                                sns.swarmplot(
-                                    data=df,
-                                    x="Condition",
-                                    y=metric,
-                                    hue=hue,
-                                    palette=palette,
-                                    size=size,
-                                    edgecolor=swarm_outline_color,
-                                    dodge=False,
-                                    alpha=swarm_alpha,
-                                    legend=False,
-                                    zorder=2,
-                                    ax=ax,
-                                )
-                            break  # SUCCESS at current size -> leave the loop
-
-                        except UserWarning:
-                            # still too crowded at this size
-                            if size <= 0.1:
-                                # Final attempt with size=-0.1 (as you requested), and suppress the warning
-                                ax.cla()
-                                with warnings.catch_warnings():
-                                    warnings.simplefilter("ignore", UserWarning)
-                                    sns.swarmplot(
-                                        data=df,
-                                        x="Condition",
-                                        y=metric,
-                                        hue=hue,
-                                        palette=palette,
-                                        size=-0.09,
-                                        edgecolor=swarm_outline_color,
-                                        dodge=False,
-                                        alpha=swarm_alpha,
-                                        legend=False,
-                                        zorder=2,
-                                        ax=ax,
-                                    )
-                                break  # done after final fallback
-                            # otherwise, shrink and try again
-                            size -= 0.1
-                            
-
-
-
-                    # sns.swarmplot(
-                    #     data=df, 
-                    #     x='Condition', 
-                    #     y=metric, 
-                    #     hue=hue, 
-                    #     palette=palette, 
-                    #     size=swarm_size, 
-                    #     edgecolor=swarm_outline_color, 
-                    #     dodge=False, 
-                    #     alpha=swarm_alpha, 
-                    #     legend=False, 
-                    #     zorder=2
-                    # )
-                
 
                 # ----------------------------------- Scatterplot of replicate means ------------------------------------------------------
 
@@ -1498,35 +1413,6 @@ class Plot:
                 
 
             # ----------------------- Title settings ----------------------------
-
-            # if show_kde:
-            #     if show_swarm & show_mean & show_median:
-            #         title = f"Swarm Plot with Mean, Median and KDE for {metric}"
-            #     elif show_swarm & show_mean & show_median == False:
-            #         title = f"Swarm Plot with Mean and KDE for {metric}"
-            #     elif show_swarm & show_mean == False & show_median:
-            #         title = f"Swarm Plot with Median and KDE for {metric}"
-            #     elif show_swarm == False:
-            #         if show_violin & show_mean & show_median:
-            #             title = f"Violin Plot with Mean, Median and KDE for {metric}"
-            #         elif show_violin & show_mean & show_median == False:
-            #             title = f"Violin Plot with Mean and KDE for {metric}"
-            #         elif show_violin & show_mean == False & show_median:
-            #             title = f"Violin Plot with Median and KDE for {metric}"
-            # else:
-            #     if show_swarm & show_mean & show_median:
-            #         title = f"Swarm Plot with Mean and Median for {metric}"
-            #     elif show_swarm & show_mean & show_median == False:
-            #         title = f"Swarm Plot with Mean for {metric}"
-            #     elif show_swarm & show_mean == False & show_median:
-            #         title = f"Swarm Plot with Median for {metric}"
-            #     elif show_swarm == False:
-            #         if show_violin & show_mean & show_median:
-            #             title = f"Violin Plot with Mean and Median for {metric}"
-            #         elif show_violin & show_mean & show_median == False:
-            #             title = f"Violin Plot with Mean for {metric}"
-            #         elif show_violin & show_mean == False & show_median:
-            #             title = f"Violin Plot with Median for {metric}"
 
             title = f"Swarm Plot for {metric}"
 

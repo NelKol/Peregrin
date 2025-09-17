@@ -64,7 +64,7 @@ app_ui = ui.page_sidebar(
                 ui.input_action_button("run", label="Run", class_="btn-secondary", disabled=True),
                 # ui.input_action_button("reset", "Reset", class_="btn-danger"),
                 # ui.input_action_button("input_help", "Show help"),
-                ui.output_ui("initialize"),
+                ui.output_ui("initialize_loader1"),
                 ui.markdown("""___"""),
                 # File inputs
                 ui.row(
@@ -104,7 +104,7 @@ app_ui = ui.page_sidebar(
                 """
             ),
             ui.input_file(id="already_processed_input", label=None, placeholder="Drag and drop here!", accept=[".csv"], multiple=False),
-            ui.output_ui("initialize_processed"),
+            ui.output_ui("initialize_loader2"),
             ui.markdown(""" ___ """),
 
             # Data frames display
@@ -518,7 +518,7 @@ app_ui = ui.page_sidebar(
                                         "Swarms",
                                         ui.panel_conditional(
                                             "input.sp_show_swarms == true",
-                                            ui.input_numeric("sp_swarm_marker_size", "Dot size:", 2, min=0, step=1),
+                                            ui.input_numeric("sp_swarm_marker_size", "Dot size:", 1, min=0, step=0.5),
                                             ui.input_numeric("sp_swarm_marker_alpha", "Dot opacity:", 0.5, min=0, max=1, step=0.1),
                                             ui.input_selectize("sp_swarm_marker_outline", "Dot outline color:", Styles.Color, selected="black"),
                                         ),
@@ -933,16 +933,23 @@ def server(input: Inputs, output: Outputs, session: Session):
         else:
             pass
 
-    @render.text
-    @reactive.event(input.run)
-    async def initialize():
-        with ui.Progress(min=0, max=30) as p:
+    @reactive.extended_task
+    async def loader1():
+        with ui.Progress(min=0, max=12) as p:
             p.set(message="Initialization in progress")
 
-            for i in range(1, 12):
+            for i in range(0, 10):
                 p.set(i, message="Initializing Peregrin...")
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.04)
         pass
+
+
+    @render.text
+    @reactive.event(input.run, ignore_none=True)
+    def initialize_loader1():
+        return loader1()
+        
+
 
     # - - - - - - - - - - - - - - - - - - - -
 
@@ -3334,10 +3341,9 @@ def server(input: Inputs, output: Outputs, session: Session):
     
     # - - - - - - Initialization progress - - - - - -
 
-    @render.text
-    @reactive.event(input.already_processed_input)
-    async def initialize_processed():
-        with ui.Progress(min=0, max=60) as p:
+    @reactive.extended_task
+    async def loader2():
+        with ui.Progress(min=0, max=20) as p:
             p.set(message="Initialization in progress")
 
             for i in range(1, 12):
@@ -3345,6 +3351,10 @@ def server(input: Inputs, output: Outputs, session: Session):
                 await asyncio.sleep(0.12)
         pass
 
+    @reactive.effect
+    @reactive.event(input.already_processed_input, ignore_none=True)
+    def initialize_loader2():
+        return loader2()
 
 
 
