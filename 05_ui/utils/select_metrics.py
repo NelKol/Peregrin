@@ -37,7 +37,7 @@ spots = {
     "Condition": "Condition",
     "Replicate": "Replicate",
     "DISTANCE": "Distance",
-    "Track length": "Track Length",
+    "Cumulative length": "Cumulative Length",
     "Net distance": "Net Distance",
     "Confinement ratio": "Confinement Ratio",
 }
