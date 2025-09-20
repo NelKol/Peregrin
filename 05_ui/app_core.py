@@ -14,6 +14,7 @@ import tempfile
 
 import pandas as pd
 import numpy as np
+from html import escape
 import matplotlib.pyplot as plt
 import plotly.graph_objs as go
 
@@ -21,19 +22,18 @@ from math import floor, ceil
 from scipy.stats import gaussian_kde
 from datetime import date
 
+import warnings
+from shiny._deprecated import ShinyDeprecationWarning
+
+warnings.filterwarnings(
+    "ignore",
+    message=r".*panel_well\(\) is deprecated\. Use shiny\.ui\.card\(\) instead\.",
+    category=ShinyDeprecationWarning,
+)
 
 
 
-
-
-
-
-
-
-
-
-
-# --- UI definition ---
+# - - - -  UI design definition  - - - - 
 app_ui = ui.page_sidebar(
 
     # ========== SIDEBAR - DATA FILTERING ==========
@@ -48,7 +48,7 @@ app_ui = ui.page_sidebar(
         ui.markdown("<p style='line-height:0.1;'> <br> </p>"),
         ui.output_ui(id="filter_info"),
         ui.download_button(id="download_filter_info", label="Info SVG", width="100%", _class="space-x-2"),
-        id="sidebar", open="closed", position="right", bg="f8f8f8",
+        id="sidebar", open="closed", position="right", bg="f8f8f8", width="280px"
     ),
 
     # ========== MAIN NAVIGATION BAR ==========
@@ -77,23 +77,35 @@ app_ui = ui.page_sidebar(
                 ),
                 # Assigning selected columns - draggable window
                 ui.panel_absolute(
-                    ui.panel_well(
+                    ui.card(
                         ui.markdown("<h5>Select columns:</h5>"),
                         ui.input_selectize("select_id", "Track identifier:", ["e.g. TRACK_ID"]),
                         ui.input_selectize("select_time", "Time point:", ["e.g. POSITION_T"]),
                         ui.input_selectize("select_x", "X coordinate:", ["e.g. POSITION_X"]),
                         ui.input_selectize("select_y", "Y coordinate:", ["e.g. POSITION_Y"]),
-                        ui.markdown("<span style='color:darkgrey; font-style:italic;'>You can drag me around!</span>")
+                        ui.markdown("<span style='color:darkgrey; font-style:italic;'>You can drag me around!</span>"),
+                        class_="bg-light border-tertiary rounded",
                     ),
-                    width="350px", right="315px", top="220px", draggable=True
+                    width="350px", right="500px", top="220px", draggable=True,
+                    class_="elevated-panel", style_="z-index: 1000;",
                 ),
             ),
+        ),
+
+        # ========== DATA GATING ==========
+        ui.nav_panel(
+            "Gating",
+            ui.markdown(
+                """ 
+                2D Data filtering?
+                """
+            )
         ),
         
 
         # ========== PROCESSED DATA DISPLAY ==========
         ui.nav_panel(
-            "Data frames",
+            "Data Tables",
 
             # Input for already processed data
             ui.markdown(
@@ -566,7 +578,7 @@ app_ui = ui.page_sidebar(
                                                 "input.sp_kde_fill == true",
                                                 ui.input_numeric("sp_kde_fill_alpha", "Fill opacity:", 0.5, min=0, max=1, step=0.1),
                                             ),
-                                            ui.input_numeric("sp_kde_bandwidth", "KDE bandwidth:", 0.5, min=0.1, step=0.1),
+                                            ui.input_numeric("sp_kde_bandwidth", "KDE bandwidth:", 0.75, min=0.1, step=0.1),
                                         ),
                                         ui.panel_conditional(
                                             "input.sp_show_kde == false",
@@ -649,15 +661,10 @@ app_ui = ui.page_sidebar(
                     ),
                     ui.markdown(""" <br> """),
                     ui.output_plot(id="swarmplot"),
-                    # ui.card(
-                    #     ui.output_plot(id="swarmplot"),
-                    #     ui.download_button("download_swarmplot_svg", "Download Swarmplot SVG"),
-                    # ),
                 ),
                 widths = (2, 10)
             ),
         ),
-        ui.nav_panel("Task list"),
         ui.nav_spacer(),
         ui.nav_control(ui.input_dark_mode(mode="light")),
         title="Peregrin"
@@ -956,24 +963,6 @@ def server(input: Inputs, output: Outputs, session: Session):
 
 
 
-    # - - - - Adding and removing thresholds - - - -
-
-    # @reactive.Effect
-    # @reactive.event(input.add_threshold)
-    # def add_threshold():
-    #     ids = threshold_list.get()
-    #     threshold_list.set(ids + [ids[-1] + 1 if ids else 1])
-    #     session.send_input_message("remove_threshold", {"disabled": False})
-
-    # @reactive.Effect
-    # @reactive.event(input.remove_threshold)
-    # def remove_threshold():
-    #     ids = threshold_list.get()
-    #     if len(ids) > 1:
-    #         threshold_list.set(ids[:-1])
-    #     if len(threshold_list.get()) <= 1:
-    #         session.send_input_message("remove_threshold", {"disabled": True})
-
 
     # - - - - Sidebar accordion layout for thresholds - - - -
 
@@ -1044,10 +1033,10 @@ def server(input: Inputs, output: Outputs, session: Session):
                 open="Threshold 1"
             )
     
-    # @Debounce(3)
-    # @reactive.Calc
+
+    # - - - - Adding and removing thresholds - - - -
+
     def render_threshold_accordion_panel(id):
-        # id = threshold_list.get()[-1]
         if threshold_dimension.get() == "1D":
             print("Rendering threshold panel", id)
             return ui.accordion_panel(
@@ -1090,7 +1079,6 @@ def server(input: Inputs, output: Outputs, session: Session):
                     ui.input_action_button(id=f"threshold2d_clear_{id}", label="Clear", class_="space-x-2", width="100%"),
                 ),
             )
-
 
 
     @reactive.Effect
@@ -1301,8 +1289,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         Build an SVG 'Info' panel using current Shiny reactives.
         Works for both 1D and 2D thresholding like in your filter_info().
         """
-        from html import escape
-        from math import floor, ceil
+        
 
         # ---------- helpers ----------
         pad = 16
@@ -3366,21 +3353,26 @@ def server(input: Inputs, output: Outputs, session: Session):
 app = App(app_ui, server)
 
 
-# TODO - Get rid of the calculation expensive iterations
-#      - Either use a machine learning algorithm to calculate the the swarmplot dot size
-#      - Or write code that  will let the user set the swarmmsize in a way, where the steps will be 
-#        0.1 inbetween 0-1;
-#        0.5 inbetween 1-5;
-#        1 inbetween 5-infinity
+# TODO - Remodel the sidebar: 
+#          - Only contain "1D filtering" 
+#          - add a button that takes the user to the 2D filtering page
+# TODO - Upgrade 2D filtering:
+#          - Make it accessible trough the nav_bar panel "Gating"
+#          - Logic - "1D" filtering as primary filtering, its output goes to "2D" filtering = "Gating"
+
+
+
+# TODO - Track visualization plot with a slider
+
+# TODO - define pre-sets for plot settings, so that the user can try out different looks easily
+# TODO - Add a button to reset all thresholding settings to default
 
 # TODO - Keep all the raw data (columns) - rather format them (stripping of _ and have them not all caps)
 # TODO - Make the 2D filtering logic work on the same logic as does the D filtering logic
-# TODO - make both 1D and 2D thresholding operational
 # TODO - Make it possible to save/load threshold configurations
 # TODO - Find a way to program all the functions so that functions do not refresh/re-render unnecessarily on just any reactive action
 # TODO - Time point definition
 # TODO - Make it possible for the user to title their charts
-# TODO - Make it possible for the user to manually set threshold values
 # TODO - Mean directional change rate
 # TODO - Select which p-tests should be shown in the superplot chart
 # TODO - P-test
@@ -3388,3 +3380,6 @@ app = App(app_ui, server)
 # TODO - Option to download a simple legend showing how much data was filtered out and how so
 # TODO - input_selectize("Plot:"... with options "Polar/Normalized" or "Cartesian/Raw"
 # TODO - Differentiate between frame(s) annotations and time annotations
+
+
+# TODO - add documentation into the markdown file with a pdf file user guide

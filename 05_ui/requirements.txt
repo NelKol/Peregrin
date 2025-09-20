@@ -12,3 +12,4 @@ shinywidgets
 ratelimit
 superviolin
 plotnine
+sklearn

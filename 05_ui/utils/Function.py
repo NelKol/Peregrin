@@ -1235,7 +1235,7 @@ class Plot:
                     inset_y = y_ax_min   # y inset position
 
                     x_val = cond_num_list[cond]  
-                    offset_x = 0
+                    offset_x = 0.5
 
                     inset_ax = ax.inset_axes([x_val - offset_x, inset_y, kde_inset_width, inset_height], transform=ax.transData, zorder=0, clip_on=True)
                     
