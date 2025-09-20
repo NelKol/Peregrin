@@ -6,4 +6,8 @@ scipy
 peregrin
 seaborn
 altair
-pathlib
+plotly
+# fitz
+shinywidgets
+ratelimit
+superviolin
