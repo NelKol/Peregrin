@@ -68,15 +68,17 @@ app_ui = ui.page_sidebar(
                 ),
                 # Assigning selected columns - draggable window
                 ui.panel_absolute(
-                    ui.panel_well(
+                    ui.card(
                         ui.markdown("<h5>Select columns:</h5>"),
                         ui.input_selectize("select_id", "Track identifier:", ["e.g. TRACK_ID"]),
                         ui.input_selectize("select_time", "Time point:", ["e.g. POSITION_T"]),
                         ui.input_selectize("select_x", "X coordinate:", ["e.g. POSITION_X"]),
                         ui.input_selectize("select_y", "Y coordinate:", ["e.g. POSITION_Y"]),
-                        ui.markdown("<span style='color:darkgrey; font-style:italic;'>You can drag me around!</span>")
+                        ui.markdown("<span style='color:darkgrey; font-style:italic;'>You can drag me around!</span>"),
+                        class_="bg-light border-tertiary rounded",
                     ),
-                    width="350px", right="315px", top="220px", draggable=True
+                    width="350px", right="500px", top="220px", draggable=True,
+                    class_="elevated-panel", style_="z-index: 1000;",
                 ),
             ),
         ),
