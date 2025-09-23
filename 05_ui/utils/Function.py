@@ -861,6 +861,7 @@ class Plot:
             df: pd.DataFrame,                                     
             metric: str,
             *args,
+            title: str = '',
             palette: str = 'tab10',
 
             show_swarm: bool = True,
@@ -1092,7 +1093,7 @@ class Plot:
                         x='Condition', 
                         y=metric, 
                         color=violin_fill_color, 
-                        edgecolor=violin_edge_color, 
+                        edgecolor=violin_edge_color if violin_edge_color else None, 
                         width=violin_outline_width, 
                         inner=None,
                         gap=0.1, 
@@ -1341,7 +1342,7 @@ class Plot:
                         x='Condition', 
                         y=metric, 
                         color=violin_fill_color, 
-                        edgecolor=violin_edge_color, 
+                        edgecolor=violin_edge_color if violin_edge_color else None, 
                         width=violin_outline_width, 
                         inner=None,
                         gap=0.2, 
@@ -1414,7 +1415,7 @@ class Plot:
 
             # ----------------------- Title settings ----------------------------
 
-            title = f"Swarm Plot for {metric}"
+            # title = f"Swarm Plot"
 
 
             plt.title(title)
@@ -1433,11 +1434,15 @@ class Plot:
                 handles.insert(0, replicate_handle)
                 labels.insert(0, 'Replicate Medians')
             
-            if show_legend:
-                plt.legend(handles=handles, labels=labels, title='Legend', title_fontsize='12', fontsize='10', loc='upper right', bbox_to_anchor=(1.15, 1), frameon=True)
-            else:
-                plt.legend().remove()
-            
+            try:
+                if show_legend:
+                    plt.legend(handles=handles, labels=labels, title='Legend', title_fontsize='12', fontsize='10', loc='upper right', bbox_to_anchor=(1.15, 1), frameon=True)
+                else:
+                    plt.legend().remove()
+
+            except:
+                pass
+
             sns.despine(top=open_spine, right=open_spine, bottom=False, left=False)
             plt.tick_params(axis='y', which='major', length=7, width=1.5, direction='out', color='black')
             plt.tick_params(axis='x', which='major', length=0)
@@ -1447,13 +1452,17 @@ class Plot:
                 plt.grid(False)
 
             # Only move legend if it exists
-            if plt.gca().get_legend() is not None:
-                sns.move_legend(ax, "upper left", bbox_to_anchor=(1.05, 1))
+            try:
+                if plt.gca().get_legend() is not None:
+                    sns.move_legend(ax, "upper left", bbox_to_anchor=(1.05, 1))
+            except:
+                try:
+                    ax = plt.gca()
+                    if plt.gca().get_legend() is not None:
+                        sns.move_legend(ax, "upper left", bbox_to_anchor=(1.05, 1))
+                except:
+                    pass
 
-            # plt.tight_layout()
-
-            # return plt.gcf()
-            
             # plt.savefig("plot.svg", format='svg', bbox_inches='tight')
             return plt.gcf()
 

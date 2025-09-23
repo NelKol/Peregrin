@@ -267,6 +267,8 @@ class Styles:
         "lightgrey",
         "silver",
         "grey",
+        "darkgrey",
+        "dimgray",
         "black",
     ]
 

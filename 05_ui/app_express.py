@@ -20,10 +20,10 @@ import matplotlib.colors as mcolors
 
 import utils.data_calcs as dc
 import utils.funcs_plot as pu
-import utils.select_markers as select_markers
+# import utils.select_markers as select_markers
 import utils.select_modes as select_mode
 import utils.select_metrics as select_metrics
-from utils.ratelimit import debounce, throttle
+from utils.RateLimit import Debounce, Throttle
 
 import webbrowser
 import tempfile
@@ -1147,7 +1147,7 @@ with ui.sidebar(open="open", position="right", bg="f8f8f8"):
                 step=1
             )
 
-            @debounce(1)
+            @Debounce(1)
             @reactive.effect
             def update_bins():
                 bins.set(input.bins())
@@ -1235,7 +1235,7 @@ with ui.nav_panel("Visualisation"):
                     5
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_marker_size():
                     return input.marker_size()
@@ -1247,12 +1247,12 @@ with ui.nav_panel("Visualisation"):
                     True
                     )
                 
-                ui.input_select(
-                    'markers',
-                    'Markers:',
-                    select_markers.classic,
-                    selected='circle',
-                    )
+                # ui.input_select(
+                #     'markers',
+                #     'Markers:',
+                #     select_markers.classic,
+                #     selected='circle',
+                #     )
 
                 ui.input_checkbox(
                     'I_just_wanna_be_normal',
@@ -1264,11 +1264,11 @@ with ui.nav_panel("Visualisation"):
                 @reactive.event(input.I_just_wanna_be_normal)
                 def update_markers():
                     if input.I_just_wanna_be_normal():
-                        ui.update_select(
-                            id='markers',
-                            choices=select_markers.classic,
-                            selected='circle-open',
-                            )
+                        # ui.update_select(
+                        #     id='markers',
+                        #     choices=select_markers.classic,
+                        #     selected='circle-open',
+                        #     )
                         ui.update_numeric(
                             id='marker_size',
                             value=5,
@@ -1276,11 +1276,11 @@ with ui.nav_panel("Visualisation"):
                         marker_size.set(5)
 
                     else:
-                        ui.update_select(
-                            id='markers',
-                            choices=select_markers.not_normal,
-                            selected='scaled',
-                            )
+                        # ui.update_select(
+                        #     id='markers',
+                        #     choices=select_markers.not_normal,
+                        #     selected='scaled',
+                            # )
                         ui.update_numeric(
                             id='marker_size',
                             value=14,
@@ -1311,7 +1311,7 @@ with ui.nav_panel("Visualisation"):
                         lw=update_track_line_width(),
                         marker_size=update_marker_size(),
                         end_track_markers=input.end_track_markers(),
-                        markers=input.markers(),
+                        markers='circle-open',
                         I_just_wanna_be_normal=input.I_just_wanna_be_normal(), 
                         metric_dictionary=select_metrics.tracks,
                         show_tracks=input.show_tracks(),
@@ -1419,7 +1419,7 @@ with ui.nav_panel("Visualisation"):
                     6
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_arrow_size():
                     return input.arrow_size()
@@ -1663,7 +1663,7 @@ with ui.nav_panel("Visualisation"):
                     min=1, 
                     max=100)
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_smoothing():
                     return input.smoothing()
@@ -1676,7 +1676,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.05
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_track_line_width():
                     return input.track_line_width()
@@ -2171,7 +2171,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.05
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_kde_alpha():
                     return input.kde_alpha()
@@ -2184,7 +2184,7 @@ with ui.nav_panel("Visualisation"):
                     min=0,
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_kde_outline():
                     return input.kde_outline()
@@ -2198,7 +2198,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.01
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_kde_inset_width():
                     return input.kde_inset_width()
@@ -2262,7 +2262,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.05
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_violin_outline_width():
                     return input.violin_outline_width()
@@ -2277,7 +2277,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.05
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_violin_alpha():
                     return input.violin_alpha()
@@ -2310,7 +2310,7 @@ with ui.nav_panel("Visualisation"):
                     step=1
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_swarm_size():
                     return input.swarm_size()
@@ -2325,7 +2325,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.05
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_swarm_alpha():
                     return input.swarm_alpha()
@@ -2360,7 +2360,7 @@ with ui.nav_panel("Visualisation"):
                     step=5
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_ball_size():
                     return input.ball_size()
@@ -2381,7 +2381,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.1
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_ball_outline_width():
                     return input.ball_outline_width()
@@ -2396,7 +2396,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.05
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_ball_alpha():
                     return input.ball_alpha()
@@ -2431,7 +2431,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.005
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_mean_span():
                     return input.mean_span()
@@ -2445,7 +2445,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.005
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_median_span():
                     return input.median_span()
@@ -2459,7 +2459,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.1
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_line_width():
                     return input.line_width()
@@ -2500,7 +2500,7 @@ with ui.nav_panel("Visualisation"):
                     step=1
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_errorbar_capsize():
                     return input.errorbar_capsize()
@@ -2514,7 +2514,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.1
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_errorbar_lw():
                     return input.errorbar_lw()
@@ -2529,7 +2529,7 @@ with ui.nav_panel("Visualisation"):
                     step=0.05
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_errorbar_alpha():
                     return input.errorbar_alpha()
@@ -2563,7 +2563,7 @@ with ui.nav_panel("Visualisation"):
                     step=1
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_plot_width():
                     return input.plot_width()
@@ -2577,7 +2577,7 @@ with ui.nav_panel("Visualisation"):
                     step=1
                     )
                 
-                @debounce(1)
+                @Debounce(1)
                 @reactive.calc
                 def update_plot_height():
                     return input.plot_height()
@@ -2785,9 +2785,9 @@ with ui.nav_panel('Task list'):
         
         **Functionality**
 
-        - [ ] Add a debounce to the add input field
-        - [ ] Add a throttle/debounce to the thresholding
-        - [ ] Add a debounce to all the heavy/plot calculations (optional)
+        - [ ] Add a Debounce to the add input field
+        - [ ] Add a throttle/Debounce to the thresholding
+        - [ ] Add a Debounce to all the heavy/plot calculations (optional)
         - [ ] Check the mean value differences (lineplot - scatter) in the swarmplot
         - [ ] možnosť stiahnuť súbor s infom o tom aké boli nastavenia pri plotovaní 
         
