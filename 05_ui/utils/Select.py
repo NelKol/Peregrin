@@ -245,7 +245,6 @@ class Styles:
         "royalblue",
         "slateblue",
         "mediumslateblue",
-        "slategray",
         "slategrey",
         "mediumorchid",
         "mediumpurple",
@@ -265,11 +264,11 @@ class Styles:
         "white",
         "snow",
         "whitesmoke",
-        "lightgray",
         "lightgrey",
         "silver",
-        "gray",
         "grey",
+        "darkgrey",
+        "dimgray",
         "black",
     ]
 
